@@ -58,6 +58,8 @@ typedef struct { uint8_t A; uint8_t c; } MY_VDU_colour;
 static MY_VDU_colour my_colour = { 17, 0 };
 void colour(int c);
 
+#define DEBUG 0
+
 #define SCR_WIDTH 320
 #define SCR_HEIGHT 240
 #define TILE_WIDTH 16
@@ -81,22 +83,24 @@ typedef struct {
 	int edge[4]; // Edge type. N=0, E=1, S=2, W=3
 } TILE_TYPE;
 
-#define NUM_TILE_TYPES 14
+#define NUM_TILE_TYPES 16
 TILE_TYPE tiles[] = {
-	{ 1, "ts01.rgb2", 0,{GRS|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4)}},
-	{ 2, "ts02.rgb2", 1,{GRS|(SEA<<4),SEA|(SEA<<4),GRS|(SEA<<4),GRS|(GRS<<4)}},
-	{ 3, "ts03.rgb2", 2,{SEA|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4),SEA|(SEA<<4)}},
-	{ 4, "ts04.rgb2", 3,{SEA|(SEA<<4),SEA|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4)}},
-	{ 5, "ts05.rgb2", 4,{GRS|(GRS<<4),GRS|(SEA<<4),SEA|(SEA<<4),GRS|(SEA<<4)}},
-	{ 6, "ts06.rgb2", 5,{SEA|(SEA<<4),SEA|(SEA<<4),GRS|(SEA<<4),SEA|(GRS<<4)}},
-	{ 7, "ts07.rgb2", 6,{GRS|(SEA<<4),SEA|(SEA<<4),SEA|(SEA<<4),GRS|(SEA<<4)}},
-	{ 8, "ts08.rgb2", 7,{SEA|(GRS<<4),GRS|(SEA<<4),SEA|(SEA<<4),SEA|(SEA<<4)}},
-	{ 9, "ts09.rgb2", 8,{SEA|(SEA<<4),SEA|(GRS<<4),SEA|(GRS<<4),SEA|(SEA<<4)}},
-	{10, "ts10.rgb2", 9,{SEA|(SEA<<4),SEA|(SEA<<4),SEA|(SEA<<4),SEA|(SEA<<4)}},
-	{11, "ts11.rgb2",11,{GRS|(SEA<<4),SEA|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4)}},
-	{12, "ts12.rgb2",12,{GRS|(GRS<<4),GRS|(SEA<<4),GRS|(SEA<<4),GRS|(GRS<<4)}},
-	{13, "ts13.rgb2",13,{GRS|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4),GRS|(SEA<<4)}},
-	{14, "ts14.rgb2",14,{SEA|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4)}},
+	{ 0, "ts01.rgb2", 0,{GRS|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4)}},
+	{ 1, "ts02.rgb2", 1,{GRS|(SEA<<4),SEA|(SEA<<4),GRS|(SEA<<4),GRS|(GRS<<4)}},
+	{ 2, "ts03.rgb2", 2,{SEA|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4),SEA|(SEA<<4)}},
+	{ 3, "ts04.rgb2", 3,{SEA|(SEA<<4),SEA|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4)}},
+	{ 4, "ts05.rgb2", 4,{GRS|(GRS<<4),GRS|(SEA<<4),SEA|(SEA<<4),GRS|(SEA<<4)}},
+	{ 5, "ts06.rgb2", 5,{SEA|(SEA<<4),SEA|(SEA<<4),GRS|(SEA<<4),SEA|(GRS<<4)}},
+	{ 6, "ts07.rgb2", 6,{GRS|(SEA<<4),SEA|(SEA<<4),SEA|(SEA<<4),GRS|(SEA<<4)}},
+	{ 7, "ts08.rgb2", 7,{SEA|(GRS<<4),GRS|(SEA<<4),SEA|(SEA<<4),SEA|(SEA<<4)}},
+	{ 8, "ts09.rgb2", 8,{SEA|(SEA<<4),SEA|(GRS<<4),SEA|(GRS<<4),SEA|(SEA<<4)}},
+	{ 9, "ts10.rgb2", 9,{SEA|(SEA<<4),SEA|(SEA<<4),SEA|(SEA<<4),SEA|(SEA<<4)}},
+	{10, "ts11.rgb2",11,{GRS|(SEA<<4),SEA|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4)}},
+	{11, "ts12.rgb2",12,{GRS|(GRS<<4),GRS|(SEA<<4),GRS|(SEA<<4),GRS|(GRS<<4)}},
+	{12, "ts13.rgb2",13,{GRS|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4),GRS|(SEA<<4)}},
+	{13, "ts14.rgb2",14,{SEA|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4)}},
+	{14, "ts15.rgb2",15,{GRS|(SEA<<4),SEA|(GRS<<4),SEA|(GRS<<4),GRS|(SEA<<4)}},
+	{15, "ts16.rgb2",16,{SEA|(GRS<<4),GRS|(SEA<<4),GRS|(SEA<<4),SEA|(GRS<<4)}},
 };
 
 #define MAX_POSSIBLES 6
@@ -147,7 +151,7 @@ int main()
 	if (load_bitmaps() <0) return -1;
 
 	init_screen();
-
+	
 	//colour(15); tab(0,line++); printf("start: %dx%d\n", (WIDTH_TILES/2), (HEIGHT_TILES/2));
 	set_tile((WIDTH_TILES/2), (HEIGHT_TILES/2), rand()%NUM_TILE_TYPES);
 
@@ -156,12 +160,14 @@ int main()
 	{
 		set_tile(next_tile->posx, next_tile->posy, get_rand_poss(next_tile));
 		next_tile = find_tile();
-		wait();
-		show_debug_screen();
-		wait();
+#if DEBUG==1
+		wait(); show_debug_screen(); wait();
+#endif
 	}
 
+#if DEBUG==1
 	show_debug_screen();
+#endif
 
 	deinit_screen();
 	// wait for a key press
@@ -199,24 +205,26 @@ void deinit_screen()
 
 void set_tile(int x, int y, int id)
 {
-	colour(15); tab(0,line++); printf("Tile: %dx%d -> %d\n", x,y,id);
+#if DEBUG==1
+	colour(15); tab(0,line++); printf("Set tile: %dx%d to %d\n", x,y,id);
+#endif
 
 	screen[y][x]->id = id;
 	screen[y][x]->entropy = 0;
 
 	display_tile(x, y);
 
-	if (y-1 > 0) { 
-		reduce_entropy(x, y-1, 2, id); 
+	if (y-1 >= 0) { 
+		if (screen[y-1][x]->entropy>0) reduce_entropy(x, y-1, 2, id); 
 	}
 	if (x+1 < WIDTH_TILES) { 
-		reduce_entropy(x+1, y, 3, id); 
+		if (screen[y][x+1]->entropy>0) reduce_entropy(x+1, y, 3, id); 
 	}
 	if (y+1 < HEIGHT_TILES) { 
-		reduce_entropy(x, y+1, 0, id); 
+		if (screen[y+1][x]->entropy>0) reduce_entropy(x, y+1, 0, id); 
 	}
-	if (x-1 > 0) { 
-		reduce_entropy(x-1, y, 1, id); 
+	if (x-1 >= 0) { 
+		if (screen[y][x-1]->entropy>0) reduce_entropy(x-1, y, 1, id); 
 	}
 }
 
@@ -226,7 +234,9 @@ void set_tile(int x, int y, int id)
 void reduce_entropy(int x, int y, int nb, int res_id)
 {
 	int opp = (nb+2)%4; // opposite neighbour position
-	colour(2); tab(0,line++); printf("Red: %dx%d nb=%d -> %d\n", x,y,nb,res_id);
+#if DEBUG==1
+	colour(2); tab(0,line++); printf("Red: %dx%d nb=%d -> %d ent %d", x,y,nb,res_id,screen[y][x]->entropy);
+#endif
 	
 	// case maximum entropy. possibles is not populated
 	if (screen[y][x]->entropy == NUM_TILE_TYPES)
@@ -240,12 +250,21 @@ void reduce_entropy(int x, int y, int nb, int res_id)
 				screen[y][x]->possibles[num_match] = t;
 				num_match++;
 			}
-			screen[y][x]->entropy = num_match;
+		}
+		screen[y][x]->entropy = num_match;
+		if (num_match == 0)
+		{
+			colour(1); tab(0,line++);printf("error"); exit(-1);
 		}
 	} else {
 		int arr[MAX_POSSIBLES];
 		int num_match=0;
-		for (int i=0; i < mymin(screen[y][x]->entropy,MAX_POSSIBLES); i++)
+		int num_possibles =  mymin(screen[y][x]->entropy,MAX_POSSIBLES);
+#if DEBUG==1
+		colour(3); tab(0,line++); printf("poss "); for (int i=0; i < num_possibles; i++) {printf("%i,",screen[y][x]->possibles[i]);}
+#endif
+
+		for (int i=0; i < num_possibles; i++)
 		{
 			int t=screen[y][x]->possibles[i];
 			if (tiles[t].edge[nb] == tiles[res_id].edge[opp])
@@ -253,19 +272,33 @@ void reduce_entropy(int x, int y, int nb, int res_id)
 				arr[num_match] = t;
 				num_match++;
 			}
-			screen[y][x]->entropy = num_match;
-			for (int i=0;i<MAX_POSSIBLES;i++)
-			{
-				screen[y][x]->possibles[i]=arr[i];
-			}
-
 		}
+		screen[y][x]->entropy = num_match;
+
+		if (num_match == 0)
+		{
+			colour(1); tab(0,line++);printf("error"); exit(-1);
+		}
+
+		for (int i=0;i<num_match;i++)
+		{
+			screen[y][x]->possibles[i]=arr[i];
+		}
+
 	}
 
 	if (screen[y][x]->entropy == 1)
 	{
+#if DEBUG==1
 		colour(1); tab(0,line++); printf("Resolve: %dx%d-> %d\n", x,y,screen[y][x]->possibles[0]);
+#endif
 		set_tile(x,y,screen[y][x]->possibles[0]);
+	}
+	else
+	{
+#if DEBUG==1
+		colour(5); tab(0,line++); printf("now "); for (int i=0; i < screen[y][x]->entropy; i++) {printf("%i,",screen[y][x]->possibles[i]);}
+#endif
 	}
 }
 
@@ -283,7 +316,7 @@ int load_bitmaps()
 	char *buffer;
 	int file_size = TILE_WIDTH*TILE_HEIGHT;
 
-	printf("Load bitmaps ... ");
+	//printf("Load bitmaps ... ");
 	for(int b=0;b<NUM_TILE_TYPES;b++)
 	{
 		fname[0]=0;
@@ -309,7 +342,9 @@ int load_bitmaps()
 		close_file(fp);
 	}
 	free(buffer);
-	printf("done.\n");
+	//printf("done.\n");
+	
+#if DEBUG==1
 	for (int x=0; x<NUM_TILE_TYPES; x++)
 	{
 		tab(x*2,3); printf("%i",x);
@@ -317,6 +352,8 @@ int load_bitmaps()
 		draw_bitmap(x*TILE_WIDTH,4*8);
 	}
 	wait();
+#endif
+	
 	return 0;
 }
 
@@ -434,9 +471,9 @@ TILE *find_tile()
 {
 	TILE *candidate = NULL;
 
-	for (int y=0;y<WIDTH_TILES;y++)
+	for (int y=0;y<HEIGHT_TILES;y++)
 	{
-		for (int x=0;x<HEIGHT_TILES;x++)
+		for (int x=0;x<WIDTH_TILES;x++)
 		{
 			if (screen[y][x]->entropy>0 && screen[y][x]->entropy<NUM_TILE_TYPES)
 			{
@@ -445,7 +482,9 @@ TILE *find_tile()
 			}
 		}
 	}
+#if DEBUG==1
 	colour(15); tab(0,line++); printf("find %dx%d %d\n",candidate->posx, candidate->posy, candidate->entropy);;
+#endif
 	return candidate;
 }
 
@@ -458,9 +497,9 @@ int get_rand_poss(TILE *tile)
 void show_debug_screen() 
 {
 	VDP_PUTS(my_cls);
-	for (int y=0;y<WIDTH_TILES;y++)
+	for (int y=0;y<HEIGHT_TILES;y++)
 	{
-		for (int x=0;x<HEIGHT_TILES;x++)
+		for (int x=0;x<WIDTH_TILES;x++)
 		{
 			if (screen[y][x]->entropy == 0)
 			{
