@@ -1,10 +1,19 @@
-#include "agon/vdp_vdu.h"
+//#include "agon/vdp_vdu.h"
 #include "agon/vdp_key.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <mos_api.h>
 #include <string.h>
-#include <time.h>
+
+#define VDP_PUTS(S) mos_puts( (char *)&(S), sizeof(S), 0)
+
+static volatile SYSVAR *sys_vars = NULL;
+
+volatile SYSVAR *vdp_vdu_init( void )
+{
+	sys_vars = (SYSVAR *)mos_sysvars();
+	return (SYSVAR *)sys_vars;
+}
 
 // VDU 22, n: Mode n
 typedef struct { uint8_t A; uint8_t n; } MY_VDU_mode;
@@ -77,35 +86,36 @@ typedef struct {
 } TILE_LIST_NODE; 
 
 typedef struct {
-	int id;
+	uint8_t id;
 	char name[12];
 	int bufid;
 	int edge[4]; // Edge type. N=0, E=1, S=2, W=3
+	int land_weight; // amount of land in tile 0-4
 } TILE_TYPE;
 
 #define NUM_TILE_TYPES 16
 TILE_TYPE tiles[] = {
-	{ 0, "ts01.rgb2", 0,{GRS|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4)}},
-	{ 1, "ts02.rgb2", 1,{GRS|(SEA<<4),SEA|(SEA<<4),GRS|(SEA<<4),GRS|(GRS<<4)}},
-	{ 2, "ts03.rgb2", 2,{SEA|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4),SEA|(SEA<<4)}},
-	{ 3, "ts04.rgb2", 3,{SEA|(SEA<<4),SEA|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4)}},
-	{ 4, "ts05.rgb2", 4,{GRS|(GRS<<4),GRS|(SEA<<4),SEA|(SEA<<4),GRS|(SEA<<4)}},
-	{ 5, "ts06.rgb2", 5,{SEA|(SEA<<4),SEA|(SEA<<4),GRS|(SEA<<4),SEA|(GRS<<4)}},
-	{ 6, "ts07.rgb2", 6,{GRS|(SEA<<4),SEA|(SEA<<4),SEA|(SEA<<4),GRS|(SEA<<4)}},
-	{ 7, "ts08.rgb2", 7,{SEA|(GRS<<4),GRS|(SEA<<4),SEA|(SEA<<4),SEA|(SEA<<4)}},
-	{ 8, "ts09.rgb2", 8,{SEA|(SEA<<4),SEA|(GRS<<4),SEA|(GRS<<4),SEA|(SEA<<4)}},
-	{ 9, "ts10.rgb2", 9,{SEA|(SEA<<4),SEA|(SEA<<4),SEA|(SEA<<4),SEA|(SEA<<4)}},
-	{10, "ts11.rgb2",11,{GRS|(SEA<<4),SEA|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4)}},
-	{11, "ts12.rgb2",12,{GRS|(GRS<<4),GRS|(SEA<<4),GRS|(SEA<<4),GRS|(GRS<<4)}},
-	{12, "ts13.rgb2",13,{GRS|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4),GRS|(SEA<<4)}},
-	{13, "ts14.rgb2",14,{SEA|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4)}},
-	{14, "ts15.rgb2",15,{GRS|(SEA<<4),SEA|(GRS<<4),SEA|(GRS<<4),GRS|(SEA<<4)}},
-	{15, "ts16.rgb2",16,{SEA|(GRS<<4),GRS|(SEA<<4),GRS|(SEA<<4),SEA|(GRS<<4)}},
+	{ 0, "ts01.rgb2", 0,{GRS|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4)},4},
+	{ 1, "ts02.rgb2", 1,{GRS|(SEA<<4),SEA|(SEA<<4),GRS|(SEA<<4),GRS|(GRS<<4)},2},
+	{ 2, "ts03.rgb2", 2,{SEA|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4),SEA|(SEA<<4)},2},
+	{ 3, "ts04.rgb2", 3,{SEA|(SEA<<4),SEA|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4)},2},
+	{ 4, "ts05.rgb2", 4,{GRS|(GRS<<4),GRS|(SEA<<4),SEA|(SEA<<4),GRS|(SEA<<4)},2},
+	{ 5, "ts06.rgb2", 5,{SEA|(SEA<<4),SEA|(SEA<<4),GRS|(SEA<<4),SEA|(GRS<<4)},1},
+	{ 6, "ts07.rgb2", 6,{GRS|(SEA<<4),SEA|(SEA<<4),SEA|(SEA<<4),GRS|(SEA<<4)},1},
+	{ 7, "ts08.rgb2", 7,{SEA|(GRS<<4),GRS|(SEA<<4),SEA|(SEA<<4),SEA|(SEA<<4)},1},
+	{ 8, "ts09.rgb2", 8,{SEA|(SEA<<4),SEA|(GRS<<4),SEA|(GRS<<4),SEA|(SEA<<4)},1},
+	{ 9, "ts10.rgb2", 9,{SEA|(SEA<<4),SEA|(SEA<<4),SEA|(SEA<<4),SEA|(SEA<<4)},0},
+	{10, "ts11.rgb2",11,{GRS|(SEA<<4),SEA|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4)},3},
+	{11, "ts12.rgb2",12,{GRS|(GRS<<4),GRS|(SEA<<4),GRS|(SEA<<4),GRS|(GRS<<4)},3},
+	{12, "ts13.rgb2",13,{GRS|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4),GRS|(SEA<<4)},3},
+	{13, "ts14.rgb2",14,{SEA|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4)},3},
+	{14, "ts15.rgb2",15,{GRS|(SEA<<4),SEA|(GRS<<4),SEA|(GRS<<4),GRS|(SEA<<4)},2},
+	{15, "ts16.rgb2",16,{SEA|(GRS<<4),GRS|(SEA<<4),GRS|(SEA<<4),SEA|(GRS<<4)},2},
 };
 
 #define MAX_POSSIBLES 6
 typedef struct {
-	int id;
+	uint8_t id;
 	int entropy;
 	uint8_t possibles[MAX_POSSIBLES]; // list of possibles. If entropy is MAX, this is empty
 	int posx;
@@ -115,18 +125,21 @@ typedef struct {
 static TILE* screen[HEIGHT_TILES][WIDTH_TILES];
 TILE* screen_tiles;
 
+#define MAX_CANDIDATES 10
+TILE* candidate_arr[MAX_CANDIDATES];
+
 FILE *open_file( const char *fname, const char *mode);
 int close_file( FILE *fp );
 int read_str(FILE *fp, char *str, char stop);
 void init_screen();
 void deinit_screen();
 int load_bitmaps();
-void set_tile(int x, int y, int id);
-void reduce_entropy(int x, int y, int nb, int res_id);
+void set_tile(int x, int y, uint8_t id);
+void reduce_entropy(int x, int y, int nb, uint8_t res_id);
 void display_tile(int x, int y);
 int mymin(int a, int b);
 TILE* find_tile();
-int get_rand_poss(TILE *tile);
+uint8_t get_rand_poss(TILE *tile);
 void show_debug_screen();
 static int line = 0;
 
@@ -136,9 +149,13 @@ void wait()
 	if (k=='q') exit(0);
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-	srand(time(NULL));
+	int seed=0;
+	if (argc>1) {
+		seed=atoi(argv[1]);
+	}
+	srand(seed);
 	vdp_vdu_init();
 	if ( vdp_key_init() == -1 ) return 1;
 
@@ -156,12 +173,13 @@ int main()
 	set_tile((WIDTH_TILES/2), (HEIGHT_TILES/2), rand()%NUM_TILE_TYPES);
 
 	TILE *next_tile = find_tile();
+
 	while (next_tile!=NULL)
 	{
 		set_tile(next_tile->posx, next_tile->posy, get_rand_poss(next_tile));
 		next_tile = find_tile();
 #if DEBUG==1
-		wait(); show_debug_screen(); wait();
+		wait(); show_debug_screen(); //wait();
 #endif
 	}
 
@@ -203,7 +221,7 @@ void deinit_screen()
 
 }
 
-void set_tile(int x, int y, int id)
+void set_tile(int x, int y, uint8_t id)
 {
 #if DEBUG==1
 	colour(15); tab(0,line++); printf("Set tile: %dx%d to %d\n", x,y,id);
@@ -231,7 +249,7 @@ void set_tile(int x, int y, int id)
 /* for given tile screen[y][x], reduce entropy based on neighbour nb (0-3).
  * res_id is the resolved id of the neighbour nb
  */
-void reduce_entropy(int x, int y, int nb, int res_id)
+void reduce_entropy(int x, int y, int nb, uint8_t res_id)
 {
 	int opp = (nb+2)%4; // opposite neighbour position
 #if DEBUG==1
@@ -243,7 +261,7 @@ void reduce_entropy(int x, int y, int nb, int res_id)
 	{
 		int num_match=0;
 		// calculate tiles that can go here from ALL possible types
-		for (int t=0;t<NUM_TILE_TYPES;t++)
+		for (uint8_t t=0;t<NUM_TILE_TYPES;t++)
 		{
 			if (tiles[t].edge[nb] == tiles[res_id].edge[opp])
 			{
@@ -254,10 +272,10 @@ void reduce_entropy(int x, int y, int nb, int res_id)
 		screen[y][x]->entropy = num_match;
 		if (num_match == 0)
 		{
-			colour(1); tab(0,line++);printf("error"); exit(-1);
+			colour(1); tab(0,line++);printf("error num_match=0"); exit(-1);
 		}
 	} else {
-		int arr[MAX_POSSIBLES];
+		uint8_t arr[MAX_POSSIBLES];
 		int num_match=0;
 		int num_possibles =  mymin(screen[y][x]->entropy,MAX_POSSIBLES);
 #if DEBUG==1
@@ -266,7 +284,7 @@ void reduce_entropy(int x, int y, int nb, int res_id)
 
 		for (int i=0; i < num_possibles; i++)
 		{
-			int t=screen[y][x]->possibles[i];
+			uint8_t t=screen[y][x]->possibles[i];
 			if (tiles[t].edge[nb] == tiles[res_id].edge[opp])
 			{
 				arr[num_match] = t;
@@ -277,7 +295,7 @@ void reduce_entropy(int x, int y, int nb, int res_id)
 
 		if (num_match == 0)
 		{
-			colour(1); tab(0,line++);printf("error"); exit(-1);
+			colour(1); tab(0,line++);printf("error num_match=0"); exit(-1);
 		}
 
 		for (int i=0;i<num_match;i++)
@@ -467,32 +485,153 @@ int mymin(int a, int b)
 	return (a<b)?a:b;
 }
 
+#if 1
+// Find a tile that needs resolving next. 
+// Choose randomly from the lowest entropy tiles.
 TILE *find_tile()
 {
 	TILE *candidate = NULL;
+	int lowest_entropy = NUM_TILE_TYPES;
+	int n=0; int resolved=0;
 
-	for (int y=0;y<HEIGHT_TILES;y++)
-	{
-		for (int x=0;x<WIDTH_TILES;x++)
+	for (int i=0;i<NUM_TILES;i++) {
+		int x=i%WIDTH_TILES;
+		int y=i/WIDTH_TILES;
+		if (screen[y][x]->entropy > 0 && screen[y][x]->entropy < lowest_entropy ) {
+			lowest_entropy = screen[y][x]->entropy;
+		}
+		if (screen[y][x]->entropy == 0)
 		{
-			if (screen[y][x]->entropy>0 && screen[y][x]->entropy<NUM_TILE_TYPES)
+			resolved++;
+		}
+	}
+	if (resolved == NUM_TILES)
+	{
+		return NULL;
+	}
+	if (lowest_entropy == NUM_TILE_TYPES)
+	{
+		colour(1); tab(0,line++);printf("error no low entropy"); colour(15);
+		
+		for (int i=0;i<NUM_TILES;i++) {
+			int x=i%WIDTH_TILES;
+			int y=i/WIDTH_TILES;
+			if (screen[y][x]->entropy>0)
 			{
 				candidate = screen[y][x];
 				break;
 			}
 		}
 	}
+
+	// get array of low entropy tiles
+	for (int i=0;i<NUM_TILES;i++) {
+		int x=i%WIDTH_TILES;
+		int y=i/WIDTH_TILES;
+		if (screen[y][x]->entropy == lowest_entropy) {
+			candidate_arr[n++] = screen[y][x];
+			if (n==MAX_CANDIDATES) break;
+		}
+	}
 #if DEBUG==1
-	colour(15); tab(0,line++); printf("find %dx%d %d\n",candidate->posx, candidate->posy, candidate->entropy);;
+	colour(15); tab(0,line++); printf("lowest e %d n=%d\n",lowest_entropy,n);
+#endif
+	
+	if (n==0) {
+		colour(1); tab(0,line++);printf("error n=0"); colour(15);
+		return NULL;
+	}
+
+	int r = rand() % n;
+#if DEBUG==1
+	colour(8); tab(0,line++); printf("cand arr size %d chose %d\n",n, r);;
+#endif
+	
+	candidate = candidate_arr[ r ];
+	
+#if DEBUG==1
+	if (candidate!=NULL) {
+		colour(15); tab(0,line++); printf("find %dx%d %d\n",candidate->posx, candidate->posy, candidate->entropy);
+	} else {
+		colour(1); tab(0,line++); printf("find candidate error\n");
+	}
+#endif
+	return candidate;
+}
+#else
+// Find a tile that needs resolving next. 
+// Choose first unresolved tile with entropy < max
+TILE *find_tile()
+{
+	TILE *candidate = NULL;
+
+	for (int i=0;i<NUM_TILES;i++) {
+		int x=i%WIDTH_TILES;
+		int y=i/WIDTH_TILES;
+		if (screen[y][x]->entropy>0 && screen[y][x]->entropy<NUM_TILE_TYPES)
+		{
+			candidate = screen[y][x];
+			break;
+		}
+	}
+#if DEBUG==1
+	if (candidate!=NULL) {
+		colour(15); tab(0,line++); printf("find %dx%d %d\n",candidate->posx, candidate->posy, candidate->entropy);;
+	}
 #endif
 	return candidate;
 }
 
-int get_rand_poss(TILE *tile)
+#endif
+
+#if 1
+uint8_t get_rand_poss(TILE *tile)
+{
+	int num_choices = 0; // tile->entropy;
+	uint8_t choice = tile->possibles[0];
+	int index, index_real, sum;
+
+#if DEBUG==1
+	if (tile->entropy == NUM_TILE_TYPES)
+	{
+		colour(6); tab(0,line++); printf("choices ALL");
+	} else {
+		colour(6); tab(0,line++); printf("choices "); for (int i=0; i < tile->entropy; i++) {printf("%i,",tile->possibles[i]);}
+	}
+#endif
+
+	for (int i=0;i<tile->entropy; i++)
+	{
+		num_choices += tiles[tile->possibles[i]].land_weight+1;
+	}
+	index = rand() % num_choices;
+#if DEBUG==1
+	colour(15); tab(0,line++); printf("num_choices %d rand %d ",num_choices, index);;
+#endif
+	index_real = 0;
+	sum=0;
+
+	do {
+		sum += tiles[tile->possibles[index_real]].land_weight+1;
+		index_real++;
+	} while (sum < index);
+
+	choice = tile->possibles[index_real-1];
+
+#if DEBUG==1
+	printf("choose n=%d %d",index_real-1, choice);;
+#endif
+
+	return choice;
+}
+#else
+uint8_t get_rand_poss(TILE *tile)
 {
 	int index = rand() % tile->entropy;
 	return tile->possibles[index];
 }
+
+#endif
 
 void show_debug_screen() 
 {
