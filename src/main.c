@@ -1,11 +1,46 @@
-//#include "agon/vdp_vdu.h"
 #include "agon/vdp_key.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <mos_api.h>
 #include <string.h>
 
+#define DEBUG 0
+
 #define VDP_PUTS(S) mos_puts( (char *)&(S), sizeof(S), 0)
+
+volatile SYSVAR *vdp_vdu_init( void );
+void select_bitmap( int n );
+void draw_bitmap( int x, int y );
+void logical_scr_dims( bool flag );
+void adv_write_block(int bufferID, int length);
+void adv_clear_buffer(int bufferID);
+void adv_select_bitmap(int bufferId);
+void adv_bitmap_from_buffer(int width, int height, int format);
+void tab(int x,int y);
+void colour(int c);
+
+// VDU 22, n: Mode n
+typedef struct { uint8_t A; uint8_t n; } MY_VDU_mode;
+// VDU 12: CLS
+typedef struct { uint8_t A; } MY_VDU_cls;
+// VDU 23, 27, 0, n : REM Select bitmap n (equating to buffer ID numbered 64000+n)
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t n; } MY_VDU_select_bitmap;
+// VDU 23, 27, 3, x; y; : REM Draw current bitmap on screen at pixel position x, y (a valid bitmap must be selected first)
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t x; uint16_t y; } MY_VDU_draw_bitmap;
+// VDU 23, 0, &C0, n : REM Turn logical screen scaling on and off, where 1=on and 0=off (Requires MOS 1.03 or above)
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t flag; } MY_VDU_logical_scr_dims;
+// VDU 23, 0 &A0, bufferId; 0 : REM write block to buffer
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t bid; uint8_t op; uint16_t length; } MY_VDU_adv_write_block;
+// VDU 23, 0 &A0, bufferId; 2 : REM clear bitmap using bufferid
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t bid; uint8_t op; } MY_VDU_adv_clear_buffer;
+// VDU 23, 27, &20, bufferId;
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t bid; } MY_VDU_adv_select_bitmap;
+// VDU 23, 27, &21, width; height; format  : REM Create bitmap from buffer
+typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t width; uint16_t height; uint8_t format; } MY_VDU_adv_bitmap_from_buffer;
+// VDU 31, x, y: TAB(x,y)
+typedef struct { uint8_t A; uint8_t x; uint8_t y; } MY_VDU_tab;
+// VDU 17, c: COLOUR(c)
+typedef struct { uint8_t A; uint8_t c; } MY_VDU_colour;
 
 static volatile SYSVAR *sys_vars = NULL;
 
@@ -15,59 +50,18 @@ volatile SYSVAR *vdp_vdu_init( void )
 	return (SYSVAR *)sys_vars;
 }
 
-// VDU 22, n: Mode n
-typedef struct { uint8_t A; uint8_t n; } MY_VDU_mode;
+
 static MY_VDU_mode my_mode = { 22, 0 };
-// VDU 12: CLS
-typedef struct { uint8_t A; } MY_VDU_cls;
 static MY_VDU_cls my_cls = { 12 };
-
-// VDU 23, 27, 0, n : REM Select bitmap n (equating to buffer ID numbered 64000+n)
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t n; } MY_VDU_select_bitmap;
-static MY_VDU_select_bitmap	my_select_bitmap = { 23, 27, 0, 0 };
-void select_bitmap( int n );
-
-// VDU 23, 27, 3, x; y; : REM Draw current bitmap on screen at pixel position x, y (a valid bitmap must be selected first)
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t x; uint16_t y; } MY_VDU_draw_bitmap;
-static MY_VDU_draw_bitmap	my_draw_bitmap 	= { 23, 27, 3, 0, 0 };
-void draw_bitmap( int x, int y );
-
-// VDU 23, 0, &C0, n : REM Turn logical screen scaling on and off, where 1=on and 0=off (Requires MOS 1.03 or above)
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t flag; } MY_VDU_logical_scr_dims;
-static MY_VDU_logical_scr_dims	my_logical_scr_dims = { 23,  0, 0xC0, 0 }; 
-void logical_scr_dims( bool flag );
-
-// VDU 23, 0 &A0, bufferId; 0 : REM write block to buffer
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t bid; uint8_t op; uint16_t length; } MY_VDU_adv_write_block;
-static MY_VDU_adv_write_block  	my_adv_write_block = { 23,  0, 0xA0, 0xFA00, 0, 0};
-void adv_write_block(int bufferID, int length);
-
-// VDU 23, 0 &A0, bufferId; 2 : REM clear bitmap using bufferid
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t bid; uint8_t op; } MY_VDU_adv_clear_buffer;
-static MY_VDU_adv_clear_buffer  	my_adv_clear_buffer = { 23,  0, 0xA0, 0xFA00, 2};
-void adv_clear_buffer(int bufferID);
-
-// VDU 23, 27, &20, bufferId;
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t bid; } MY_VDU_adv_select_bitmap;
+static MY_VDU_select_bitmap my_select_bitmap = { 23, 27, 0, 0 };
+static MY_VDU_draw_bitmap my_draw_bitmap = { 23, 27, 3, 0, 0 };
+static MY_VDU_logical_scr_dims my_logical_scr_dims = { 23,  0, 0xC0, 0 }; 
+static MY_VDU_adv_write_block my_adv_write_block = { 23,  0, 0xA0, 0xFA00, 0, 0};
+static MY_VDU_adv_clear_buffer my_adv_clear_buffer = { 23,  0, 0xA0, 0xFA00, 2};
 static MY_VDU_adv_select_bitmap	my_adv_select_bitmap = { 23, 27, 0x20, 0,};
-void adv_select_bitmap(int bufferId);
-
-// VDU 23, 27, &21, width; height; format  : REM Create bitmap from buffer
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t width; uint16_t height; uint8_t format; } MY_VDU_adv_bitmap_from_buffer;
 static MY_VDU_adv_bitmap_from_buffer my_adv_bitmap_from_buffer = { 23, 27, 0x21, 0, 0, 1};
-void adv_bitmap_from_buffer(int width, int height, int format);
-
-// VDU 31, x, y: TAB(x,y)
-typedef struct { uint8_t A; uint8_t x; uint8_t y; } MY_VDU_tab;
 static MY_VDU_tab my_tab = { 31, 0, 0 };
-void tab(int x,int y);
-
-// VDU 17, c: COLOUR(c)
-typedef struct { uint8_t A; uint8_t c; } MY_VDU_colour;
 static MY_VDU_colour my_colour = { 17, 0 };
-void colour(int c);
-
-#define DEBUG 0
 
 #define SCR_WIDTH 320
 #define SCR_HEIGHT 240
@@ -76,6 +70,8 @@ void colour(int c);
 #define WIDTH_TILES (SCR_WIDTH / TILE_WIDTH)
 #define HEIGHT_TILES (SCR_HEIGHT / TILE_HEIGHT)
 #define NUM_TILES   (WIDTH_TILES * HEIGHT_TILES)
+#define WORLD_TWIDTH (WIDTH_TILES * 4)
+#define WORLD_THEIGHT (HEIGHT_TILES * 4)
 
 #define GRS 0
 #define SEA 1
@@ -95,7 +91,7 @@ typedef struct {
 
 #define NUM_TILE_TYPES 16
 TILE_TYPE tiles[] = {
-	{ 0, "ts01.rgb2", 0,{GRS|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4)},4},
+	{ 0, "ts01.rgb2", 0,{GRS|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4),GRS|(GRS<<4)},4*20},
 	{ 1, "ts02.rgb2", 1,{GRS|(SEA<<4),SEA|(SEA<<4),GRS|(SEA<<4),GRS|(GRS<<4)},2},
 	{ 2, "ts03.rgb2", 2,{SEA|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4),SEA|(SEA<<4)},2},
 	{ 3, "ts04.rgb2", 3,{SEA|(SEA<<4),SEA|(GRS<<4),GRS|(GRS<<4),SEA|(GRS<<4)},2},
@@ -141,6 +137,7 @@ int mymin(int a, int b);
 TILE* find_tile();
 uint8_t get_rand_poss(TILE *tile);
 void show_debug_screen();
+void show_screen();
 static int line = 0;
 
 void wait()
@@ -165,12 +162,13 @@ int main(int argc, char *argv[])
 
 	logical_scr_dims(false);
 
-	if (load_bitmaps() <0) return -1;
+	if (load_bitmaps() < 0) return -1;
 
 	init_screen();
 	
 	//colour(15); tab(0,line++); printf("start: %dx%d\n", (WIDTH_TILES/2), (HEIGHT_TILES/2));
-	set_tile((WIDTH_TILES/2), (HEIGHT_TILES/2), rand()%NUM_TILE_TYPES);
+	//set_tile((WIDTH_TILES/2), (HEIGHT_TILES/2), rand()%NUM_TILE_TYPES);
+	set_tile(0, 0, rand()%NUM_TILE_TYPES);
 
 	TILE *next_tile = find_tile();
 
@@ -183,15 +181,77 @@ int main(int argc, char *argv[])
 #endif
 	}
 
-#if DEBUG==1
-	show_debug_screen();
-#endif
+	show_screen();
 
-	deinit_screen();
 	// wait for a key press
 	wait(); 
 
+	deinit_screen();
 	return 0;
+}
+
+/*
+ * My VDP commands 
+ */
+
+void select_bitmap( int n )
+{
+	my_select_bitmap.n = n;
+	VDP_PUTS(my_select_bitmap);
+}
+
+void logical_scr_dims( bool flag )
+{
+	my_logical_scr_dims.flag = 0;
+	if ( flag ) my_logical_scr_dims.flag = 1;
+	VDP_PUTS(my_logical_scr_dims);
+}
+
+void draw_bitmap( int x, int y )
+{
+	my_draw_bitmap.x = x;
+	my_draw_bitmap.y = y;
+	VDP_PUTS(my_draw_bitmap);
+}
+
+void adv_write_block(int bufferID, int length)
+{
+	my_adv_write_block.bid = bufferID;
+	my_adv_write_block.length = length;
+	VDP_PUTS(my_adv_write_block);
+}
+
+void adv_clear_buffer(int bufferID)
+{
+	my_adv_clear_buffer.bid = bufferID;
+	VDP_PUTS(my_adv_clear_buffer);
+}
+
+void adv_select_bitmap(int bufferID)
+{
+	my_adv_select_bitmap.bid = bufferID;
+	VDP_PUTS(my_adv_select_bitmap);
+}
+
+void adv_bitmap_from_buffer(int width, int height, int format)
+{
+	my_adv_bitmap_from_buffer.width = width;
+	my_adv_bitmap_from_buffer.height = height;
+	my_adv_bitmap_from_buffer.format = format; // RGBA2=1
+	VDP_PUTS(my_adv_bitmap_from_buffer);
+}
+
+void tab(int x, int y)
+{
+	my_tab.x = x;
+	my_tab.y = y;
+	VDP_PUTS(my_tab);
+}
+
+void colour(int c)
+{
+	my_colour.c = c;
+	VDP_PUTS(my_colour);
 }
 
 void init_screen()
@@ -362,6 +422,7 @@ int load_bitmaps()
 	free(buffer);
 	//printf("done.\n");
 	
+/*
 #if DEBUG==1
 	for (int x=0; x<NUM_TILE_TYPES; x++)
 	{
@@ -371,7 +432,7 @@ int load_bitmaps()
 	}
 	wait();
 #endif
-	
+*/	
 	return 0;
 }
 
@@ -416,76 +477,12 @@ int read_str(FILE *fp, char *str, char stop) {
 	return bytes;
 }
 	
-/*
- * My VDP commands 
- */
-
-void select_bitmap( int n )
-{
-	my_select_bitmap.n = n;
-	VDP_PUTS(my_select_bitmap);
-}
-
-void logical_scr_dims( bool flag )
-{
-	my_logical_scr_dims.flag = 0;
-	if ( flag ) my_logical_scr_dims.flag = 1;
-	VDP_PUTS(my_logical_scr_dims);
-}
-
-void draw_bitmap( int x, int y )
-{
-	my_draw_bitmap.x = x;
-	my_draw_bitmap.y = y;
-	VDP_PUTS(my_draw_bitmap);
-}
-
-void adv_write_block(int bufferID, int length)
-{
-	my_adv_write_block.bid = bufferID;
-	my_adv_write_block.length = length;
-	VDP_PUTS(my_adv_write_block);
-}
-
-void adv_clear_buffer(int bufferID)
-{
-	my_adv_clear_buffer.bid = bufferID;
-	VDP_PUTS(my_adv_clear_buffer);
-}
-
-void adv_select_bitmap(int bufferID)
-{
-	my_adv_select_bitmap.bid = bufferID;
-	VDP_PUTS(my_adv_select_bitmap);
-}
-
-void adv_bitmap_from_buffer(int width, int height, int format)
-{
-	my_adv_bitmap_from_buffer.width = width;
-	my_adv_bitmap_from_buffer.height = height;
-	my_adv_bitmap_from_buffer.format = format; // RGBA2=1
-	VDP_PUTS(my_adv_bitmap_from_buffer);
-}
-
-void tab(int x, int y)
-{
-	my_tab.x = x;
-	my_tab.y = y;
-	VDP_PUTS(my_tab);
-}
-
-void colour(int c)
-{
-	my_colour.c = c;
-	VDP_PUTS(my_colour);
-}
-
 int mymin(int a, int b)
 {
 	return (a<b)?a:b;
 }
 
-#if 1
+#if 0 // this is very slow
 // Find a tile that needs resolving next. 
 // Choose randomly from the lowest entropy tiles.
 TILE *find_tile()
@@ -585,6 +582,7 @@ TILE *find_tile()
 #endif
 
 #if 1
+// weighted choice
 uint8_t get_rand_poss(TILE *tile)
 {
 	int num_choices = 0; // tile->entropy;
@@ -614,7 +612,7 @@ uint8_t get_rand_poss(TILE *tile)
 	do {
 		sum += tiles[tile->possibles[index_real]].land_weight+1;
 		index_real++;
-	} while (sum < index);
+	} while (sum <= index);
 
 	choice = tile->possibles[index_real-1];
 
@@ -625,6 +623,7 @@ uint8_t get_rand_poss(TILE *tile)
 	return choice;
 }
 #else
+// no weight in choice
 uint8_t get_rand_poss(TILE *tile)
 {
 	int index = rand() % tile->entropy;
@@ -647,6 +646,19 @@ void show_debug_screen()
 			{
 				tab(x*2,y*2); printf("%02X",screen[y][x]->entropy);
 			}
+		}
+	}
+	line=0;
+}
+
+void show_screen() 
+{
+	VDP_PUTS(my_cls);
+	for (int y=0;y<HEIGHT_TILES;y++)
+	{
+		for (int x=0;x<WIDTH_TILES;x++)
+		{
+			display_tile(x,y);
 		}
 	}
 	line=0;
