@@ -1,3 +1,4 @@
+#include "agon/vdp_vdu.h"
 #include "agon/vdp_key.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,63 +6,6 @@
 #include <string.h>
 
 #define DEBUG 0
-
-#define VDP_PUTS(S) mos_puts( (char *)&(S), sizeof(S), 0)
-
-volatile SYSVAR *vdp_vdu_init( void );
-void select_bitmap( int n );
-void draw_bitmap( int x, int y );
-void logical_scr_dims( bool flag );
-void adv_write_block(int bufferID, int length);
-void adv_clear_buffer(int bufferID);
-void adv_select_bitmap(int bufferId);
-void adv_bitmap_from_buffer(int width, int height, int format);
-void tab(int x,int y);
-void colour(int c);
-
-// VDU 22, n: Mode n
-typedef struct { uint8_t A; uint8_t n; } MY_VDU_mode;
-// VDU 12: CLS
-typedef struct { uint8_t A; } MY_VDU_cls;
-// VDU 23, 27, 0, n : REM Select bitmap n (equating to buffer ID numbered 64000+n)
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t n; } MY_VDU_select_bitmap;
-// VDU 23, 27, 3, x; y; : REM Draw current bitmap on screen at pixel position x, y (a valid bitmap must be selected first)
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t x; uint16_t y; } MY_VDU_draw_bitmap;
-// VDU 23, 0, &C0, n : REM Turn logical screen scaling on and off, where 1=on and 0=off (Requires MOS 1.03 or above)
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint8_t flag; } MY_VDU_logical_scr_dims;
-// VDU 23, 0 &A0, bufferId; 0 : REM write block to buffer
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t bid; uint8_t op; uint16_t length; } MY_VDU_adv_write_block;
-// VDU 23, 0 &A0, bufferId; 2 : REM clear bitmap using bufferid
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t bid; uint8_t op; } MY_VDU_adv_clear_buffer;
-// VDU 23, 27, &20, bufferId;
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t bid; } MY_VDU_adv_select_bitmap;
-// VDU 23, 27, &21, width; height; format  : REM Create bitmap from buffer
-typedef struct { uint8_t A; uint8_t B; uint8_t C; uint16_t width; uint16_t height; uint8_t format; } MY_VDU_adv_bitmap_from_buffer;
-// VDU 31, x, y: TAB(x,y)
-typedef struct { uint8_t A; uint8_t x; uint8_t y; } MY_VDU_tab;
-// VDU 17, c: COLOUR(c)
-typedef struct { uint8_t A; uint8_t c; } MY_VDU_colour;
-
-static volatile SYSVAR *sys_vars = NULL;
-
-volatile SYSVAR *vdp_vdu_init( void )
-{
-	sys_vars = (SYSVAR *)mos_sysvars();
-	return (SYSVAR *)sys_vars;
-}
-
-
-static MY_VDU_mode my_mode = { 22, 0 };
-static MY_VDU_cls my_cls = { 12 };
-static MY_VDU_select_bitmap my_select_bitmap = { 23, 27, 0, 0 };
-static MY_VDU_draw_bitmap my_draw_bitmap = { 23, 27, 3, 0, 0 };
-static MY_VDU_logical_scr_dims my_logical_scr_dims = { 23,  0, 0xC0, 0 }; 
-static MY_VDU_adv_write_block my_adv_write_block = { 23,  0, 0xA0, 0xFA00, 0, 0};
-static MY_VDU_adv_clear_buffer my_adv_clear_buffer = { 23,  0, 0xA0, 0xFA00, 2};
-static MY_VDU_adv_select_bitmap	my_adv_select_bitmap = { 23, 27, 0x20, 0,};
-static MY_VDU_adv_bitmap_from_buffer my_adv_bitmap_from_buffer = { 23, 27, 0x21, 0, 0, 1};
-static MY_VDU_tab my_tab = { 31, 0, 0 };
-static MY_VDU_colour my_colour = { 17, 0 };
 
 #define SCR_WIDTH 320
 #define SCR_HEIGHT 240
@@ -72,6 +16,8 @@ static MY_VDU_colour my_colour = { 17, 0 };
 #define NUM_TILES   (WIDTH_TILES * HEIGHT_TILES)
 #define WORLD_TWIDTH (WIDTH_TILES * 4)
 #define WORLD_THEIGHT (HEIGHT_TILES * 4)
+
+#define BM_OFFSET 0xFA00
 
 #define GRS 0
 #define SEA 1
@@ -156,17 +102,15 @@ int main(int argc, char *argv[])
 	vdp_vdu_init();
 	if ( vdp_key_init() == -1 ) return 1;
 
-	int iMode = 8;
+	vdp_mode(8);
 
-	my_mode.n = iMode; VDP_PUTS( my_mode );
-
-	logical_scr_dims(false);
+	vdp_logical_scr_dims(false);
 
 	if (load_bitmaps() < 0) return -1;
 
 	init_screen();
 	
-	//colour(15); tab(0,line++); printf("start: %dx%d\n", (WIDTH_TILES/2), (HEIGHT_TILES/2));
+	//colour(15); vdp_cursor_tab(0,line++); printf("start: %dx%d\n", (WIDTH_TILES/2), (HEIGHT_TILES/2));
 	//set_tile((WIDTH_TILES/2), (HEIGHT_TILES/2), rand()%NUM_TILE_TYPES);
 	set_tile(0, 0, rand()%NUM_TILE_TYPES);
 
@@ -188,70 +132,6 @@ int main(int argc, char *argv[])
 
 	deinit_screen();
 	return 0;
-}
-
-/*
- * My VDP commands 
- */
-
-void select_bitmap( int n )
-{
-	my_select_bitmap.n = n;
-	VDP_PUTS(my_select_bitmap);
-}
-
-void logical_scr_dims( bool flag )
-{
-	my_logical_scr_dims.flag = 0;
-	if ( flag ) my_logical_scr_dims.flag = 1;
-	VDP_PUTS(my_logical_scr_dims);
-}
-
-void draw_bitmap( int x, int y )
-{
-	my_draw_bitmap.x = x;
-	my_draw_bitmap.y = y;
-	VDP_PUTS(my_draw_bitmap);
-}
-
-void adv_write_block(int bufferID, int length)
-{
-	my_adv_write_block.bid = bufferID;
-	my_adv_write_block.length = length;
-	VDP_PUTS(my_adv_write_block);
-}
-
-void adv_clear_buffer(int bufferID)
-{
-	my_adv_clear_buffer.bid = bufferID;
-	VDP_PUTS(my_adv_clear_buffer);
-}
-
-void adv_select_bitmap(int bufferID)
-{
-	my_adv_select_bitmap.bid = bufferID;
-	VDP_PUTS(my_adv_select_bitmap);
-}
-
-void adv_bitmap_from_buffer(int width, int height, int format)
-{
-	my_adv_bitmap_from_buffer.width = width;
-	my_adv_bitmap_from_buffer.height = height;
-	my_adv_bitmap_from_buffer.format = format; // RGBA2=1
-	VDP_PUTS(my_adv_bitmap_from_buffer);
-}
-
-void tab(int x, int y)
-{
-	my_tab.x = x;
-	my_tab.y = y;
-	VDP_PUTS(my_tab);
-}
-
-void colour(int c)
-{
-	my_colour.c = c;
-	VDP_PUTS(my_colour);
 }
 
 void init_screen()
@@ -284,7 +164,7 @@ void deinit_screen()
 void set_tile(int x, int y, uint8_t id)
 {
 #if DEBUG==1
-	colour(15); tab(0,line++); printf("Set tile: %dx%d to %d\n", x,y,id);
+	vdp_set_text_colour(15); vdp_cursor_tab(0,line++); printf("Set tile: %dx%d to %d\n", x,y,id);
 #endif
 
 	screen[y][x]->id = id;
@@ -313,7 +193,7 @@ void reduce_entropy(int x, int y, int nb, uint8_t res_id)
 {
 	int opp = (nb+2)%4; // opposite neighbour position
 #if DEBUG==1
-	colour(2); tab(0,line++); printf("Red: %dx%d nb=%d -> %d ent %d", x,y,nb,res_id,screen[y][x]->entropy);
+	vdp_set_text_colour(2); vdp_cursor_tab(0,line++); printf("Red: %dx%d nb=%d -> %d ent %d", x,y,nb,res_id,screen[y][x]->entropy);
 #endif
 	
 	// case maximum entropy. possibles is not populated
@@ -332,14 +212,14 @@ void reduce_entropy(int x, int y, int nb, uint8_t res_id)
 		screen[y][x]->entropy = num_match;
 		if (num_match == 0)
 		{
-			colour(1); tab(0,line++);printf("error num_match=0"); exit(-1);
+			vdp_set_text_colour(1); vdp_cursor_tab(0,line++);printf("error num_match=0"); exit(-1);
 		}
 	} else {
 		uint8_t arr[MAX_POSSIBLES];
 		int num_match=0;
 		int num_possibles =  mymin(screen[y][x]->entropy,MAX_POSSIBLES);
 #if DEBUG==1
-		colour(3); tab(0,line++); printf("poss "); for (int i=0; i < num_possibles; i++) {printf("%i,",screen[y][x]->possibles[i]);}
+		vdp_set_text_colour(3); vdp_cursor_tab(0,line++); printf("poss "); for (int i=0; i < num_possibles; i++) {printf("%i,",screen[y][x]->possibles[i]);}
 #endif
 
 		for (int i=0; i < num_possibles; i++)
@@ -355,7 +235,7 @@ void reduce_entropy(int x, int y, int nb, uint8_t res_id)
 
 		if (num_match == 0)
 		{
-			colour(1); tab(0,line++);printf("error num_match=0"); exit(-1);
+			vdp_set_text_colour(1); vdp_cursor_tab(0,line++);printf("error num_match=0"); exit(-1);
 		}
 
 		for (int i=0;i<num_match;i++)
@@ -368,22 +248,22 @@ void reduce_entropy(int x, int y, int nb, uint8_t res_id)
 	if (screen[y][x]->entropy == 1)
 	{
 #if DEBUG==1
-		colour(1); tab(0,line++); printf("Resolve: %dx%d-> %d\n", x,y,screen[y][x]->possibles[0]);
+		vdp_set_text_colour(1); vdp_cursor_tab(0,line++); printf("Resolve: %dx%d-> %d\n", x,y,screen[y][x]->possibles[0]);
 #endif
 		set_tile(x,y,screen[y][x]->possibles[0]);
 	}
 	else
 	{
 #if DEBUG==1
-		colour(5); tab(0,line++); printf("now "); for (int i=0; i < screen[y][x]->entropy; i++) {printf("%i,",screen[y][x]->possibles[i]);}
+		vdp_set_text_colour(5); vdp_cursor_tab(0,line++); printf("now "); for (int i=0; i < screen[y][x]->entropy; i++) {printf("%i,",screen[y][x]->possibles[i]);}
 #endif
 	}
 }
 
 void display_tile(int x, int y)
 {
-	select_bitmap(screen[y][x]->id+0xFA00);
-	draw_bitmap(x*TILE_WIDTH, y*TILE_HEIGHT);
+	vdp_adv_select_bitmap(BM_OFFSET + screen[y][x]->id);
+	vdp_draw_bitmap(x*TILE_WIDTH, y*TILE_HEIGHT);
 }
 
 int load_bitmaps()
@@ -410,13 +290,13 @@ int load_bitmaps()
 			printf( "Failed to allocate %d bytes for buffer.\n",file_size );
 			return -1;
 		}
-		tiles[b].bufid = 0xFA00+b;
-		adv_clear_buffer(tiles[b].bufid);
-		adv_write_block(tiles[b].bufid, file_size);
+		tiles[b].bufid = BM_OFFSET + b;
+		vdp_adv_clear_buffer(tiles[b].bufid);
+		vdp_adv_write_block(tiles[b].bufid, file_size);
 		if ( fread( buffer, 1, file_size, fp ) != (size_t)file_size ) return 0;
 		mos_puts( buffer, file_size, 0 );
-		adv_select_bitmap(0xFA00+b);
-		adv_bitmap_from_buffer(TILE_WIDTH, TILE_HEIGHT, 1);
+		vdp_adv_select_bitmap(BM_OFFSET + b);
+		vdp_adv_bitmap_from_buffer(TILE_WIDTH, TILE_HEIGHT, 1);
 		close_file(fp);
 	}
 	free(buffer);
@@ -426,9 +306,9 @@ int load_bitmaps()
 #if DEBUG==1
 	for (int x=0; x<NUM_TILE_TYPES; x++)
 	{
-		tab(x*2,3); printf("%i",x);
-		select_bitmap(x+0xFA00);
-		draw_bitmap(x*TILE_WIDTH,4*8);
+		vdp_cursor_tab(x*2,3); printf("%i",x);
+		vdp_adv_select_bitmap(BM_OFFSET + x);
+		vdp_draw_bitmap(x*TILE_WIDTH,4*8);
 	}
 	wait();
 #endif
@@ -482,80 +362,6 @@ int mymin(int a, int b)
 	return (a<b)?a:b;
 }
 
-#if 0 // this is very slow
-// Find a tile that needs resolving next. 
-// Choose randomly from the lowest entropy tiles.
-TILE *find_tile()
-{
-	TILE *candidate = NULL;
-	int lowest_entropy = NUM_TILE_TYPES;
-	int n=0; int resolved=0;
-
-	for (int i=0;i<NUM_TILES;i++) {
-		int x=i%WIDTH_TILES;
-		int y=i/WIDTH_TILES;
-		if (screen[y][x]->entropy > 0 && screen[y][x]->entropy < lowest_entropy ) {
-			lowest_entropy = screen[y][x]->entropy;
-		}
-		if (screen[y][x]->entropy == 0)
-		{
-			resolved++;
-		}
-	}
-	if (resolved == NUM_TILES)
-	{
-		return NULL;
-	}
-	if (lowest_entropy == NUM_TILE_TYPES)
-	{
-		colour(1); tab(0,line++);printf("error no low entropy"); colour(15);
-		
-		for (int i=0;i<NUM_TILES;i++) {
-			int x=i%WIDTH_TILES;
-			int y=i/WIDTH_TILES;
-			if (screen[y][x]->entropy>0)
-			{
-				candidate = screen[y][x];
-				break;
-			}
-		}
-	}
-
-	// get array of low entropy tiles
-	for (int i=0;i<NUM_TILES;i++) {
-		int x=i%WIDTH_TILES;
-		int y=i/WIDTH_TILES;
-		if (screen[y][x]->entropy == lowest_entropy) {
-			candidate_arr[n++] = screen[y][x];
-			if (n==MAX_CANDIDATES) break;
-		}
-	}
-#if DEBUG==1
-	colour(15); tab(0,line++); printf("lowest e %d n=%d\n",lowest_entropy,n);
-#endif
-	
-	if (n==0) {
-		colour(1); tab(0,line++);printf("error n=0"); colour(15);
-		return NULL;
-	}
-
-	int r = rand() % n;
-#if DEBUG==1
-	colour(8); tab(0,line++); printf("cand arr size %d chose %d\n",n, r);;
-#endif
-	
-	candidate = candidate_arr[ r ];
-	
-#if DEBUG==1
-	if (candidate!=NULL) {
-		colour(15); tab(0,line++); printf("find %dx%d %d\n",candidate->posx, candidate->posy, candidate->entropy);
-	} else {
-		colour(1); tab(0,line++); printf("find candidate error\n");
-	}
-#endif
-	return candidate;
-}
-#else
 // Find a tile that needs resolving next. 
 // Choose first unresolved tile with entropy < max
 TILE *find_tile()
@@ -573,15 +379,12 @@ TILE *find_tile()
 	}
 #if DEBUG==1
 	if (candidate!=NULL) {
-		colour(15); tab(0,line++); printf("find %dx%d %d\n",candidate->posx, candidate->posy, candidate->entropy);;
+		vdp_set_text_colour(15); vdp_cursor_tab(0,line++); printf("find %dx%d %d\n",candidate->posx, candidate->posy, candidate->entropy);;
 	}
 #endif
 	return candidate;
 }
 
-#endif
-
-#if 1
 // weighted choice
 uint8_t get_rand_poss(TILE *tile)
 {
@@ -592,9 +395,9 @@ uint8_t get_rand_poss(TILE *tile)
 #if DEBUG==1
 	if (tile->entropy == NUM_TILE_TYPES)
 	{
-		colour(6); tab(0,line++); printf("choices ALL");
+		vdp_set_text_colour(6); vdp_cursor_tab(0,line++); printf("choices ALL");
 	} else {
-		colour(6); tab(0,line++); printf("choices "); for (int i=0; i < tile->entropy; i++) {printf("%i,",tile->possibles[i]);}
+		vdp_set_text_colour(6); vdp_cursor_tab(0,line++); printf("choices "); for (int i=0; i < tile->entropy; i++) {printf("%i,",tile->possibles[i]);}
 	}
 #endif
 
@@ -604,7 +407,7 @@ uint8_t get_rand_poss(TILE *tile)
 	}
 	index = rand() % num_choices;
 #if DEBUG==1
-	colour(15); tab(0,line++); printf("num_choices %d rand %d ",num_choices, index);;
+	vdp_set_text_colour(15); vdp_cursor_tab(0,line++); printf("num_choices %d rand %d ",num_choices, index);;
 #endif
 	index_real = 0;
 	sum=0;
@@ -622,19 +425,10 @@ uint8_t get_rand_poss(TILE *tile)
 
 	return choice;
 }
-#else
-// no weight in choice
-uint8_t get_rand_poss(TILE *tile)
-{
-	int index = rand() % tile->entropy;
-	return tile->possibles[index];
-}
-
-#endif
 
 void show_debug_screen() 
 {
-	VDP_PUTS(my_cls);
+	vdp_clear_screen();
 	for (int y=0;y<HEIGHT_TILES;y++)
 	{
 		for (int x=0;x<WIDTH_TILES;x++)
@@ -644,7 +438,7 @@ void show_debug_screen()
 				display_tile(x,y);
 			} else if (screen[y][x]->entropy > 0 && screen[y][x]->entropy < NUM_TILE_TYPES)
 			{
-				tab(x*2,y*2); printf("%02X",screen[y][x]->entropy);
+				vdp_cursor_tab(x*2,y*2); printf("%02X",screen[y][x]->entropy);
 			}
 		}
 	}
@@ -653,7 +447,7 @@ void show_debug_screen()
 
 void show_screen() 
 {
-	VDP_PUTS(my_cls);
+	vdp_clear_screen();
 	for (int y=0;y<HEIGHT_TILES;y++)
 	{
 		for (int x=0;x<WIDTH_TILES;x++)
