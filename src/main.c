@@ -15,7 +15,6 @@
 
 #define CHUNK_SIZE 1024
 
-bool db = false;
 int gMode = 8; 
 int gScreenWidth = 320;
 int gScreenHeight = 240;
@@ -51,12 +50,14 @@ int gTileSize = 16;
 #define KEY_d 0x19
 #define KEY_c 0x18
 #define KEY_p 0x25
+#define KEY_q 0x26
 #define KEY_W 0x46
 #define KEY_A 0x30
 #define KEY_S 0x42
 #define KEY_D 0x33
 #define KEY_C 0x32
 #define KEY_P 0x3F
+#define KEY_Q 0x40
 #define KEY_comma 0x5B
 #define KEY_dot 0x59
 #define KEY_lt 0x6E
@@ -115,11 +116,28 @@ clock_t move_wait_ticks;
 
 bool bPlace=false;
 void start_place();
+void stop_place();
+void draw_place(bool draw);
+int placex=0;
+int placey=0;
+int place_selected=-1;
+int oldplacex=0;
+int oldplacey=0;
+int place_tx=0;
+int place_ty=0;
+int oldplace_tx=0;
+int oldplace_ty=0;
+clock_t place_select_wait_ticks;
+int poss_belt[20];
+int poss_belt_num=0;
+void get_possible_belt(int tx, int ty);
+void calc_belt_connects();
 
 clock_t layer_wait_ticks;
 int layer_frame = 0;
 void draw_layer();
 void draw_horizontal_layer(int tx, int ty, int len);
+void draw_box(int x1,int y1, int x2, int y2, int col);
 
 void wait()
 {
@@ -153,6 +171,8 @@ int main(/*int argc, char *argv[]*/)
 		goto my_exit;
 	}
 
+	calc_belt_connects();
+
 	layer1 = (uint8_t *) malloc(sizeof(uint8_t) * gMapWidth * gMapHeight);
 	if (layer1 == NULL)
 	{
@@ -160,31 +180,15 @@ int main(/*int argc, char *argv[]*/)
 		return -1;
 	}
 	memset(layer1,255, gMapWidth * gMapHeight);
-	layer1[20*45+20]=0;
-	layer1[20*45+21]=0;
-	layer1[20*45+22]=0;
-	layer1[20*45+23]=7*4;
-	layer1[19*45+23]=3*4;
-	layer1[18*45+23]=3*4;
-	layer1[17*45+23]=11*4;
-	layer1[17*45+22]=2*4;
-	layer1[17*45+21]=2*4;
-	layer1[17*45+20]=2*4;
-
-
-	for (int i=0;i<16;i++)
-	{
-		layer1[26*45+13+i]=i*4;
-	}
 
 	/* start screen centred */
 	xpos = gTileSize*(gMapWidth - gScreenWidth/gTileSize)/2; 
 	ypos = gTileSize*(gMapHeight - gScreenHeight/gTileSize)/2; 
-	bobx = xpos + gTileSize*(gScreenWidth/gTileSize)/2;
-	boby = ypos + gTileSize*(gScreenHeight/gTileSize)/2;
+	bobx = (xpos + gTileSize*(gScreenWidth/gTileSize)/2) & 0xFFFFF0;
+	boby = (ypos + gTileSize*(gScreenHeight/gTileSize)/2) & 0xFFFFF0;
 
 	// setup complete
-	vdp_mode(gMode + (db?128:0));
+	vdp_mode(gMode);
 	vdp_logical_scr_dims(false);
 	//vdu_set_graphics_viewport()
 
@@ -205,15 +209,10 @@ void game_loop()
 	int exit=0;
 	draw_screen();
 	draw_layer();
-	if (db) 
-	{
-		vdp_swap();
-		draw_screen();
-		draw_layer();
-	}
 	bob_wait_ticks = clock();
 	bob_anim_ticks = clock();
 	layer_wait_ticks = clock();
+	place_select_wait_ticks = clock();
 
 	do {
 		int dir=-1;
@@ -221,42 +220,58 @@ void game_loop()
 		if ( vdp_check_key_press( KEY_RIGHT ) ) {dir=SCROLL_LEFT; }
 		if ( vdp_check_key_press( KEY_UP ) ) {dir=SCROLL_UP; }
 		if ( vdp_check_key_press( KEY_DOWN ) ) {dir=SCROLL_DOWN; }
-		if (dir>=0 && ( move_wait_ticks < clock() ) ) {
-			int bx=bobx;
-			int by=boby;
-			int px=xpos; int nx=xpos;
-			int py=ypos; int ny=ypos;
-			switch (dir) {
-				case SCROLL_RIGHT: nx-=1;break;
-				case SCROLL_LEFT: nx+=1;break;
-				case SCROLL_UP: ny-=1;break;
-				case SCROLL_DOWN: ny+=1;break;
-			}
-			if (db) {
-				draw_bob(false,bx,by,px,py);
-				scroll_screen(dir,1,false);
-				draw_bob(true,bx,by,nx,ny);
-				//draw_screen();
-				vdp_swap();
-			}
-			// draw_bob(false,bx,by,px,py);
-			scroll_screen(dir,1,true);
-			if (bobAtEdge()) draw_bob(true,bx,by,nx,ny);
-			//move_wait_ticks = clock() + 1;
-		}
 		if (layer_wait_ticks < clock()) 
 		{
+			draw_place(false);
 			draw_layer();
 			layer_wait_ticks = clock() + 5;
+			draw_bob(true,bobx,boby,xpos,ypos);
+			draw_place(true);
 		}
 			
-		if ( vdp_check_key_press( KEY_w ) || vdp_check_key_press( KEY_W ) ) {move_bob(BOB_UP, 1); }
-		if ( vdp_check_key_press( KEY_a ) || vdp_check_key_press( KEY_A ) ) {move_bob(BOB_LEFT, 1); }
-		if ( vdp_check_key_press( KEY_s ) || vdp_check_key_press( KEY_S ) ) {move_bob(BOB_DOWN, 1); }
-		if ( vdp_check_key_press( KEY_d ) || vdp_check_key_press( KEY_D ) ) {move_bob(BOB_RIGHT, 1); }
+		if (dir>=0 && ( move_wait_ticks < clock() ) ) {
+			// draw_bob(false,bx,by,px,py);
+			draw_place(false);
+			scroll_screen(dir,1,true);
+			if (bobAtEdge()) {
+				draw_bob(true,bobx,boby,xpos,ypos);
+			}
+			draw_place(true);
+			//move_wait_ticks = clock() + 1;
+		}
+		if ( vdp_check_key_press( KEY_w ) || vdp_check_key_press( KEY_W ) ) { move_bob(BOB_UP, 1); }
+		if ( vdp_check_key_press( KEY_a ) || vdp_check_key_press( KEY_A ) ) { move_bob(BOB_LEFT, 1); }
+		if ( vdp_check_key_press( KEY_s ) || vdp_check_key_press( KEY_S ) ) { move_bob(BOB_DOWN, 1); }
+		if ( vdp_check_key_press( KEY_d ) || vdp_check_key_press( KEY_D ) ) { move_bob(BOB_RIGHT, 1); }
 		if ( vdp_check_key_press( KEY_c ) || vdp_check_key_press( KEY_C ) ) { recentre(); }
 		if ( vdp_check_key_press( KEY_p ) || vdp_check_key_press( KEY_P ) ) { start_place(); }
-		if ( vdp_check_key_press( 0x26 ) || vdp_check_key_press( 0x2D ) ) exit=1; // q or x
+		if ( vdp_check_key_press( KEY_q ) || vdp_check_key_press( KEY_Q ) ) { stop_place(); }
+		if ( vdp_check_key_press( KEY_comma ) ) { 
+			if (bPlace && place_select_wait_ticks < clock() ) {
+				place_selected--;  
+				place_selected = ((place_selected + 1) % (NUM_BELT_TYPES+1)) -1;
+				place_select_wait_ticks = clock() + 30;
+			}
+		}
+		if ( vdp_check_key_press( KEY_dot ) ) { 
+			if (bPlace && place_select_wait_ticks < clock() ) {
+				place_selected++;  
+				place_selected = ((place_selected + 1) % (NUM_BELT_TYPES+1)) -1;
+				place_select_wait_ticks = clock() + 30;
+			}
+		}
+		if ( vdp_check_key_press( 0x8F ) ) // ENTER
+		{
+			if (bPlace)
+			{				
+				if (place_selected>=0)
+				{
+					layer1[place_tx + gMapWidth *  place_ty] = place_selected * 4;
+				}
+				stop_place();
+			}
+		}
+		if ( vdp_check_key_press( 0x2D ) ) exit=1; // x
 
 		vdp_update_key_state();
 	} while (exit==0);
@@ -267,13 +282,6 @@ void game_loop()
 void load_images() 
 {
 	char fname[40];
-	/*
-	for (int fn=1; fn<=24; fn++)
-	{
-		sprintf(fname, "img/t16/tt%02d.rgb2",fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_TILE16 + fn-1);
-	}
-	*/
 	for (int fn=1; fn<=13; fn++)
 	{
 		sprintf(fname, "img/terr16/tr%02d.rgb2",fn);
@@ -420,7 +428,7 @@ void draw_bob(bool draw, int bx, int by, int px, int py)
 {
 	if (!bShowBob) return;
 	if (draw) {
-		vdp_select_bitmap( BMOFF_BOB16 + bob_facing + bob_frame);
+		vdp_select_bitmap( BMOFF_BOB16 + bob_facing*4 + bob_frame);
 		vdp_draw_bitmap( bx-px, by-py );
 	} else {
 		int tx=getTileX(bx);
@@ -441,8 +449,6 @@ void draw_bob(bool draw, int bx, int by, int px, int py)
 		vdp_select_bitmap( tilemap[ (ty+1)*gMapWidth + tx + 1] + BMOFF_TILE16 );
 		vdp_draw_bitmap( tposx + gTileSize, tposy + gTileSize );
 	}
-	if (bPlace) {
-	}
 }
 
 void move_bob(int dir, int speed)
@@ -452,7 +458,7 @@ void move_bob(int dir, int speed)
 	if ( bob_wait_ticks > clock() ) return;
 
 	//if (bob_facing != dir*4) bob_frame=0;
-	bob_facing = dir*4;
+	bob_facing = dir;
 	speed *= (gTileSize/8);
 
 	switch (dir) {
@@ -478,12 +484,6 @@ void move_bob(int dir, int speed)
 			break;
 		default: break;
 	}
-	if (db)
-	{
-		draw_bob(false,bobx,boby,xpos,ypos);
-		draw_bob(true,newx,newy,xpos,ypos);
-		vdp_swap();
-	}
 	draw_bob(false,bobx,boby,xpos,ypos);
 	bobx=newx;
 	boby=newy;
@@ -502,11 +502,6 @@ void recentre()
 	xpos = bobx - gScreenWidth/2;
 	ypos = boby - gScreenHeight/2;
 	draw_screen();
-	if (db) 
-	{
-		vdp_swap();
-		draw_screen();
-	}
 	move_wait_ticks = clock() + 1;
 }
 
@@ -527,6 +522,77 @@ void start_place()
 {
 	if (bPlace) return;
 	bPlace=true;
+	draw_place(true);
+}
+void stop_place()
+{
+	if (!bPlace) return;
+	draw_place(false);
+	bPlace=false;
+}
+
+void draw_place(bool draw) 
+{
+	if (!bPlace) return;
+	int tx = getTileX(bobx+gTileSize/2);
+	int ty = getTileY(boby+gTileSize/2);
+
+	if (bob_facing == BOB_RIGHT) {
+		tx++;
+	} else if (bob_facing == BOB_LEFT) {
+		tx--;
+	} else if (bob_facing == BOB_UP) {
+		ty--;
+	} else if (bob_facing == BOB_DOWN) {
+		ty++;
+	}
+
+	place_tx = tx;
+	place_ty = ty;
+	// undraw
+	if (!draw) {
+		vdp_select_bitmap( tilemap[oldplace_ty*gMapWidth + oldplace_tx] + BMOFF_TILE16 );
+		vdp_draw_bitmap( oldplacex, oldplacey );
+		return;
+	}
+
+	placex=getTilePosInScreenX(tx);
+	placey=getTilePosInScreenY(ty);
+
+	//get_possible_belt(place_tx, place_ty);
+	/*
+	if (poss_belt_num>0)
+	{
+		if (place_selected>=0) {
+			bool bFound=false;
+			for (int i=0;i<poss_belt_num;i++)
+			{
+				if (place_selected == poss_belt[i])
+				{
+					bFound=true;
+					break;
+				}
+				if (!bFound) {
+					place_selected = poss_belt[0];
+				}
+			}	
+		}
+	} else {
+		place_selected = 0;
+	}
+	*/
+
+	if (place_selected>=0)
+	{
+		vdp_select_bitmap( BMOFF_BELT16 + place_selected*4 );
+		vdp_draw_bitmap( placex, placey );
+	}
+
+	draw_box(placex, placey, placex+gTileSize-1, placey+gTileSize-1, 15);
+	oldplacex=placex;
+	oldplacey=placey;
+	oldplace_tx = tx;
+	oldplace_ty = ty;
 }
 
 void draw_layer()
@@ -556,4 +622,76 @@ void draw_horizontal_layer(int tx, int ty, int len)
 		}
 	}
 	
+}
+
+void draw_box(int x1,int y1, int x2, int y2, int col)
+{
+	vdp_gcol( 0, col );
+	vdp_move_to( x1, y1 );
+	vdp_line_to( x1, y2 );
+	vdp_line_to( x2, y2 );
+	vdp_line_to( x2, y1 );
+	vdp_line_to( x1, y1 );
+}
+
+#define DIR_OPP(D) ((D+2)%4)
+void get_possible_belt(int tx, int ty)
+{
+	poss_belt_num = 0;
+	int belt_at_dir[4];
+
+	belt_at_dir[0] = layer1[tx   + (ty-1)*gMapWidth];
+	if (belt_at_dir[0]>=0) belt_at_dir[0] /= 4;
+
+	belt_at_dir[1] = layer1[tx+1 + (ty)*gMapWidth];
+	if (belt_at_dir[1]>=0) belt_at_dir[1] /= 4;
+
+	belt_at_dir[2] = layer1[tx   + (ty+1)*gMapWidth];
+	if (belt_at_dir[2]>=0) belt_at_dir[2] /= 4;
+
+	belt_at_dir[3] = layer1[tx-1 + (ty)*gMapWidth];
+	if (belt_at_dir[3]>=0) belt_at_dir[3] /= 4;
+
+	TAB(0,0);
+	for (int b=0; b<NUM_BELT_TYPES; b++)
+	{
+		for (int dir=0; dir<4; dir++)
+		{
+			if (belt_at_dir[dir] < 0 || belts[belt_at_dir[dir]].to == belts[b].from) {
+				// add belt to list
+				poss_belt[poss_belt_num++] = b;
+			}
+		}
+	}
+	printf("%d Poss: ",poss_belt_num);
+	for (int i=0; i<poss_belt_num;i++)
+	{
+		printf("%d:(%d->%d)\n",poss_belt[i], 
+				belts[poss_belt[i]].from,
+				belts[poss_belt[i]].to);
+	}
+
+	return;
+}
+
+void calc_belt_connects()
+{
+	TAB(0,0);
+	for (int i=0; i< NUM_BELT_TYPES; i++)
+	{
+		for (int dir=0; dir<4; dir++)
+		{
+			bconn[i].connIn[dir] = -1;
+			bconn[i].connOut[dir] = -1;
+		}
+
+		bconn[i].beltID = i;
+		bconn[i].connIn[belts[i].from] = DIR_OPP(belts[i].from);
+		bconn[i].connOut[belts[i].to] = DIR_OPP(belts[i].to);
+
+		//printf("%d: %d->%d [%d,%d,%d,%d] [%d,%d,%d,%d]\n", i, belts[i].from, belts[i].to,
+		//		bconn[i].connIn[0],bconn[i].connIn[1],bconn[i].connIn[2],bconn[i].connIn[3],
+		//		bconn[i].connOut[0],bconn[i].connOut[1],bconn[i].connOut[2],bconn[i].connOut[3]);
+	}
+	//wait();
 }
