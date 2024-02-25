@@ -67,7 +67,7 @@ int gTileSize = 16;
 int xpos=0, ypos=0;
 
 uint8_t* tilemap;
-uint8_t* layer1;
+int8_t* layer1;
 
 FILE *open_file( const char *fname, const char *mode);
 int close_file( FILE *fp );
@@ -128,16 +128,28 @@ int place_ty=0;
 int oldplace_tx=0;
 int oldplace_ty=0;
 clock_t place_select_wait_ticks;
+clock_t place_wait_ticks;
 int poss_belt[20];
 int poss_belt_num=0;
+void do_place();
 void get_possible_belt(int tx, int ty);
-void calc_belt_connects();
+//void calc_belt_connects();
+void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty);
 
 clock_t layer_wait_ticks;
 int layer_frame = 0;
 void draw_layer();
 void draw_horizontal_layer(int tx, int ty, int len);
 void draw_box(int x1,int y1, int x2, int y2, int col);
+
+BELT_LINK **belt_groups = NULL;
+int num_belt_groups = 0;
+int max_num_belt_groups = 10;
+BELT_LINK *make_new_belt_group(int x, int y, int belt);
+int find_belt_group(BELT_PLACE *bp);
+void add_to_group_at_end(int bg, int beltID, int tx, int ty);
+void add_to_group_at_front(int bg, int beltID, int tx, int ty);
+void print_groups();
 
 void wait()
 {
@@ -171,15 +183,15 @@ int main(/*int argc, char *argv[]*/)
 		goto my_exit;
 	}
 
-	calc_belt_connects();
+	//calc_belt_connects();
 
-	layer1 = (uint8_t *) malloc(sizeof(uint8_t) * gMapWidth * gMapHeight);
+	layer1 = (int8_t *) malloc(sizeof(int8_t) * gMapWidth * gMapHeight);
 	if (layer1 == NULL)
 	{
 		printf("Out of memory\n");
 		return -1;
 	}
-	memset(layer1,255, gMapWidth * gMapHeight);
+	memset(layer1, (int8_t)-1, gMapWidth * gMapHeight);
 
 	/* start screen centred */
 	xpos = gTileSize*(gMapWidth - gScreenWidth/gTileSize)/2; 
@@ -212,19 +224,28 @@ void game_loop()
 	bob_wait_ticks = clock();
 	bob_anim_ticks = clock();
 	layer_wait_ticks = clock();
+	place_wait_ticks = clock();
 	place_select_wait_ticks = clock();
 
 	do {
 		int dir=-1;
-		if ( vdp_check_key_press( KEY_LEFT ) ) {dir=SCROLL_RIGHT; }
-		if ( vdp_check_key_press( KEY_RIGHT ) ) {dir=SCROLL_LEFT; }
-		if ( vdp_check_key_press( KEY_UP ) ) {dir=SCROLL_UP; }
-		if ( vdp_check_key_press( KEY_DOWN ) ) {dir=SCROLL_DOWN; }
+		int place_dir=-1;
+		if (!bPlace) {
+			if ( vdp_check_key_press( KEY_LEFT ) ) {dir=SCROLL_RIGHT; }
+			if ( vdp_check_key_press( KEY_RIGHT ) ) {dir=SCROLL_LEFT; }
+			if ( vdp_check_key_press( KEY_UP ) ) {dir=SCROLL_UP; }
+			if ( vdp_check_key_press( KEY_DOWN ) ) {dir=SCROLL_DOWN; }
+		} else {
+			if ( vdp_check_key_press( KEY_LEFT ) ) {place_dir=SCROLL_RIGHT; }
+			if ( vdp_check_key_press( KEY_RIGHT ) ) {place_dir=SCROLL_LEFT; }
+			if ( vdp_check_key_press( KEY_UP ) ) {place_dir=SCROLL_UP; }
+			if ( vdp_check_key_press( KEY_DOWN ) ) {place_dir=SCROLL_DOWN; }
+		}
 		if (layer_wait_ticks < clock()) 
 		{
 			draw_place(false);
 			draw_layer();
-			layer_wait_ticks = clock() + 5;
+			layer_wait_ticks = clock() + 7; // belt anim speed
 			draw_bob(true,bobx,boby,xpos,ypos);
 			draw_place(true);
 		}
@@ -239,6 +260,18 @@ void game_loop()
 			draw_place(true);
 			//move_wait_ticks = clock() + 1;
 		}
+		if (place_dir>=0 && ( place_wait_ticks < clock() ) ) {
+			draw_place(false);
+			switch(place_dir) {
+				case SCROLL_RIGHT: place_tx--; break;
+				case SCROLL_LEFT: place_tx++; break;
+				case SCROLL_UP: place_ty--; break;
+				case SCROLL_DOWN: place_ty++; break;
+				default: break;
+			}
+			draw_place(true);
+			place_wait_ticks = clock() +10;
+		}
 		if ( vdp_check_key_press( KEY_w ) || vdp_check_key_press( KEY_W ) ) { move_bob(BOB_UP, 1); }
 		if ( vdp_check_key_press( KEY_a ) || vdp_check_key_press( KEY_A ) ) { move_bob(BOB_LEFT, 1); }
 		if ( vdp_check_key_press( KEY_s ) || vdp_check_key_press( KEY_S ) ) { move_bob(BOB_DOWN, 1); }
@@ -249,27 +282,21 @@ void game_loop()
 		if ( vdp_check_key_press( KEY_comma ) ) { 
 			if (bPlace && place_select_wait_ticks < clock() ) {
 				place_selected--;  
-				place_selected = ((place_selected + 1) % (NUM_BELT_TYPES+1)) -1;
-				place_select_wait_ticks = clock() + 30;
+				if (place_selected < -1) place_selected += NUM_BELT_TYPES+1;
+				//place_selected = ((place_selected + 1) % (NUM_BELT_TYPES+1)) -1;
+				place_select_wait_ticks = clock() + 20;
 			}
 		}
 		if ( vdp_check_key_press( KEY_dot ) ) { 
 			if (bPlace && place_select_wait_ticks < clock() ) {
 				place_selected++;  
 				place_selected = ((place_selected + 1) % (NUM_BELT_TYPES+1)) -1;
-				place_select_wait_ticks = clock() + 30;
+				place_select_wait_ticks = clock() + 20;
 			}
 		}
 		if ( vdp_check_key_press( 0x8F ) ) // ENTER
 		{
-			if (bPlace)
-			{				
-				if (place_selected>=0)
-				{
-					layer1[place_tx + gMapWidth *  place_ty] = place_selected * 4;
-				}
-				stop_place();
-			}
+			do_place();
 		}
 		if ( vdp_check_key_press( 0x2D ) ) exit=1; // x
 
@@ -522,6 +549,18 @@ void start_place()
 {
 	if (bPlace) return;
 	bPlace=true;
+	place_tx = getTileX(bobx+gTileSize/2);
+	place_ty = getTileY(boby+gTileSize/2);
+	if (bob_facing == BOB_RIGHT) {
+		place_tx++;
+	} else if (bob_facing == BOB_LEFT) {
+		place_tx--;
+	} else if (bob_facing == BOB_UP) {
+		place_ty--;
+	} else if (bob_facing == BOB_DOWN) {
+		place_ty++;
+	}
+	 
 	draw_place(true);
 }
 void stop_place()
@@ -534,9 +573,10 @@ void stop_place()
 void draw_place(bool draw) 
 {
 	if (!bPlace) return;
-	int tx = getTileX(bobx+gTileSize/2);
-	int ty = getTileY(boby+gTileSize/2);
+	//int tx = getTileX(bobx+gTileSize/2);
+	//int ty = getTileY(boby+gTileSize/2);
 
+	/*
 	if (bob_facing == BOB_RIGHT) {
 		tx++;
 	} else if (bob_facing == BOB_LEFT) {
@@ -546,9 +586,10 @@ void draw_place(bool draw)
 	} else if (bob_facing == BOB_DOWN) {
 		ty++;
 	}
+	*/
 
-	place_tx = tx;
-	place_ty = ty;
+	//place_tx = tx;
+	//place_ty = ty;
 	// undraw
 	if (!draw) {
 		vdp_select_bitmap( tilemap[oldplace_ty*gMapWidth + oldplace_tx] + BMOFF_TILE16 );
@@ -556,8 +597,8 @@ void draw_place(bool draw)
 		return;
 	}
 
-	placex=getTilePosInScreenX(tx);
-	placey=getTilePosInScreenY(ty);
+	placex=getTilePosInScreenX(place_tx);
+	placey=getTilePosInScreenY(place_ty);
 
 	//get_possible_belt(place_tx, place_ty);
 	/*
@@ -591,8 +632,8 @@ void draw_place(bool draw)
 	draw_box(placex, placey, placex+gTileSize-1, placey+gTileSize-1, 15);
 	oldplacex=placex;
 	oldplacey=placey;
-	oldplace_tx = tx;
-	oldplace_ty = ty;
+	oldplace_tx = place_tx;
+	oldplace_ty = place_ty;
 }
 
 void draw_layer()
@@ -615,9 +656,9 @@ void draw_horizontal_layer(int tx, int ty, int len)
 
 	for (int i=0; i<len; i++)
 	{
-		if ( layer1[ty*gMapWidth + tx+i] != 255 )
+		if ( layer1[ty*gMapWidth + tx+i] >= 0 )
 		{
-			vdp_select_bitmap( layer1[ty*gMapWidth + tx+i] + BMOFF_BELT16 + layer_frame);
+			vdp_select_bitmap( layer1[ty*gMapWidth + tx+i]*4 + BMOFF_BELT16 + layer_frame);
 			vdp_draw_bitmap( px + i*gTileSize, py );
 		}
 	}
@@ -634,23 +675,34 @@ void draw_box(int x1,int y1, int x2, int y2, int col)
 	vdp_line_to( x1, y1 );
 }
 
+void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty)
+{
+	bn[0].beltID = layer1[tx   + (ty-1)*gMapWidth];
+	bn[0].locX = tx;
+	bn[0].locY = ty-1;
+
+	bn[1].beltID = layer1[tx+1 + (ty)*gMapWidth];
+	bn[1].locX = tx+1;
+	bn[1].locY = ty;
+
+	bn[2].beltID = layer1[tx   + (ty+1)*gMapWidth];
+	bn[2].locX = tx;
+	bn[2].locY = ty+1;
+
+	bn[3].beltID = layer1[tx-1 + (ty)*gMapWidth];
+	bn[3].locX = tx-1;
+	bn[3].locY = ty;
+
+}
+
 #define DIR_OPP(D) ((D+2)%4)
+/*
 void get_possible_belt(int tx, int ty)
 {
 	poss_belt_num = 0;
-	int belt_at_dir[4];
 
-	belt_at_dir[0] = layer1[tx   + (ty-1)*gMapWidth];
-	if (belt_at_dir[0]>=0) belt_at_dir[0] /= 4;
-
-	belt_at_dir[1] = layer1[tx+1 + (ty)*gMapWidth];
-	if (belt_at_dir[1]>=0) belt_at_dir[1] /= 4;
-
-	belt_at_dir[2] = layer1[tx   + (ty+1)*gMapWidth];
-	if (belt_at_dir[2]>=0) belt_at_dir[2] /= 4;
-
-	belt_at_dir[3] = layer1[tx-1 + (ty)*gMapWidth];
-	if (belt_at_dir[3]>=0) belt_at_dir[3] /= 4;
+	uint8_t belt_at_dir[4];
+	get_belt_neighbours(belt_at_dir, tx, ty);
 
 	TAB(0,0);
 	for (int b=0; b<NUM_BELT_TYPES; b++)
@@ -673,7 +725,9 @@ void get_possible_belt(int tx, int ty)
 
 	return;
 }
+*/
 
+/*
 void calc_belt_connects()
 {
 	TAB(0,0);
@@ -694,4 +748,207 @@ void calc_belt_connects()
 		//		bconn[i].connOut[0],bconn[i].connOut[1],bconn[i].connOut[2],bconn[i].connOut[3]);
 	}
 	//wait();
+}
+*/
+
+void do_place()
+{
+	if (!bPlace || place_selected<0) return;
+
+	draw_screen(); // to clear debug messages
+	layer1[place_tx + gMapWidth *  place_ty] = place_selected;
+	
+	BELT_PLACE bn[4];
+	get_belt_neighbours(bn, place_tx, place_ty);
+
+	TAB(0,0);
+	printf("BN %d %d %d %d \n",bn[0].beltID,bn[1].beltID,bn[2].beltID,bn[3].beltID);
+
+	int in_connection = -1;
+	int out_connection = -1;
+	for (int i=0; i<4; i++)
+	{
+		// check neighbour exit coming into selected
+		if (bn[i].beltID >=0 && belts[bn[i].beltID].to == DIR_OPP(i)) {
+			// check piece fits
+			if (belts[place_selected].from == i) {
+				in_connection = i;
+			}
+		}
+		// check neighbour entry coming from selected
+		if (bn[i].beltID >=0 && belts[bn[i].beltID].from == DIR_OPP(i)) {
+			// check piece fits
+			if (belts[place_selected].to == i) {
+				out_connection = i;
+			}
+		}
+	}
+	if (in_connection == -1 && out_connection == -1)
+	{
+		make_new_belt_group(place_tx, place_ty, place_selected);
+	} else {
+		int in_bg = -1;
+		int out_bg = -1;
+		if (in_connection>=0) {
+			in_bg = find_belt_group(&bn[in_connection]);
+			if (in_bg>=0) {
+				TAB(25,0);printf("Add to end\n");
+				add_to_group_at_end(in_bg,place_selected, place_tx, place_ty);
+			}
+		}
+		if (out_connection>=0) {
+			out_bg = find_belt_group(&bn[out_connection]);
+			if (out_bg>=0) {
+				TAB(25,0);printf("Add to front\n");
+				add_to_group_at_front(out_bg, place_selected, place_tx, place_ty);
+			}
+		}
+
+	}
+	print_groups();
+	stop_place();
+}
+
+BELT_LINK *make_new_belt_group(int x, int y, int belt)
+{
+	if (belt_groups==NULL)
+	{
+		belt_groups = (BELT_LINK**) malloc(sizeof(BELT_LINK*) * max_num_belt_groups);
+		if (belt_groups == NULL)
+		{
+			printf("out of memory\n");
+			return NULL;
+		}
+		for (int i=0;i<max_num_belt_groups;i++)
+		{
+			belt_groups[i]=NULL;
+		}
+	}
+	if (num_belt_groups>=max_num_belt_groups)
+	{
+		max_num_belt_groups += 10;
+		belt_groups = (BELT_LINK**) realloc(belt_groups, max_num_belt_groups * sizeof(BELT_LINK*));
+		if (belt_groups == NULL)
+		{
+			printf("out of memory on realloc\n");
+			return NULL;
+		}
+		for (int i=num_belt_groups;i<max_num_belt_groups;i++)
+		{
+			belt_groups[i]=NULL;
+		}
+	}
+
+	BELT_LINK *bl = malloc(sizeof(BELT_LINK));
+	if (bl == NULL)
+	{
+		printf("out of memory\n");
+		return NULL;
+	}
+	bl->beltID = belt;
+	bl->locX = x;
+	bl->locY = y;
+	bl->nextLink = NULL;
+	bl->prevLink = NULL;
+	belt_groups[num_belt_groups] = bl;
+
+	TAB(0,1); printf("New BG %d: %d %d,%d\n",num_belt_groups,bl->beltID,bl->locX,bl->locY);
+
+	num_belt_groups++;
+	return bl;
+}
+
+int find_belt_group(BELT_PLACE *bp)
+{
+	bool found=false;
+	BELT_LINK *bl = NULL;	
+	int bg;
+	TAB(0,2);
+	printf("find %d %d,%d\n",bp->beltID, bp->locX, bp->locY);
+
+	for (bg=0;bg<num_belt_groups;bg++)
+	{
+		bl = belt_groups[bg];
+		while (bl != NULL)
+		{
+			if (bl->beltID == bp->beltID &&
+			    bl->locX == bp->locX &&
+			    bl->locY == bp->locY)
+			{
+				found=true;
+				break;
+			}
+			bl = (BELT_LINK*)bl->nextLink;
+		}
+		if (found) break;
+	}
+
+	if (found) {
+		printf("found in group %d\n", bg);
+	}
+
+	return bg;
+}
+
+void add_to_group_at_end(int bg, int beltID, int tx, int ty)
+{
+	BELT_LINK * newbl = malloc(sizeof(BELT_LINK));
+	if (newbl==NULL)
+	{
+		printf("out of mem\n");
+		return;
+	}
+	newbl->beltID = beltID;
+	newbl->locX = tx;
+	newbl->locY = ty;
+	newbl->nextLink = NULL;
+	newbl->prevLink = NULL;
+
+	BELT_LINK *bl = belt_groups[bg];
+	while (bl->nextLink != NULL)
+	{
+		bl = (BELT_LINK*)bl->nextLink;
+	}
+	
+	newbl->prevLink = (struct BELT_LINK*)bl;
+
+	bl->nextLink = (struct BELT_LINK*)newbl;
+}
+void add_to_group_at_front(int bg, int beltID, int tx, int ty)
+{
+	BELT_LINK * newbl = malloc(sizeof(BELT_LINK));
+	if (newbl==NULL)
+	{
+		printf("out of mem\n");
+		return;
+	}
+	newbl->beltID = beltID;
+	newbl->locX = tx;
+	newbl->locY = ty;
+	newbl->nextLink = NULL;
+	newbl->prevLink = NULL;
+
+
+	BELT_LINK *bl = belt_groups[bg];
+	bl->prevLink = (struct BELT_LINK*)newbl;
+	newbl->nextLink = (struct BELT_LINK*)bl;
+	belt_groups[bg] = newbl;
+}
+
+void print_groups()
+{
+	int line=2;
+	TAB(23,line++);
+	printf("groups %d\n",num_belt_groups);
+	for (int bg=0;bg<num_belt_groups;bg++)
+	{
+		BELT_LINK *bl = belt_groups[bg];
+		TAB(23,line++);
+		printf("%d: ",bg);
+		while(bl!=NULL)
+		{
+			printf("%d ",bl->beltID);
+			bl = (BELT_LINK*)bl->nextLink;
+		}
+	}
 }

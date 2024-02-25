@@ -15,13 +15,20 @@ typedef struct {
 } BELT_CONFIG;
 
 typedef struct {
-	uint8_t beltID;
+	int8_t beltID;
 	int locX;
 	int locY;
 	int contents;
 	struct BELT_LINK *nextLink;
 	struct BELT_LINK *prevLink;
 } BELT_LINK;
+
+typedef struct {
+	uint8_t beltID;
+	int locX;
+	int locY;
+} BELT_PLACE;
+
 
 #define NUM_BELT_TYPES 12
 //    0
