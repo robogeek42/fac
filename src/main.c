@@ -24,6 +24,7 @@ int gMapHeight = 200;
 int gTileSize = 16;
 
 #define BMOFF_TILE16 0
+#define BMOFF_FEAT16 32
 #define BMOFF_BOB16 64
 #define BMOFF_BELT16 80
 
@@ -79,7 +80,6 @@ void wait_clock( clock_t ticks );
 double my_atof(char *str);
 
 void load_images();
-void show_map();
 void game_loop();
 
 int getWorldCoordX(int sx) { return (xpos + sx); }
@@ -89,6 +89,7 @@ int getTileY(int sy) { return (sy/gTileSize); }
 int getTilePosInScreenX(int tx) { return ((tx * gTileSize) - xpos); }
 int getTilePosInScreenY(int ty) { return ((ty * gTileSize) - ypos); }
 
+void draw_tile(int tx, int ty, int tposx, int tposy);
 void draw_screen();
 void scroll_screen(int dir, int step, bool updatepos);
 void draw_horizontal(int tx, int ty, int len);
@@ -96,6 +97,7 @@ void draw_vertical(int tx, int ty, int len);
 void recentre();
 
 int load_map(char *mapname);
+void place_feature_overlay(uint8_t *data, int sx, int sy, int tile, int tx, int ty);
 
 #define TILE_INFO_FILE "img/tileinfo.txt"
 int readTileInfoFile(char *path, TileInfoFile *tif, int items);
@@ -176,10 +178,6 @@ int main(/*int argc, char *argv[]*/)
 		return -1;
 	}
 
-	//if (load_map("maps/mapmap_dry_256x256.data") != 0)
-	//if (load_map("maps/myworld_wet_256x256.data") != 0)
-	//if (load_map("maps/map_400x400_1234_0.4000_2_-0.130_0.000_0.400.data") != 0)
-	//if (load_map("maps/tm_1234_200x200.data") != 0)
 	if (load_map("maps/fmap.data") != 0)
 	{
 		printf("Failed to load map\n");
@@ -317,6 +315,11 @@ void load_images()
 		sprintf(fname, "img/terr16/tr%02d.rgb2",fn);
 		load_bitmap_file(fname, 16, 16, BMOFF_TILE16 + fn-1);
 	}
+	for (int fn=1; fn<=5; fn++)
+	{
+		sprintf(fname, "img/tf16/tf%02d.rgb2",fn);
+		load_bitmap_file(fname, 16, 16, BMOFF_FEAT16 + fn-1);
+	}
 	for (int fn=1; fn<=16; fn++)
 	{
 		sprintf(fname, "img/b16/bob%02d.rgb2",fn);
@@ -335,18 +338,16 @@ void load_images()
 	
 }
 
-void load_belts()
+void draw_tile(int tx, int ty, int tposx, int tposy)
 {
-	char fname[40];
-	for (int fn=1; fn<=16; fn++)
+	uint8_t tile = tilemap[ty*gMapWidth + tx] & 0x0F;
+	uint8_t overlay = (tilemap[ty*gMapWidth + tx] & 0xF0) >> 4;
+	vdp_select_bitmap( tile + BMOFF_TILE16);
+	vdp_draw_bitmap( tposx, tposy );
+	if (overlay > 0)
 	{
-		sprintf(fname, "img/belt16/belt%02d.rgb2",fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_BELT16 + fn-1);
-	}
-	for (int fn=1; fn<=32; fn++)
-	{
-		sprintf(fname, "img/belt16/bbelt%02d.rgb2",fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_BELT16 + 16 + fn-1);
+		vdp_select_bitmap( overlay - 1 + BMOFF_FEAT16);
+		vdp_draw_bitmap( tposx, tposy );
 	}
 }
 
@@ -371,8 +372,7 @@ void draw_horizontal(int tx, int ty, int len)
 
 	for (int i=0; i<len; i++)
 	{
-		vdp_select_bitmap( tilemap[ty*gMapWidth + tx+i] + BMOFF_TILE16);
-		vdp_draw_bitmap( px + i*gTileSize, py );
+		draw_tile(tx + i, ty, px + i*gTileSize, py); 
 		vdp_update_key_state();
 	}
 	
@@ -384,8 +384,7 @@ void draw_vertical(int tx, int ty, int len)
 
 	for (int i=0; i<len; i++)
 	{
-		vdp_select_bitmap( tilemap[(ty+i)*gMapWidth + tx] + BMOFF_TILE16);
-		vdp_draw_bitmap( px, py + i*gTileSize );
+		draw_tile(tx, ty + i, px, py + i*gTileSize);
 		vdp_update_key_state();
 	}
 }
@@ -447,10 +446,75 @@ void scroll_screen(int dir, int step, bool updatepos)
 	}
 }
 
+uint8_t oval1_block6x6[6*6] = {
+	0,0,1,1,0,0,
+	0,1,1,1,1,0,
+	1,1,1,1,1,0,
+	1,1,1,1,1,1,
+	0,1,1,1,1,0,
+	0,0,1,0,0,0};
+
+uint8_t oval2_block6x6[6*6] = {
+	0,1,1,1,0,0,
+	0,1,0,1,1,0,
+	1,1,1,1,0,0,
+	0,1,0,1,1,1,
+	0,1,1,1,1,0,
+	0,0,1,1,0,0};
+
+uint8_t rnd1_block5x5[5*5] = {
+	0,1,0,1,1,
+	0,0,1,0,0,
+	1,0,0,0,0,
+	0,1,0,1,0,
+	0,1,0,1,0,
+};
+uint8_t rnd2_block5x5[5*5] = {
+	0,0,0,1,0,
+	0,1,1,1,0,
+	1,1,0,0,1,
+	0,0,1,0,0,
+	1,1,0,0,1,
+};
+
+uint8_t rnd1_block4x4[4*4] = {
+	0,1,1,0,
+	1,0,1,0,
+	0,0,0,1,
+	1,1,0,0,
+};
+
+
 int load_map(char *mapname)
 {
 	uint8_t ret = mos_load( mapname, (uint24_t) tilemap,  gMapWidth * gMapHeight );
+	place_feature_overlay(oval1_block6x6,6,6,0,30,10);
+	place_feature_overlay(oval2_block6x6,6,6,1,10,23);
+	place_feature_overlay(oval1_block6x6,6,6,2,22,29);
+
+	place_feature_overlay(rnd1_block5x5,5,5,4,5,5);
+	place_feature_overlay(rnd1_block5x5,5,5,4,15,8);
+	place_feature_overlay(rnd2_block5x5,5,5,4,20,30);
+	place_feature_overlay(rnd1_block5x5,5,5,4,7,26);
+	place_feature_overlay(rnd2_block5x5,5,5,4,32,22);
+
+	place_feature_overlay(rnd1_block4x4,4,4,4,28,19);
+	place_feature_overlay(rnd1_block4x4,4,4,4,12,3);
 	return ret;
+}
+
+void place_feature_overlay(uint8_t *data, int sx, int sy, int tile, int tx, int ty)
+{
+	for (int y=0; y<sy; y++) 
+	{
+		for (int x=0; x<sx; x++) 
+		{
+			if (data[x+(y*sx)] > 0)
+			{
+				tilemap[(tx+x) + (ty+y)*gMapWidth] |= (tile+1)<<4;
+			}
+		}
+	}
 }
 
 
@@ -467,18 +531,19 @@ void draw_bob(bool draw, int bx, int by, int px, int py)
 		int tposy = ty*gTileSize - py;
 
 		// have to re-draw the 4 tiles that are under the sprite
-		vdp_select_bitmap( tilemap[ty*gMapWidth + tx] + BMOFF_TILE16 );
-		vdp_draw_bitmap( tposx, tposy );
-
-		vdp_select_bitmap( tilemap[ty*gMapWidth + tx + 1] + BMOFF_TILE16 );
-		vdp_draw_bitmap( tposx + gTileSize, tposy );
-
-		vdp_select_bitmap( tilemap[ (ty+1)*gMapWidth + tx] + BMOFF_TILE16 );
-		vdp_draw_bitmap( tposx, tposy + gTileSize );
-
-		vdp_select_bitmap( tilemap[ (ty+1)*gMapWidth + tx + 1] + BMOFF_TILE16 );
-		vdp_draw_bitmap( tposx + gTileSize, tposy + gTileSize );
+		draw_tile(tx, ty, tposx, tposy);
+		draw_tile(tx+1, ty, tposx+gTileSize, tposy);
+		draw_tile(tx, ty+1, tposx, tposy+gTileSize);
+		draw_tile(tx+1, ty+1, tposx+gTileSize, tposy+gTileSize);
 	}
+}
+
+bool check_tile(int px, int py)
+{
+	int tx=getTileX(px);
+	int ty=getTileY(py);
+
+	return tilemap[tx+ty*gMapWidth]<16;
 }
 
 void move_bob(int dir, int speed)
@@ -493,22 +558,34 @@ void move_bob(int dir, int speed)
 
 	switch (dir) {
 		case BOB_LEFT:
-			if (bobx > speed) {
+			if (bobx > speed 
+					&& check_tile(bobx-speed,boby)
+					&& check_tile(bobx-speed,boby+gTileSize-1)
+					) {
 				newx -= speed;
 			}
 			break;
 		case BOB_RIGHT:
-			if (bobx < gMapWidth*gTileSize - speed) {
+			if (bobx < gMapWidth*gTileSize - speed 
+					&& check_tile(bobx+speed+gTileSize-1,boby)
+					&& check_tile(bobx+speed+gTileSize-1, boby+gTileSize-1)
+						) {
 				newx += speed;
 			}
 			break;
 		case BOB_UP:
-			if (boby > speed) {
+			if (boby > speed 
+					&& check_tile(bobx,boby-speed)
+					&& check_tile(bobx+gTileSize-1,boby-speed)
+					) {
 				newy -= speed;
 			}
 			break;
 		case BOB_DOWN:
-			if (boby < gMapHeight*gTileSize - speed) {
+			if (boby < gMapHeight*gTileSize - speed 
+				&& check_tile(bobx,boby+speed+gTileSize-1)
+				&& check_tile(bobx+gTileSize-1,boby+speed+gTileSize-1)
+				) {
 				newy += speed;
 			}
 			break;
@@ -595,8 +672,7 @@ void draw_place(bool draw)
 	//place_ty = ty;
 	// undraw
 	if (!draw) {
-		vdp_select_bitmap( tilemap[oldplace_ty*gMapWidth + oldplace_tx] + BMOFF_TILE16 );
-		vdp_draw_bitmap( oldplacex, oldplacey );
+		draw_tile(oldplace_tx, oldplace_ty, oldplacex, oldplacey);
 		return;
 	}
 
@@ -757,8 +833,6 @@ void calc_belt_connects()
 void do_place()
 {
 	if (!bPlace || place_selected<0) return;
-
-	draw_screen(); // to clear debug messages
 		       
 	int belt_at_place = layer1[place_ty*gMapWidth + place_tx];;
 
@@ -766,6 +840,7 @@ void do_place()
 	get_belt_neighbours(bn, place_tx, place_ty);
 
 	if (belt_debug) { 
+		draw_screen(); // to clear debug messages
 		TAB(0,0); printf("BN %d %d %d %d \n",bn[0].beltID,bn[1].beltID,bn[2].beltID,bn[3].beltID);
 	}
 
