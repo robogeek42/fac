@@ -130,7 +130,7 @@ clock_t bob_wait_ticks;
 clock_t bob_anim_ticks;
 clock_t move_wait_ticks;
 
-bool belt_debug = false;
+bool belt_debug = true;
 bool bPlace=false;
 void start_place();
 void stop_place();
@@ -336,8 +336,8 @@ void game_loop()
 		if ( vdp_check_key_press( 0x2D ) ) exit=1; // x
 
 		if ( item_move_wait_ticks <  clock() ) {
-			move_belt_items();
-			item_move_wait_ticks = clock()+60;
+			//move_belt_items();
+			item_move_wait_ticks = clock()+30;
 		}
 
 		vdp_update_key_state();
@@ -1015,6 +1015,7 @@ BELT_LINK *make_new_belt_group(int x, int y, int belt)
 	bl->locY = y;
 	bl->nextLink = NULL;
 	bl->prevLink = NULL;
+	for (int i=0;i<10;i++) { bl->contents[i]=0; }
 	belt_groups[num_belt_groups] = bl;
 
 	if (belt_debug) { TAB(0,1); printf("New BG %d: %d %d,%d\n",num_belt_groups,bl->beltID,bl->locX,bl->locY); }
@@ -1076,6 +1077,7 @@ void add_to_group_at_end(int bg, int beltID, int tx, int ty)
 	newbl->locY = ty;
 	newbl->nextLink = NULL;
 	newbl->prevLink = NULL;
+	for (int i=0;i<10;i++) { newbl->contents[i]=0; }
 
 	BELT_LINK *bl = belt_groups[bg];
 	while (bl->nextLink != NULL)
@@ -1100,6 +1102,7 @@ void add_to_group_at_front(int bg, int beltID, int tx, int ty)
 	newbl->locY = ty;
 	newbl->nextLink = NULL;
 	newbl->prevLink = NULL;
+	for (int i=0;i<10;i++) { newbl->contents[i]=0; }
 
 
 	BELT_LINK *bl = belt_groups[bg];
@@ -1210,7 +1213,7 @@ bool find_belt(int tx, int ty, int *belt_group, BELT_LINK *belt_link)
 		bp.locY = ty;
 	}
 	if (belt_debug) {
-		TAB(0,2); 
+		TAB(0,5); 
 		//printf("find %d %d,%d\n",bp->beltID, bp->locX, bp->locY);
 	}
 
@@ -1241,7 +1244,7 @@ bool find_belt(int tx, int ty, int *belt_group, BELT_LINK *belt_link)
 	if (belt_debug)
 	{
 		if (found) {
-			printf("found in group %d\n", bg);
+			printf("found %d ID:%d %d,%d\n", bg, bl->beltID, bl->locXtx, bl->locY);
 		} else {
 			printf("not found\n");
 		}
@@ -1276,11 +1279,11 @@ void drop_item(int item, int tx, int ty)
 	if ( find_belt(tx, ty, &bg, &bl) )
 	{
 		bl.contents[2] = item; // drop at centre
-		layer2[tx + ty*gMapWidth] = bl.contents[2];
+		//layer2[tx + ty*gMapWidth] = bl.contents[2];
 	}
 	else 
 	{
-		layer2[tx + ty*gMapWidth] = item;
+		//layer2[tx + ty*gMapWidth] = item;
 	}
 
 }
@@ -1326,7 +1329,7 @@ void show_belt_items()
 	for (int bg=0;bg<num_belt_groups;bg++)
 	{
 		BELT_LINK *bl = belt_groups[bg];
-
+TAB(0,7);
 		while (bl != NULL)
 		{
 			int px=getTilePosInScreenX(bl->locX);
@@ -1335,9 +1338,10 @@ void show_belt_items()
 			{
 				for (int pos=0;pos<5;pos++)
 				{
+					printf("%d ID:%d P:%d C:%d\n",pos,bl->beltID,belts[bl->beltID].pos[pos], bl->contents[belts[bl->beltID].pos[pos]]);
 					if (BL_CONTENTS(bl,pos)>0)
 					{
-						vdp_select_bitmap( layer2[bl->locY*gMapWidth + bl->locX] + BMOFF_ITEM16 );
+						vdp_select_bitmap( BL_CONTENTS(bl,pos) + BMOFF_ITEM16 );
 						vdp_draw_bitmap( px, py);
 					}
 				}
