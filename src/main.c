@@ -24,9 +24,22 @@ int gMapHeight = 200;
 int gTileSize = 16;
 
 #define BMOFF_TILE16 0
-#define BMOFF_FEAT16 32
-#define BMOFF_BOB16 64
-#define BMOFF_BELT16 80
+#define NUM_BM_TERR16 13
+
+#define BMOFF_FEAT16 BMOFF_TILE16 + NUM_BM_TERR16 
+#define NUM_BM_FEAT16 5
+
+#define BMOFF_BOB16 BMOFF_FEAT16 + NUM_BM_FEAT16
+#define NUM_BM_BOB16 16
+
+#define BMOFF_BELT16 BMOFF_BOB16 + NUM_BM_BOB16
+#define NUM_BM_BELT16 4*4
+#define NUM_BM_BBELT16 8*4
+
+#define BMOFF_ITEM16 BMOFF_BELT16 + NUM_BM_BELT16 + NUM_BM_BBELT16
+#define NUM_BM_ITEM16 5
+
+#define TOTAL_BM BMOFF_ITEM16 + NUM_BM_ITEM16
 
 #define SCROLL_RIGHT 0
 #define SCROLL_LEFT 1
@@ -69,6 +82,7 @@ int xpos=0, ypos=0;
 
 uint8_t* tilemap;
 int8_t* layer1;
+int8_t* layer2;
 
 FILE *open_file( const char *fname, const char *mode);
 int close_file( FILE *fp );
@@ -156,6 +170,9 @@ void print_groups();
 void join_groups(int in_bg, int out_bg);
 void delete_belt_part(BELT_PLACE *bp);
 
+void start_drop();
+void drop_item(int item, int tx, int ty);
+
 void wait()
 {
 	char k=getchar();
@@ -193,6 +210,13 @@ int main(/*int argc, char *argv[]*/)
 		return -1;
 	}
 	memset(layer1, (int8_t)-1, gMapWidth * gMapHeight);
+	layer2 = (int8_t *) malloc(sizeof(int8_t) * gMapWidth * gMapHeight);
+	if (layer2 == NULL)
+	{
+		printf("Out of memory\n");
+		return -1;
+	}
+	memset(layer2, (int8_t)-1, gMapWidth * gMapHeight);
 
 	/* start screen centred */
 	xpos = gTileSize*(gMapWidth - gScreenWidth/gTileSize)/2; 
@@ -299,6 +323,10 @@ void game_loop()
 		{
 			do_place();
 		}
+		if ( vdp_check_key_press( 0x2D ) ) // z - drop an item
+		{
+			start_drop();
+		}
 		if ( vdp_check_key_press( 0x2D ) ) exit=1; // x
 
 		vdp_update_key_state();
@@ -310,30 +338,35 @@ void game_loop()
 void load_images() 
 {
 	char fname[40];
-	for (int fn=1; fn<=13; fn++)
+	for (int fn=1; fn<=NUM_BM_TERR16; fn++)
 	{
 		sprintf(fname, "img/terr16/tr%02d.rgb2",fn);
 		load_bitmap_file(fname, 16, 16, BMOFF_TILE16 + fn-1);
 	}
-	for (int fn=1; fn<=5; fn++)
+	for (int fn=1; fn<=NUM_BM_FEAT16; fn++)
 	{
 		sprintf(fname, "img/tf16/tf%02d.rgb2",fn);
 		load_bitmap_file(fname, 16, 16, BMOFF_FEAT16 + fn-1);
 	}
-	for (int fn=1; fn<=16; fn++)
+	for (int fn=1; fn<=NUM_BM_BOB16; fn++)
 	{
 		sprintf(fname, "img/b16/bob%02d.rgb2",fn);
 		load_bitmap_file(fname, 16, 16, BMOFF_BOB16 + fn-1);
 	}
-	for (int fn=1; fn<=4*4; fn++)
+	for (int fn=1; fn<=NUM_BM_BELT16; fn++)
 	{
 		sprintf(fname, "img/belt16/belt%02d.rgb2",fn);
 		load_bitmap_file(fname, 16, 16, BMOFF_BELT16 + fn-1);
 	}
-	for (int fn=1; fn<=8*4; fn++)
+	for (int fn=1; fn<=NUM_BM_BBELT16; fn++)
 	{
 		sprintf(fname, "img/belt16/bbelt%02d.rgb2",fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_BELT16 + 4*4 + fn-1);
+		load_bitmap_file(fname, 16, 16, BMOFF_BELT16 + NUM_BM_BELT16 + fn-1);
+	}
+	for (int fn=1; fn<=NUM_BM_ITEM16; fn++)
+	{
+		sprintf(fname, "img/ti16/ti%02d.rgb2",fn);
+		load_bitmap_file(fname, 16, 16, BMOFF_ITEM16 + fn-1);
 	}
 	
 }
@@ -739,6 +772,8 @@ void draw_horizontal_layer(int tx, int ty, int len)
 		{
 			vdp_select_bitmap( layer1[ty*gMapWidth + tx+i]*4 + BMOFF_BELT16 + layer_frame);
 			vdp_draw_bitmap( px + i*gTileSize, py );
+			vdp_select_bitmap( layer2[ty*gMapWidth + tx+i] + BMOFF_ITEM16 - 1 + layer_frame);
+			vdp_draw_bitmap( px + i*gTileSize, py );
 		}
 	}
 	
@@ -1132,3 +1167,24 @@ void delete_belt_part(BELT_PLACE *bp)
 
 }
 
+void start_drop()
+{
+	int drop_tx = getTileX(bobx+gTileSize/2);
+	int drop_ty = getTileY(boby+gTileSize/2);
+	if (bob_facing == BOB_RIGHT) {
+		drop_tx++;
+	} else if (bob_facing == BOB_LEFT) {
+		drop_tx--;
+	} else if (bob_facing == BOB_UP) {
+		drop_ty--;
+	} else if (bob_facing == BOB_DOWN) {
+		drop_ty++;
+	}
+	 
+	drop_item(1,drop_tx, drop_ty);
+}
+
+void drop_item(int item, int tx, int ty)
+{
+	layer2[tx + ty*gMapWidth] = item;
+}
