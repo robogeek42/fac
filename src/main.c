@@ -341,7 +341,7 @@ void game_loop()
 			{
 				belt_debug = !belt_debug;
 				draw_screen();
-				drop_item_wait_ticks = clock() + 10;
+				drop_item_wait_ticks = clock() + 20;
 			}
 		}
 
@@ -388,10 +388,9 @@ void load_images()
 	for (int fn=1; fn<=NUM_BM_ITEM8; fn++)
 	{
 		sprintf(fname, "img/ti8/ti%02d.rgb2",fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_ITEM8 + fn-1);
+		load_bitmap_file(fname, 8, 8, BMOFF_ITEM8 + fn-1);
 	}
 	
-	/*
 	TAB(0,0);
 	printf("TILES start %d count %d\n",BMOFF_TILE16,NUM_BM_TERR16);
 	printf("FEATS start %d count %d\n",BMOFF_FEAT16,NUM_BM_FEAT16);
@@ -400,7 +399,6 @@ void load_images()
 	printf("ITEMS start %d count %d\n",BMOFF_ITEM8,NUM_BM_ITEM8);
 	printf("Total %d\n",TOTAL_BM);
 	wait();
-	*/
 }
 
 void draw_tile(int tx, int ty, int tposx, int tposy)
