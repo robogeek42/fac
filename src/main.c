@@ -391,6 +391,7 @@ void load_images()
 		load_bitmap_file(fname, 8, 8, BMOFF_ITEM8 + fn-1);
 	}
 	
+	/*
 	TAB(0,0);
 	printf("TILES start %d count %d\n",BMOFF_TILE16,NUM_BM_TERR16);
 	printf("FEATS start %d count %d\n",BMOFF_FEAT16,NUM_BM_FEAT16);
@@ -399,6 +400,7 @@ void load_images()
 	printf("ITEMS start %d count %d\n",BMOFF_ITEM8,NUM_BM_ITEM8);
 	printf("Total %d\n",TOTAL_BM);
 	wait();
+	*/
 }
 
 void draw_tile(int tx, int ty, int tposx, int tposy)
@@ -749,10 +751,20 @@ void draw_layer()
 		draw_horizontal_layer(tx, ty+i, 1+(gScreenWidth/gTileSize));
 	}
 
-	TAB(0,4); printItemList();
-
 	vdp_update_key_state();
 	layer_frame = (layer_frame +1) % 4;
+}
+
+bool itemIsOnScreen(ItemNodePtr itemptr)
+{
+	if (itemptr->x > xpos - 8 &&
+		itemptr->x < xpos + gScreenWidth &&
+		itemptr->y > ypos - 8 &&
+		itemptr->y < ypos + gScreenHeight)
+	{
+		return true;
+	}
+	return false;
 }
 
 void draw_horizontal_layer(int tx, int ty, int len)
@@ -767,6 +779,16 @@ void draw_horizontal_layer(int tx, int ty, int len)
 			vdp_select_bitmap( layer1[ty*gMapWidth + tx+i]*4 + BMOFF_BELT16 + layer_frame);
 			vdp_draw_bitmap( px + i*gTileSize, py );
 		}
+	}
+
+	ItemNodePtr currPtr = itemlist;
+	while (currPtr != NULL) {
+		if (itemIsOnScreen(currPtr))
+		{
+			vdp_select_bitmap( currPtr->item + BMOFF_ITEM8 );
+			vdp_draw_bitmap( currPtr->x - xpos, currPtr->y - ypos );
+		}
+		currPtr = currPtr->next;
 	}
 }
 
@@ -1172,7 +1194,7 @@ void drop_near_bob()
 	}
 	 
 	// only one item type currently
-	insertAtFrontItemList(1, drop_tx, drop_ty);
+	insertAtFrontItemList(0, drop_tx*gTileSize+4, drop_ty*gTileSize+4);
 }
 
 

@@ -12,27 +12,37 @@ bool isEmptyItemList() {
 }
 
 // Insert data at the front of the list
-void insertAtFrontItemList(uint8_t item, int x, int y) {
-	ItemNodePtr node = (ItemNodePtr) malloc(sizeof(ItemNodePtr));
+void insertAtFrontItemList(uint8_t item, int x, int y) 
+{
+	ItemNodePtr node = (ItemNodePtr) malloc(sizeof(struct ItemNode));
+	if (node==NULL) {
+		printf("Out of memory\n");
+		return;
+	}
 	node->item = item;
 	node->x = x;
 	node->y = y;
 	node->next = NULL;
-	printf("Insert %p ",node);	
+	//printf("Insert %p: %u %d,%d\n", node, node->item, node->x, node->y);
 	if (isEmptyItemList()) {
 		itemlist = node;
-		printf("empty\n");
+		//printf("empty\n");
 	} else {
 		node->next = itemlist;
 		itemlist = node;
-		printf("next %p\n",node->next);
+		//printf("next %p\n",node->next);
 	}
 
 }
 	
 // insert data at the back of the linked list
-void insertAtBackItemList(uint8_t item, int x, int y) {
-	ItemNodePtr node = (ItemNodePtr) malloc(sizeof(ItemNodePtr));
+void insertAtBackItemList(uint8_t item, int x, int y) 
+{
+	ItemNodePtr node = (ItemNodePtr) malloc(sizeof(struct ItemNode));
+	if (node==NULL) {
+		printf("Out of memory\n");
+		return;
+	}
 	node->item = item;
 	node->x = x;
 	node->y = y;
@@ -53,9 +63,10 @@ void insertAtBackItemList(uint8_t item, int x, int y) {
 }
 	
 // returns the data at first node 
-ItemNodePtr topFrontItem() {
+ItemNodePtr topFrontItem() 
+{
 	if (isEmptyItemList()) {
-		printf("%s", "List is empty");
+		//printf("%s", "List is empty");
 		return NULL;
 	} else {
 		return itemlist;
@@ -63,9 +74,10 @@ ItemNodePtr topFrontItem() {
 }
 
 // returns the data at last node 
-ItemNodePtr topBackItem() {
+ItemNodePtr topBackItem() 
+{
 	if (isEmptyItemList()) {
-		printf("%s", "List is empty");
+		//printf("%s", "List is empty");
 		return NULL;
 	} else if (itemlist->next == NULL) {
 		return itemlist;
@@ -79,10 +91,11 @@ ItemNodePtr topBackItem() {
 }
 
 // removes the item at front of the linked list and return 
-ItemNodePtr popFrontItem() {
+ItemNodePtr popFrontItem() 
+{
 	ItemNodePtr itemPtr = NULL;
 	if (isEmptyItemList()) {
-		printf("%s", "List is empty");
+		//printf("%s", "List is empty");
 	} else {
 		ItemNodePtr nextPtr = itemlist->next;
 		itemPtr = itemlist;
@@ -97,10 +110,11 @@ ItemNodePtr popFrontItem() {
 }
 
 // remove the item at the back of the linked list and return 
-ItemNodePtr popBackItem() {
+ItemNodePtr popBackItem() 
+{
 	ItemNodePtr itemPtr = NULL;
 	if (isEmptyItemList()) {
-		printf("%s", "List is empty");
+		//printf("%s", "List is empty");
 		return NULL;
 	} else if (itemlist->next == NULL) {
 	   itemPtr = itemlist;
@@ -123,16 +137,18 @@ ItemNodePtr popBackItem() {
 }
 
 // print the linked list 
-void printItemList() {
+void printItemList() 
+{
 	ItemNodePtr currPtr = itemlist;
 	while (currPtr != NULL) {
-		printf("%p: %d %d,%d\n", currPtr, currPtr->item, currPtr->x, currPtr->y);
+		printf("%p: %u %d,%d\n", currPtr, currPtr->item, currPtr->x, currPtr->y);
 		currPtr = currPtr->next;
 	}
 }
 
 // check if a key is in the list
-bool findItem(uint8_t key, int keyx, int keyy) {
+bool findItem(uint8_t key, int keyx, int keyy) 
+{
 	if (isEmptyItemList()) {
 		return false;
 	}
