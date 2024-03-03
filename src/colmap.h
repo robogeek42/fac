@@ -1,3 +1,7 @@
+/*
+  vim:ts=4
+  vim:sw=4
+*/
 #ifndef _COLMAP_H
 #define _COLMAP_H
 

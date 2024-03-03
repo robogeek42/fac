@@ -1,3 +1,7 @@
+/*
+  vim:ts=4
+  vim:sw=4
+*/
 #include "util.h"
 
 #include <stdint.h>

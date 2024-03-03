@@ -1,3 +1,7 @@
+/*
+  vim:ts=4
+  vim:sw=4
+*/
 #ifndef _BELT_H
 #define _BELT_H
 

@@ -1,3 +1,7 @@
+/*
+  vim:ts=4
+  vim:sw=4
+*/
 #ifndef _UTIL_H
 #define _UTIL_H
 

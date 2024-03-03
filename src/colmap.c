@@ -1,3 +1,7 @@
+/*
+  vim:ts=4
+  vim:sw=4
+*/
  #include <stdint.h>
 
 // Agon BBC 64 Colour mapping to RGB 
