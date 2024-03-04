@@ -154,11 +154,11 @@ bool findItem(uint8_t key, int keyx, int keyy)
 	}
 
 	ItemNodePtr currPtr = itemlist;
-	while (currPtr != NULL 
-			&& currPtr->item != key 
-			&& currPtr->x != keyx
-			&& currPtr->y != keyy
-			) {
+	while (currPtr != NULL ) {
+		if (currPtr->item == key && currPtr->x == keyx && currPtr->y == keyy)
+		{
+			break;
+		}
 		currPtr = currPtr->next;
 	}
 

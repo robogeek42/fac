@@ -162,18 +162,6 @@ void draw_layer();
 void draw_horizontal_layer(int tx, int ty, int len);
 void draw_box(int x1,int y1, int x2, int y2, int col);
 
-BELT_LINK **belt_groups = NULL;
-int num_belt_groups = 0;
-int max_num_belt_groups = 10;
-BELT_LINK *make_new_belt_group(int x, int y, int belt);
-int find_belt_group(BELT_PLACE *bp);
-void add_to_group_at_end(int bg, int beltID, int tx, int ty);
-void add_to_group_at_front(int bg, int beltID, int tx, int ty);
-void print_groups();
-void join_groups(int in_bg, int out_bg);
-void delete_belt_part(BELT_PLACE *bp);
-BELT_LINK* find_belt(int tx, int ty);
-
 void drop_near_bob();
 void drop_item(int item, int tx, int ty);
 clock_t drop_item_wait_ticks;
@@ -357,8 +345,8 @@ void game_loop()
 
 		if ( item_move_wait_ticks <  clock() ) {
 			move_items_on_belts();
-			print_item_pos();
-			item_move_wait_ticks = clock()+30;
+			//print_item_pos();
+			item_move_wait_ticks = clock()+15;
 		}
 
 		vdp_update_key_state();
@@ -848,16 +836,6 @@ void do_place()
 		TAB(0,0); printf("BN %d %d %d %d \n",bn[0].beltID,bn[1].beltID,bn[2].beltID,bn[3].beltID);
 	}
 
-	if (belt_at_place>=0)
-	{
-		// remove this belt
-		BELT_PLACE bp;
-		bp.beltID = belt_at_place;
-		bp.locX = place_tx;
-		bp.locY = place_ty;
-		delete_belt_part(&bp);
-	}
-
 	int in_connection = -1;
 	int out_connection = -1;
 	for (int i=0; i<4; i++)
@@ -878,316 +856,10 @@ void do_place()
 		}
 	}
 
-	if (in_connection == -1 && out_connection == -1)
-	{
-		make_new_belt_group(place_tx, place_ty, place_selected);
-	} else {
-		int in_bg = -1;
-		int out_bg = -1;
-		if (in_connection>=0) {
-			in_bg = find_belt_group(&bn[in_connection]);
-			if (in_bg>=0) {
-				if (belt_debug) { TAB(25,0);printf("Add to end\n");}
-				add_to_group_at_end(in_bg,place_selected, place_tx, place_ty);
-			}
-			if (out_connection>=0) {
-				out_bg = find_belt_group(&bn[out_connection]);
-				if (out_bg>=0) {
-					join_groups(in_bg, out_bg);
-				}
-			}
-				
-		} else {
-			if (out_connection>=0) {
-				out_bg = find_belt_group(&bn[out_connection]);
-				if (out_bg>=0) {
-					if (belt_debug) { TAB(25,0);printf("Add to front\n"); }
-					add_to_group_at_front(out_bg, place_selected, place_tx, place_ty);
-				}
-			}
-		}
-
-	}
-
 	layer_belts[gMapWidth * place_ty + place_tx] = place_selected;
 	
-	print_groups();
 	stop_place();
 }
-
-BELT_LINK *make_new_belt_group(int x, int y, int belt)
-{
-	if (belt_groups==NULL)
-	{
-		belt_groups = (BELT_LINK**) malloc(sizeof(BELT_LINK*) * max_num_belt_groups);
-		if (belt_groups == NULL)
-		{
-			printf("out of memory\n");
-			return NULL;
-		}
-		for (int i=0;i<max_num_belt_groups;i++)
-		{
-			belt_groups[i]=NULL;
-		}
-	}
-	if (num_belt_groups>=max_num_belt_groups)
-	{
-		max_num_belt_groups += 10;
-		belt_groups = (BELT_LINK**) realloc(belt_groups, max_num_belt_groups * sizeof(BELT_LINK*));
-		if (belt_groups == NULL)
-		{
-			printf("out of memory on realloc\n");
-			return NULL;
-		}
-		for (int i=num_belt_groups;i<max_num_belt_groups;i++)
-		{
-			belt_groups[i]=NULL;
-		}
-	}
-
-	BELT_LINK *bl = malloc(sizeof(BELT_LINK));
-	if (bl == NULL)
-	{
-		printf("out of memory\n");
-		return NULL;
-	}
-	bl->beltID = belt;
-	bl->locX = x;
-	bl->locY = y;
-	bl->nextLink = NULL;
-	bl->prevLink = NULL;
-	for (int i=0;i<10;i++) { bl->contents[i]=0; }
-	belt_groups[num_belt_groups] = bl;
-
-	if (belt_debug) { TAB(0,1); printf("New BG %d: %d %d,%d\n",num_belt_groups,bl->beltID,bl->locX,bl->locY); }
-
-	num_belt_groups++;
-	return bl;
-}
-
-int find_belt_group(BELT_PLACE *bp)
-{
-	bool found=false;
-	BELT_LINK *bl = NULL;	
-	int bg;
-
-	if (belt_debug) {
-		TAB(0,2); 
-		//printf("find %d %d,%d\n",bp->beltID, bp->locX, bp->locY);
-	}
-
-	for (bg=0;bg<num_belt_groups;bg++)
-	{
-		bl = belt_groups[bg];
-		while (bl != NULL)
-		{
-			if (bl->beltID == bp->beltID &&
-			    bl->locX == bp->locX &&
-			    bl->locY == bp->locY)
-			{
-				found=true;
-				break;
-			}
-			bl = (BELT_LINK*)bl->nextLink;
-		}
-		if (found) break;
-	}
-
-	if (belt_debug)
-	{
-		if (found) {
-			printf("found in group %d\n", bg);
-		} else {
-			printf("not found\n");
-		}
-	}
-
-	return bg;
-}
-
-void add_to_group_at_end(int bg, int beltID, int tx, int ty)
-{
-	BELT_LINK * newbl = malloc(sizeof(BELT_LINK));
-	if (newbl==NULL)
-	{
-		printf("out of mem\n");
-		return;
-	}
-	newbl->beltID = beltID;
-	newbl->locX = tx;
-	newbl->locY = ty;
-	newbl->nextLink = NULL;
-	newbl->prevLink = NULL;
-	for (int i=0;i<10;i++) { newbl->contents[i]=0; }
-
-	BELT_LINK *bl = belt_groups[bg];
-	while (bl->nextLink != NULL)
-	{
-		bl = (BELT_LINK*)bl->nextLink;
-	}
-	
-	newbl->prevLink = (struct BELT_LINK*)bl;
-
-	bl->nextLink = (struct BELT_LINK*)newbl;
-}
-void add_to_group_at_front(int bg, int beltID, int tx, int ty)
-{
-	BELT_LINK * newbl = malloc(sizeof(BELT_LINK));
-	if (newbl==NULL)
-	{
-		printf("out of mem\n");
-		return;
-	}
-	newbl->beltID = beltID;
-	newbl->locX = tx;
-	newbl->locY = ty;
-	newbl->nextLink = NULL;
-	newbl->prevLink = NULL;
-	for (int i=0;i<10;i++) { newbl->contents[i]=0; }
-
-
-	BELT_LINK *bl = belt_groups[bg];
-	bl->prevLink = (struct BELT_LINK*)newbl;
-	newbl->nextLink = (struct BELT_LINK*)bl;
-	belt_groups[bg] = newbl;
-}
-
-void print_groups()
-{
-	if (!belt_debug) return;
-	int line=2;
-	TAB(25,line++); printf("groups %d\n",num_belt_groups);
-	for (int bg=0;bg<num_belt_groups;bg++)
-	{
-		BELT_LINK *bl = belt_groups[bg];
-		TAB(25,line++);
-		printf("%d: ",bg);
-		while(bl!=NULL)
-		{
-			printf("%d ",bl->beltID);
-			bl = (BELT_LINK*)bl->nextLink;
-		}
-	}
-}
-
-void join_groups(int in_bg, int out_bg) 
-{
-	// add the out_bg to the end of in_bg
-	
-	BELT_LINK *out_bl = belt_groups[out_bg];
-
-	BELT_LINK *bl = belt_groups[in_bg];
-	while (bl->nextLink != NULL)
-	{
-		bl = (BELT_LINK*) bl->nextLink;
-	}
-	bl->nextLink = (struct BELT_LINK*) out_bl;
-	out_bl->prevLink = (struct BELT_LINK*) bl;
-	belt_groups[out_bg] = NULL;
-}
-
-void delete_belt_part(BELT_PLACE *bp)
-{
-	bool found=false;
-	BELT_LINK *bl = NULL;	
-	int bg;
-	bool head=true;
-
-	if (belt_debug) { TAB(0,1);printf("delete\n"); }
-	for (bg=0;bg<num_belt_groups;bg++)
-	{
-		bl = belt_groups[bg];
-		head=true;
-		while (bl != NULL)
-		{
-			if (bl->beltID == bp->beltID &&
-			    bl->locX == bp->locX &&
-			    bl->locY == bp->locY)
-			{
-				found=true;
-				break;
-			}
-			bl = (BELT_LINK*)bl->nextLink;
-			head=false;
-		}
-		if (found) break;
-	}
-
-	if (found) {
-		if (belt_debug) printf("in group %d%s\n", bg, head?" at head":"");
-
-		if (head) {
-			belt_groups[bg] = (BELT_LINK*)(bl->nextLink);
-			belt_groups[bg]->prevLink = NULL;
-		} else {
-			// tail
-			if (bl->prevLink && !bl->nextLink) {
-				((BELT_LINK*)(bl->prevLink))->nextLink = bl->nextLink;
-			} else if (bl->prevLink && bl->nextLink) {
-				// middle
-				((BELT_LINK*)(bl->prevLink))->nextLink = NULL;
-				BELT_LINK *nl = (BELT_LINK*)(bl->nextLink);
-				BELT_LINK *nnl = make_new_belt_group(nl->locX, nl->locY, nl->beltID);
-				nnl->nextLink = nl->nextLink;
-				free(nl);
-			}
-		}
-
-		free(bl);
-		bl=NULL;
-	}
-
-}
-
-BELT_LINK* find_belt(int tx, int ty)
-{
-	bool found=false;
-	int bg;
-	BELT_LINK *bl = NULL;	
-
-	BELT_PLACE bp;
-	int l1 = layer_belts[tx + ty*gMapWidth];
-
-	if ( l1 >= 0 ) {
-		bp.beltID = l1;
-		bp.locX = tx;
-		bp.locY = ty;
-	}
-	if (belt_debug) {
-		TAB(0,5); 
-		//printf("find %d %d,%d\n",bp->beltID, bp->locX, bp->locY);
-	}
-
-	for (bg=0;bg<num_belt_groups;bg++)
-	{
-		bl = belt_groups[bg];
-		while (bl != NULL)
-		{
-			if (bl->beltID == bp.beltID &&
-			    bl->locX == bp.locX &&
-			    bl->locY == bp.locY)
-			{
-				found=true;
-				break;
-			}
-			bl = (BELT_LINK*)bl->nextLink;
-		}
-		if (found) break;
-	}
-
-	if (belt_debug)
-	{
-		if (found) {
-			printf("found %d ID:%d %d,%d\n", bg, bl->beltID, bl->locX, bl->locY);
-		} else {
-			printf("not found\n");
-		}
-	}
-
-	if (found) return bl;
-	return NULL;
-}
-
 
 void drop_near_bob()
 {
@@ -1211,6 +883,7 @@ void move_items_on_belts()
 {
 	ItemNodePtr currPtr = itemlist;
 	while (currPtr != NULL) {
+		bool moved = false;
 		if (itemIsOnScreen(currPtr))
 		{
 			int tx = getTileX(currPtr->x);
@@ -1222,20 +895,23 @@ void move_items_on_belts()
 				int dy = currPtr->y % gTileSize;
 				int in = belts[beltID].from;
 				int out = belts[beltID].to;
-				bool moved = false;
+				int nextx = currPtr->x;
+				int nexty = currPtr->y;
+				int nnx = nextx;
+				int nny = nexty;
 				switch (in)
 				{
 					case 0:  // in from top - move down
-						if ( !moved && dy < 4 ) { currPtr->y++; moved=true; }
+						if ( !moved && dy < 4 ) { nexty++; nny+=2; moved=true; }
 						break;
 					case 1: // in from right - move left
-						if ( !moved && dx >= 4 ) { currPtr->x--; moved=true; }
+						if ( !moved && dx >= 5 ) { nextx--; nnx-=2;  moved=true; }
 						break;
 					case 2: // in from bottom - move up
-						if ( !moved && dy >= 4 ) { currPtr->y--; moved=true; }
+						if ( !moved && dy >= 4 ) { nexty--; nny-=2; moved=true; }
 						break;
 					case 3: // in from left - move right
-						if ( !moved && dx < 4 ) { currPtr->x++; moved=true; }
+						if ( !moved && dx < 5 ) { nextx++; nnx+=2; moved=true; }
 						break;
 					default:
 						break;
@@ -1243,22 +919,42 @@ void move_items_on_belts()
 				if (!moved) switch (out)
 				{
 					case 0: // out to top - move up
-						if ( !moved ) { currPtr->y--; moved=true; }
+						if ( !moved ) { nexty--; nny-=2; moved=true; }
 						break;
 					case 1: // out to right - move right
-						if ( !moved ) { currPtr->x++; moved=true; }
+						if ( !moved ) { nextx++; nnx+=2; moved=true; }
 						break;
 					case 2: // out to bottom - move down
-						if ( !moved ) { currPtr->y++; moved=true; }
+						if ( !moved ) { nexty++; nny+=2; moved=true; }
 						break;
 					case 3: // out to left - move left
-						if ( !moved ) { currPtr->x--; moved=true; }
+						if ( !moved ) { nextx--; nnx-=2; moved=true; }
 						break;
 					default:
 						break;
 				}
+
+				if (moved)
+				{
+					bool found = findItem(currPtr->item, nextx, nexty);
+					found |= findItem(currPtr->item, nnx, nny);
+					if (!found) 
+					{
+						currPtr->x = nextx;
+						currPtr->y = nexty;
+					}
+				}
 			}
 		}
+		int tx = getTileX(currPtr->x);
+		int ty = getTileY(currPtr->y);
+		int beltID = layer_belts[ tx + ty*gMapWidth ];
+		if (moved && beltID<0)
+		{
+			int px=getTilePosInScreenX(tx);
+			int py=getTilePosInScreenY(ty);
+			draw_tile(tx, ty, px, py);
+		}	
 		currPtr = currPtr->next;
 	}
 
