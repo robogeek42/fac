@@ -86,7 +86,7 @@ int gTileSize = 16;
 int xpos=0, ypos=0;
 
 uint8_t* tilemap;
-int8_t* layer1;
+int8_t* layer_belts;
 
 FILE *open_file( const char *fname, const char *mode);
 int close_file( FILE *fp );
@@ -182,6 +182,9 @@ clock_t drop_item_wait_ticks;
 // first node of the Item list
 ItemNodePtr itemlist = NULL;
 
+void move_items_on_belts();
+void print_item_pos();
+
 clock_t item_move_wait_ticks;
 
 void wait()
@@ -212,13 +215,13 @@ int main(/*int argc, char *argv[]*/)
 		goto my_exit;
 	}
 
-	layer1 = (int8_t *) malloc(sizeof(int8_t) * gMapWidth * gMapHeight);
-	if (layer1 == NULL)
+	layer_belts = (int8_t *) malloc(sizeof(int8_t) * gMapWidth * gMapHeight);
+	if (layer_belts == NULL)
 	{
 		printf("Out of memory\n");
 		return -1;
 	}
-	memset(layer1, (int8_t)-1, gMapWidth * gMapHeight);
+	memset(layer_belts, (int8_t)-1, gMapWidth * gMapHeight);
 
 	/* start screen centred */
 	xpos = gTileSize*(gMapWidth - gScreenWidth/gTileSize)/2; 
@@ -345,10 +348,17 @@ void game_loop()
 			}
 		}
 
-		if ( vdp_check_key_press( 0x2D ) ) exit=1; // x
+		if ( vdp_check_key_press( 0x2D ) ) { // x
+			TAB(6,8);printf("Are you sure?");
+			char k=getchar(); 
+			if (k=='y') exit=1;
+			draw_screen();
+		}
 
 		if ( item_move_wait_ticks <  clock() ) {
-			item_move_wait_ticks = clock()+100;
+			move_items_on_belts();
+			print_item_pos();
+			item_move_wait_ticks = clock()+30;
 		}
 
 		vdp_update_key_state();
@@ -774,9 +784,9 @@ void draw_horizontal_layer(int tx, int ty, int len)
 
 	for (int i=0; i<len; i++)
 	{
-		if ( layer1[ty*gMapWidth + tx+i] >= 0 )
+		if ( layer_belts[ty*gMapWidth + tx+i] >= 0 )
 		{
-			vdp_select_bitmap( layer1[ty*gMapWidth + tx+i]*4 + BMOFF_BELT16 + layer_frame);
+			vdp_select_bitmap( layer_belts[ty*gMapWidth + tx+i]*4 + BMOFF_BELT16 + layer_frame);
 			vdp_draw_bitmap( px + i*gTileSize, py );
 		}
 	}
@@ -804,19 +814,19 @@ void draw_box(int x1,int y1, int x2, int y2, int col)
 
 void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty)
 {
-	bn[0].beltID = layer1[tx   + (ty-1)*gMapWidth];
+	bn[0].beltID = layer_belts[tx   + (ty-1)*gMapWidth];
 	bn[0].locX = tx;
 	bn[0].locY = ty-1;
 
-	bn[1].beltID = layer1[tx+1 + (ty)*gMapWidth];
+	bn[1].beltID = layer_belts[tx+1 + (ty)*gMapWidth];
 	bn[1].locX = tx+1;
 	bn[1].locY = ty;
 
-	bn[2].beltID = layer1[tx   + (ty+1)*gMapWidth];
+	bn[2].beltID = layer_belts[tx   + (ty+1)*gMapWidth];
 	bn[2].locX = tx;
 	bn[2].locY = ty+1;
 
-	bn[3].beltID = layer1[tx-1 + (ty)*gMapWidth];
+	bn[3].beltID = layer_belts[tx-1 + (ty)*gMapWidth];
 	bn[3].locX = tx-1;
 	bn[3].locY = ty;
 
@@ -828,7 +838,7 @@ void do_place()
 {
 	if (!bPlace || place_selected<0) return;
 		       
-	int belt_at_place = layer1[place_ty*gMapWidth + place_tx];;
+	int belt_at_place = layer_belts[place_ty*gMapWidth + place_tx];;
 
 	BELT_PLACE bn[4];
 	get_belt_neighbours(bn, place_tx, place_ty);
@@ -899,7 +909,7 @@ void do_place()
 
 	}
 
-	layer1[gMapWidth * place_ty + place_tx] = place_selected;
+	layer_belts[gMapWidth * place_ty + place_tx] = place_selected;
 	
 	print_groups();
 	stop_place();
@@ -1136,7 +1146,7 @@ BELT_LINK* find_belt(int tx, int ty)
 	BELT_LINK *bl = NULL;	
 
 	BELT_PLACE bp;
-	int l1 = layer1[tx + ty*gMapWidth];
+	int l1 = layer_belts[tx + ty*gMapWidth];
 
 	if ( l1 >= 0 ) {
 		bp.beltID = l1;
@@ -1197,4 +1207,83 @@ void drop_near_bob()
 	insertAtFrontItemList(0, drop_tx*gTileSize+4, drop_ty*gTileSize+4);
 }
 
+void move_items_on_belts()
+{
+	ItemNodePtr currPtr = itemlist;
+	while (currPtr != NULL) {
+		if (itemIsOnScreen(currPtr))
+		{
+			int tx = getTileX(currPtr->x);
+			int ty = getTileY(currPtr->y);
+			int beltID = layer_belts[ tx + ty*gMapWidth ];
+			if (beltID >= 0)
+			{
+				int dx = currPtr->x % gTileSize;
+				int dy = currPtr->y % gTileSize;
+				int in = belts[beltID].from;
+				int out = belts[beltID].to;
+				bool moved = false;
+				switch (in)
+				{
+					case 0:  // in from top - move down
+						if ( !moved && dy < 4 ) { currPtr->y++; moved=true; }
+						break;
+					case 1: // in from right - move left
+						if ( !moved && dx >= 4 ) { currPtr->x--; moved=true; }
+						break;
+					case 2: // in from bottom - move up
+						if ( !moved && dy >= 4 ) { currPtr->y--; moved=true; }
+						break;
+					case 3: // in from left - move right
+						if ( !moved && dx < 4 ) { currPtr->x++; moved=true; }
+						break;
+					default:
+						break;
+				}
+				if (!moved) switch (out)
+				{
+					case 0: // out to top - move up
+						if ( !moved ) { currPtr->y--; moved=true; }
+						break;
+					case 1: // out to right - move right
+						if ( !moved ) { currPtr->x++; moved=true; }
+						break;
+					case 2: // out to bottom - move down
+						if ( !moved ) { currPtr->y++; moved=true; }
+						break;
+					case 3: // out to left - move left
+						if ( !moved ) { currPtr->x--; moved=true; }
+						break;
+					default:
+						break;
+				}
+			}
+		}
+		currPtr = currPtr->next;
+	}
 
+}
+
+void print_item_pos()
+{
+	TAB(0,0);
+	ItemNodePtr currPtr = itemlist;
+	while (currPtr != NULL) {
+		if (itemIsOnScreen(currPtr))
+		{
+			int tx = getTileX(currPtr->x);
+			int ty = getTileY(currPtr->y);
+			int beltID = layer_belts[ tx + ty*gMapWidth ];
+			if (beltID >= 0)
+			{
+				int dx = currPtr->x % gTileSize;
+				int dy = currPtr->y % gTileSize;
+				int in = belts[beltID].from;
+				int out = belts[beltID].to;
+
+				printf("%d,%d : %d,%d (I%d O%d)   \n",currPtr->x, currPtr->y, dx, dy, in, out);
+			}
+		}
+		currPtr = currPtr->next;
+	}
+}
