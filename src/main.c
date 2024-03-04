@@ -109,7 +109,8 @@ int getTilePosInScreenY(int ty) { return ((ty * gTileSize) - ypos); }
 
 void draw_tile(int tx, int ty, int tposx, int tposy);
 void draw_screen();
-void scroll_screen(int dir, int step, bool updatepos);
+void scroll_screen(int dir, int step);
+bool can_scroll_screen(int dir, int step);
 void draw_horizontal(int tx, int ty, int len);
 void draw_vertical(int tx, int ty, int len);
 void recentre();
@@ -124,7 +125,7 @@ int bobx=0;
 int boby=0;
 bool bShowBob=true;
 void draw_bob(bool draw, int bx, int by, int px, int py);
-void move_bob(int dir, int speed);
+bool move_bob(int dir, int speed);
 bool bobAtEdge();
 
 int bob_facing = BOB_DOWN;
@@ -247,15 +248,39 @@ void game_loop()
 	item_move_wait_ticks = clock()+60;
 	drop_item_wait_ticks = clock();
 
+	recentre();
 	do {
 		int dir=-1;
+		int bob_dir = -1;
 		int place_dir=-1;
-		if (!bPlace) {
-			if ( vdp_check_key_press( KEY_LEFT ) ) {dir=SCROLL_RIGHT; }
-			if ( vdp_check_key_press( KEY_RIGHT ) ) {dir=SCROLL_LEFT; }
-			if ( vdp_check_key_press( KEY_UP ) ) {dir=SCROLL_UP; }
-			if ( vdp_check_key_press( KEY_DOWN ) ) {dir=SCROLL_DOWN; }
-		} else {
+		if ( vdp_check_key_press( KEY_w ) || vdp_check_key_press( KEY_W ) ) { bob_dir = BOB_UP; dir=SCROLL_UP; }
+		if ( vdp_check_key_press( KEY_a ) || vdp_check_key_press( KEY_A ) ) { bob_dir = BOB_LEFT; dir=SCROLL_RIGHT; }
+		if ( vdp_check_key_press( KEY_s ) || vdp_check_key_press( KEY_S ) ) { bob_dir = BOB_DOWN; dir=SCROLL_DOWN; }
+		if ( vdp_check_key_press( KEY_d ) || vdp_check_key_press( KEY_D ) ) { bob_dir = BOB_RIGHT; dir=SCROLL_LEFT; }
+
+		if (dir>=0 && ( move_wait_ticks < clock() ) ) {
+			if (can_scroll_screen(dir, 1) && move_bob(bob_dir, 1) )
+			{
+				draw_place(false);
+				scroll_screen(dir,1);
+				if (bobAtEdge()) {
+					draw_bob(true,bobx,boby,xpos,ypos);
+				}
+				draw_place(true);
+			}
+			if (!can_scroll_screen(dir, 1))
+			{
+				if ( bob_wait_ticks < clock() )
+				{
+					move_bob(bob_dir, 1);
+					bob_wait_ticks = clock()+1;
+				}
+
+			}
+			move_wait_ticks = clock()+1;
+		}
+
+		if (bPlace) {
 			if ( vdp_check_key_press( KEY_LEFT ) ) {place_dir=SCROLL_RIGHT; }
 			if ( vdp_check_key_press( KEY_RIGHT ) ) {place_dir=SCROLL_LEFT; }
 			if ( vdp_check_key_press( KEY_UP ) ) {place_dir=SCROLL_UP; }
@@ -270,16 +295,6 @@ void game_loop()
 			draw_place(true);
 		}
 			
-		if (dir>=0 && ( move_wait_ticks < clock() ) ) {
-			// draw_bob(false,bx,by,px,py);
-			draw_place(false);
-			scroll_screen(dir,1,true);
-			if (bobAtEdge()) {
-				draw_bob(true,bobx,boby,xpos,ypos);
-			}
-			draw_place(true);
-			//move_wait_ticks = clock() + 1;
-		}
 		if (place_dir>=0 && ( place_wait_ticks < clock() ) ) {
 			draw_place(false);
 			switch(place_dir) {
@@ -292,10 +307,6 @@ void game_loop()
 			draw_place(true);
 			place_wait_ticks = clock() + 20;
 		}
-		if ( vdp_check_key_press( KEY_w ) || vdp_check_key_press( KEY_W ) ) { move_bob(BOB_UP, 1); }
-		if ( vdp_check_key_press( KEY_a ) || vdp_check_key_press( KEY_A ) ) { move_bob(BOB_LEFT, 1); }
-		if ( vdp_check_key_press( KEY_s ) || vdp_check_key_press( KEY_S ) ) { move_bob(BOB_DOWN, 1); }
-		if ( vdp_check_key_press( KEY_d ) || vdp_check_key_press( KEY_D ) ) { move_bob(BOB_RIGHT, 1); }
 		if ( vdp_check_key_press( KEY_c ) || vdp_check_key_press( KEY_C ) ) { recentre(); }
 		if ( vdp_check_key_press( KEY_p ) || vdp_check_key_press( KEY_P ) ) { start_place(); }
 		if ( vdp_check_key_press( KEY_q ) || vdp_check_key_press( KEY_Q ) ) { stop_place(); }
@@ -453,7 +464,7 @@ void draw_vertical(int tx, int ty, int len)
 }
 
 /* 0=right, 1=left, 2=up, 3=down */
-void scroll_screen(int dir, int step, bool updatepos)
+void scroll_screen(int dir, int step)
 {
 	switch (dir) {
 		case SCROLL_RIGHT: // scroll screen to right, view moves left
@@ -465,7 +476,6 @@ void scroll_screen(int dir, int step, bool updatepos)
 				int tx=getTileX(xpos);
 				int ty=getTileY(ypos);
 				draw_vertical(tx,ty, 1+(gScreenHeight/gTileSize));
-				if (!updatepos) xpos += step;
 			}
 			break;
 		case SCROLL_LEFT: // scroll screen to left, view moves right
@@ -477,7 +487,6 @@ void scroll_screen(int dir, int step, bool updatepos)
 				int tx=getTileX(xpos + gScreenWidth -1);
 				int ty=getTileY(ypos);
 				draw_vertical(tx,ty, 1+(gScreenHeight/gTileSize));
-				if (!updatepos) xpos -= step;
 			}
 			break;
 		case SCROLL_UP:
@@ -489,7 +498,6 @@ void scroll_screen(int dir, int step, bool updatepos)
 				int tx=getTileX(xpos);
 				int ty=getTileY(ypos);
 				draw_horizontal(tx,ty, 1+(gScreenWidth/gTileSize));
-				if (!updatepos) ypos += step;
 			}
 			break;
 		case SCROLL_DOWN:
@@ -501,7 +509,6 @@ void scroll_screen(int dir, int step, bool updatepos)
 				int tx=getTileX(xpos);
 				int ty=getTileY(ypos + gScreenHeight -1);
 				draw_horizontal(tx,ty, 1+(gScreenWidth/gTileSize));
-				if (!updatepos) ypos -= step;
 			}
 			break;
 		default:
@@ -509,6 +516,42 @@ void scroll_screen(int dir, int step, bool updatepos)
 	}
 }
 
+bool can_scroll_screen(int dir, int step)
+{
+	/*
+	if (dir == SCROLL_RIGHT) {TAB(0,0);printf("R");}
+	if (dir == SCROLL_LEFT) {TAB(0,0);printf("L");}
+	if (dir == SCROLL_UP) {TAB(0,0);printf("U");}
+	if (dir == SCROLL_DOWN) {TAB(0,0);printf("D");}
+	*/
+
+	if (dir == SCROLL_RIGHT || dir == SCROLL_LEFT) {
+		if ((bobx - xpos) < gScreenWidth/2) { return false; }
+		if ((bobx - xpos) > gScreenWidth/2) { return false; }
+	}
+	if (dir == SCROLL_UP || dir == SCROLL_DOWN) {
+		if ((boby - ypos) < gScreenHeight/2) { return false; }
+		if ((boby - ypos) > gScreenHeight/2) { return false; }
+	}
+
+	switch (dir) {
+		case SCROLL_RIGHT: // scroll screen to right, view moves left
+			if (xpos > step) { return true; }
+			break;
+		case SCROLL_LEFT: // scroll screen to left, view moves right
+			if ((xpos + gScreenWidth + step) < (gMapWidth * gTileSize)) { return true; }
+			break;
+		case SCROLL_UP:
+			if (ypos > step) { return true; }
+			break;
+		case SCROLL_DOWN:
+			if ((ypos + gScreenHeight + step) < (gMapHeight * gTileSize)) { return true; }
+			break;
+		default:
+			break;
+	}
+	return false;
+}
 uint8_t oval1_block6x6[6*6] = {
 	0,0,1,1,0,0,
 	0,1,1,1,1,0,
@@ -610,15 +653,16 @@ bool check_tile(int px, int py)
 	return tilemap[tx+ty*gMapWidth]<16;
 }
 
-void move_bob(int dir, int speed)
+bool move_bob(int dir, int speed)
 {
 	int newx=bobx, newy=boby;
+	bool moved = false;
 
-	if ( bob_wait_ticks > clock() ) return;
+	//if ( bob_wait_ticks > clock() ) return;
 
 	//if (bob_facing != dir*4) bob_frame=0;
 	bob_facing = dir;
-	speed *= (gTileSize/8);
+	//speed *= (gTileSize/8);
 
 	switch (dir) {
 		case BOB_LEFT:
@@ -655,17 +699,22 @@ void move_bob(int dir, int speed)
 			break;
 		default: break;
 	}
-	draw_bob(false,bobx,boby,xpos,ypos);
-	bobx=newx;
-	boby=newy;
-	draw_bob(true,newx,newy,xpos,ypos);
+	if (newx != bobx || newy != boby)
+	{
+		draw_bob(false,bobx,boby,xpos,ypos);
+		bobx=newx;
+		boby=newy;
+		draw_bob(true,newx,newy,xpos,ypos);
+		moved = true;
+	}
 
 	bob_wait_ticks = clock()+5;
 	
-	if (bob_anim_ticks > clock() ) return;
+	if (bob_anim_ticks > clock() ) return moved;
 	bob_frame=(bob_frame+1)%4; 
 	bob_anim_ticks = clock()+10;
 
+	return moved;
 }
 
 void recentre()
