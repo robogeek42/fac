@@ -10,9 +10,8 @@
 typedef struct {
 	uint8_t beltID;// index
 	uint8_t bmID;  // bitmap number
-	uint8_t from;  // from direction
-	uint8_t to;    // to direction
-	uint8_t pos[5]; // content at position. (from)0->1->2->3->4->5(to)
+	uint8_t in;  // from direction
+	uint8_t out;    // to direction
 } BELT_CONFIG;
 
 #define NUM_BELT_TYPES 12
@@ -22,51 +21,49 @@ typedef struct {
 // 3     1
 //    2
 
-// content position 
-//     0   
-//     1
-// 5 6 2 8 9 
-//     3
-//     4
-
 static BELT_CONFIG belts[NUM_BELT_TYPES] = {
-	{ 0,  0, 1, 3,    {9,8,2,6,5}}, // straight belts
-	{ 1,  4, 2, 0,    {4,3,2,1,0}},
-	{ 2,  8, 3, 1,    {5,6,2,8,9}},
-	{ 3, 12, 0, 2,    {0,1,2,3,4}},
-	{ 4, 16, 1, 0,    {9,8,2,1,0}}, // bent belts
-	{ 5, 20, 3, 0,    {5,6,2,1,0}},
-	{ 6, 24, 0, 1,    {0,1,2,8,9}},
-	{ 7, 28, 0, 3,    {0,1,2,6,5}},
-	{ 8, 32, 1, 2,    {8,7,2,3,4}},
-	{ 9, 36, 2, 1,    {4,3,2,8,9}},
-	{10, 40, 2, 3,    {4,3,2,6,5}},
-	{11, 48, 3, 2,    {5,6,2,3,4}},
+// straight belts
+	{ 0,  0, 1, 3 }, // left
+	{ 1,  4, 2, 0 }, // up
+	{ 2,  8, 3, 1 }, // right
+	{ 3, 12, 0, 2 }, // down
+// bent belts
+	{ 4, 16, 1, 0 }, 
+	{ 5, 20, 3, 0 },
+	{ 6, 24, 0, 1 },
+	{ 7, 28, 0, 3 },
+	{ 8, 32, 1, 2 },
+	{ 9, 36, 2, 1 },
+	{10, 40, 2, 3 },
+	{11, 48, 3, 2 },
 };
-// contents contain item-type at that pos
+
 typedef struct {
-	int8_t beltID;
-	int locX;
-	int locY;
-	uint8_t contents[10]; 
-	struct BELT_LINK *nextLink;
-	struct BELT_LINK *prevLink;
-} BELT_LINK;
+	int nb; // which neighbour (0-3 u,r,d,l) connects their out to our in
+	uint8_t rb[4]; // belt rotate selected (0-3 = u,r,d,l) mapping to beltID 
+} BELT_DIR_RULES;
+
+#define NUM_RULES 5
+static BELT_DIR_RULES belt_rules_in[NUM_RULES] = {
+	{ -1, { 1, 2, 3, 0} },
+	{  0, { 1, 9, 3,10} },
+	{  1, { 5, 2,11, 0} },
+	{  2, { 1, 6, 3, 7} },
+	{  3, { 4, 2, 8, 0} },
+};
+static BELT_DIR_RULES belt_rules_out[NUM_RULES] = {
+	{ -1, { 1, 2, 3, 0} },
+	{  0, { 1, 5, 3, 4} },
+	{  1, { 9, 2, 6, 0} },
+	{  2, { 1,11, 3, 8} },
+	{  3, {10, 2, 7, 0} },
+};
 
 typedef struct {
 	uint8_t beltID;
 	int locX;
 	int locY;
 } BELT_PLACE;
-
-
-typedef struct {
-	uint8_t beltID;
-	uint8_t connIn[4];
-	uint8_t connOut[4];
-} BELT_CONNECT;
-
-static BELT_CONNECT bconn[NUM_BELT_TYPES];
 
 #endif
 

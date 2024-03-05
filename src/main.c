@@ -70,6 +70,7 @@ int gTileSize = 16;
 #define KEY_c 0x18
 #define KEY_p 0x25
 #define KEY_q 0x26
+#define KEY_r 0x27
 #define KEY_W 0x46
 #define KEY_A 0x30
 #define KEY_S 0x42
@@ -77,6 +78,7 @@ int gTileSize = 16;
 #define KEY_C 0x32
 #define KEY_P 0x3F
 #define KEY_Q 0x40
+#define KEY_R 0x41
 #define KEY_comma 0x5B
 #define KEY_dot 0x59
 #define KEY_lt 0x6E
@@ -143,7 +145,8 @@ void stop_place();
 void draw_place(bool draw);
 int placex=0;
 int placey=0;
-int place_selected=-1;
+int place_belt_index=0;
+int place_belt_selected=-1;
 int oldplacex=0;
 int oldplacey=0;
 int place_tx=0;
@@ -310,18 +313,17 @@ void game_loop()
 		if ( vdp_check_key_press( KEY_c ) || vdp_check_key_press( KEY_C ) ) { recentre(); }
 		if ( vdp_check_key_press( KEY_p ) || vdp_check_key_press( KEY_P ) ) { start_place(); }
 		if ( vdp_check_key_press( KEY_q ) || vdp_check_key_press( KEY_Q ) ) { stop_place(); }
-		if ( vdp_check_key_press( KEY_comma ) ) { 
+		if ( vdp_check_key_press( KEY_r ) ) { 
 			if (bPlace && place_select_wait_ticks < clock() ) {
-				place_selected--;  
-				if (place_selected < -1) place_selected += NUM_BELT_TYPES+1;
-				//place_selected = ((place_selected + 1) % (NUM_BELT_TYPES+1)) -1;
+				place_belt_index++;  
+				place_belt_index = place_belt_index % 4;
 				place_select_wait_ticks = clock() + 20;
 			}
 		}
-		if ( vdp_check_key_press( KEY_dot ) ) { 
+		if ( vdp_check_key_press( KEY_R ) ) { 
 			if (bPlace && place_select_wait_ticks < clock() ) {
-				place_selected++;  
-				place_selected = ((place_selected + 1) % (NUM_BELT_TYPES+1)) -1;
+				place_belt_index--;  
+				if (place_belt_index < 0) place_belt_index += 4;
 				place_select_wait_ticks = clock() + 20;
 			}
 		}
@@ -518,13 +520,6 @@ void scroll_screen(int dir, int step)
 
 bool can_scroll_screen(int dir, int step)
 {
-	/*
-	if (dir == SCROLL_RIGHT) {TAB(0,0);printf("R");}
-	if (dir == SCROLL_LEFT) {TAB(0,0);printf("L");}
-	if (dir == SCROLL_UP) {TAB(0,0);printf("U");}
-	if (dir == SCROLL_DOWN) {TAB(0,0);printf("D");}
-	*/
-
 	if (dir == SCROLL_RIGHT || dir == SCROLL_LEFT) {
 		if ((bobx - xpos) < gScreenWidth/2) { return false; }
 		if ((bobx - xpos) > gScreenWidth/2) { return false; }
@@ -763,6 +758,8 @@ void stop_place()
 	bPlace=false;
 }
 
+#define DIR_OPP(D) ((D+2)%4)
+
 void draw_place(bool draw) 
 {
 	if (!bPlace) return;
@@ -775,9 +772,37 @@ void draw_place(bool draw)
 	placex=getTilePosInScreenX(place_tx);
 	placey=getTilePosInScreenY(place_ty);
 
-	if (place_selected>=0)
+	BELT_PLACE bn[4];
+	get_belt_neighbours(bn, place_tx, place_ty);
+
+	int in_connection = -1;
+	int out_connection = -1;
+
+	TAB(0,0);
+	for (int i=0; i<4; i++)
 	{
-		vdp_select_bitmap( BMOFF_BELT16 + place_selected*4 );
+		if (bn[i].beltID != 255 && DIR_OPP(belts[bn[i].beltID].out) == i)
+		{
+			in_connection = DIR_OPP(i);
+			break;
+		}
+		if (bn[i].beltID != 255 && DIR_OPP(belts[bn[i].beltID].in) == i)
+		{
+			out_connection = i;
+			break;
+		}
+	}
+
+	if (out_connection >= 0)
+	{
+		place_belt_selected = belt_rules_out[out_connection+1].rb[place_belt_index];
+	} else {
+		place_belt_selected = belt_rules_in[in_connection+1].rb[place_belt_index];
+	}
+
+	if (place_belt_selected>=0)
+	{
+		vdp_select_bitmap( BMOFF_BELT16 + place_belt_selected*4 );
 		vdp_draw_bitmap( placex, placey );
 	}
 
@@ -869,43 +894,11 @@ void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty)
 
 }
 
-#define DIR_OPP(D) ((D+2)%4)
-
 void do_place()
 {
-	if (!bPlace || place_selected<0) return;
+	if (!bPlace || place_belt_selected<0) return;
 		       
-	int belt_at_place = layer_belts[place_ty*gMapWidth + place_tx];;
-
-	BELT_PLACE bn[4];
-	get_belt_neighbours(bn, place_tx, place_ty);
-
-	if (belt_debug) { 
-		draw_screen(); // to clear debug messages
-		TAB(0,0); printf("BN %d %d %d %d \n",bn[0].beltID,bn[1].beltID,bn[2].beltID,bn[3].beltID);
-	}
-
-	int in_connection = -1;
-	int out_connection = -1;
-	for (int i=0; i<4; i++)
-	{
-		// check neighbour exit coming into selected
-		if (bn[i].beltID >=0 && belts[bn[i].beltID].to == DIR_OPP(i)) {
-			// check piece fits
-			if (belts[place_selected].from == i) {
-				in_connection = i;
-			}
-		}
-		// check neighbour entry coming from selected
-		if (bn[i].beltID >=0 && belts[bn[i].beltID].from == DIR_OPP(i)) {
-			// check piece fits
-			if (belts[place_selected].to == i) {
-				out_connection = i;
-			}
-		}
-	}
-
-	layer_belts[gMapWidth * place_ty + place_tx] = place_selected;
+	layer_belts[gMapWidth * place_ty + place_tx] = place_belt_selected;
 	
 	stop_place();
 }
@@ -942,8 +935,8 @@ void move_items_on_belts()
 			{
 				int dx = currPtr->x % gTileSize;
 				int dy = currPtr->y % gTileSize;
-				int in = belts[beltID].from;
-				int out = belts[beltID].to;
+				int in = belts[beltID].in;
+				int out = belts[beltID].out;
 				int nextx = currPtr->x;
 				int nexty = currPtr->y;
 				int nnx = nextx;
@@ -1023,8 +1016,8 @@ void print_item_pos()
 			{
 				int dx = currPtr->x % gTileSize;
 				int dy = currPtr->y % gTileSize;
-				int in = belts[beltID].from;
-				int out = belts[beltID].to;
+				int in = belts[beltID].in;
+				int out = belts[beltID].out;
 
 				printf("%d,%d : %d,%d (I%d O%d)   \n",currPtr->x, currPtr->y, dx, dy, in, out);
 			}
