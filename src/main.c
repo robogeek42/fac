@@ -167,8 +167,7 @@ void draw_horizontal_layer(int tx, int ty, int len);
 void draw_box(int x1,int y1, int x2, int y2, int col);
 void draw_corners(int x1,int y1, int x2, int y2, int col);
 
-void drop_near_bob();
-void drop_item(int item, int tx, int ty);
+void drop_item();
 clock_t drop_item_wait_ticks;
 
 // global variable head. It points to the 
@@ -349,7 +348,7 @@ void game_loop()
 		{
 			if (drop_item_wait_ticks < clock()) 
 			{
-				drop_near_bob();
+				drop_item();
 				drop_item_wait_ticks = clock() + 10;
 			}
 		}
@@ -935,22 +934,10 @@ void do_place()
 	stop_place();
 }
 
-void drop_near_bob()
+void drop_item()
 {
-	int drop_tx = getTileX(bobx+gTileSize/2);
-	int drop_ty = getTileY(boby+gTileSize/2);
-	if (bob_facing == BOB_RIGHT) {
-		drop_tx++;
-	} else if (bob_facing == BOB_LEFT) {
-		drop_tx--;
-	} else if (bob_facing == BOB_UP) {
-		drop_ty--;
-	} else if (bob_facing == BOB_DOWN) {
-		drop_ty++;
-	}
-	 
 	// only one item type currently
-	insertAtFrontItemList(0, drop_tx*gTileSize+4, drop_ty*gTileSize+4);
+	insertAtFrontItemList(0, place_tx*gTileSize+4, plac_ty*gTileSize+4);
 }
 
 void move_items_on_belts()
