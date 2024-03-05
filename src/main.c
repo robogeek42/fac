@@ -165,6 +165,7 @@ int layer_frame = 0;
 void draw_layer();
 void draw_horizontal_layer(int tx, int ty, int len);
 void draw_box(int x1,int y1, int x2, int y2, int col);
+void draw_corners(int x1,int y1, int x2, int y2, int col);
 
 void drop_near_bob();
 void drop_item(int item, int tx, int ty);
@@ -220,6 +221,12 @@ int main(/*int argc, char *argv[]*/)
 	ypos = gTileSize*(gMapHeight - gScreenHeight/gTileSize)/2; 
 	bobx = (xpos + gTileSize*(gScreenWidth/gTileSize)/2) & 0xFFFFF0;
 	boby = (ypos + gTileSize*(gScreenHeight/gTileSize)/2) & 0xFFFFF0;
+	place_tx = getTileX(bobx+gTileSize/2);
+	place_ty = getTileY(boby+gTileSize/2);
+	oldplacex=placex;
+	oldplacey=placey;
+	oldplace_tx = place_tx;
+	oldplace_ty = place_ty;
 
 	// setup complete
 	vdp_mode(gMode);
@@ -283,12 +290,31 @@ void game_loop()
 			move_wait_ticks = clock()+1;
 		}
 
-		if (bPlace) {
-			if ( vdp_check_key_press( KEY_LEFT ) ) {place_dir=SCROLL_RIGHT; }
-			if ( vdp_check_key_press( KEY_RIGHT ) ) {place_dir=SCROLL_LEFT; }
-			if ( vdp_check_key_press( KEY_UP ) ) {place_dir=SCROLL_UP; }
-			if ( vdp_check_key_press( KEY_DOWN ) ) {place_dir=SCROLL_DOWN; }
+		// cursor movement
+		if ( vdp_check_key_press( KEY_LEFT ) ) {place_dir=SCROLL_LEFT; }
+		if ( vdp_check_key_press( KEY_RIGHT ) ) {place_dir=SCROLL_RIGHT; }
+		if ( vdp_check_key_press( KEY_UP ) ) {place_dir=SCROLL_UP; }
+		if ( vdp_check_key_press( KEY_DOWN ) ) {place_dir=SCROLL_DOWN; }
+
+		// keep cursor on screen
+		if ( placex < 0 ) { place_dir=SCROLL_RIGHT; }
+		if ( placey < 0 ) { place_dir=SCROLL_DOWN; }
+		if ( placex > gScreenWidth-gTileSize ) { place_dir=SCROLL_LEFT; }
+		if ( placey > gScreenHeight-gTileSize ) { place_dir=SCROLL_UP; }
+
+		if (place_dir>=0 && ( place_wait_ticks < clock() ) ) {
+			draw_place(false);
+			switch(place_dir) {
+				case SCROLL_RIGHT: place_tx++; break;
+				case SCROLL_LEFT: place_tx--; break;
+				case SCROLL_UP: place_ty--; break;
+				case SCROLL_DOWN: place_ty++; break;
+				default: break;
+			}
+			draw_place(true);
+			place_wait_ticks = clock() + 20;
 		}
+
 		if (layer_wait_ticks < clock()) 
 		{
 			draw_place(false);
@@ -298,18 +324,6 @@ void game_loop()
 			draw_place(true);
 		}
 			
-		if (place_dir>=0 && ( place_wait_ticks < clock() ) ) {
-			draw_place(false);
-			switch(place_dir) {
-				case SCROLL_RIGHT: place_tx--; break;
-				case SCROLL_LEFT: place_tx++; break;
-				case SCROLL_UP: place_ty--; break;
-				case SCROLL_DOWN: place_ty++; break;
-				default: break;
-			}
-			draw_place(true);
-			place_wait_ticks = clock() + 20;
-		}
 		if ( vdp_check_key_press( KEY_c ) || vdp_check_key_press( KEY_C ) ) { recentre(); }
 		if ( vdp_check_key_press( KEY_p ) || vdp_check_key_press( KEY_P ) ) { start_place(); }
 		if ( vdp_check_key_press( KEY_q ) || vdp_check_key_press( KEY_Q ) ) { stop_place(); }
@@ -735,8 +749,8 @@ bool bobAtEdge()
 
 void start_place()
 {
-	if (bPlace) return;
 	bPlace=true;
+	/*
 	place_tx = getTileX(bobx+gTileSize/2);
 	place_ty = getTileY(boby+gTileSize/2);
 	if (bob_facing == BOB_RIGHT) {
@@ -748,6 +762,7 @@ void start_place()
 	} else if (bob_facing == BOB_DOWN) {
 		place_ty++;
 	}
+	*/
 	 
 	draw_place(true);
 }
@@ -762,7 +777,7 @@ void stop_place()
 
 void draw_place(bool draw) 
 {
-	if (!bPlace) return;
+	//if (!bPlace) return;
 	// undraw
 	if (!draw) {
 		draw_tile(oldplace_tx, oldplace_ty, oldplacex, oldplacey);
@@ -772,41 +787,49 @@ void draw_place(bool draw)
 	placex=getTilePosInScreenX(place_tx);
 	placey=getTilePosInScreenY(place_ty);
 
-	BELT_PLACE bn[4];
-	get_belt_neighbours(bn, place_tx, place_ty);
-
-	int in_connection = -1;
-	int out_connection = -1;
-
-	TAB(0,0);
-	for (int i=0; i<4; i++)
+	if (bPlace)
 	{
-		if (bn[i].beltID != 255 && DIR_OPP(belts[bn[i].beltID].out) == i)
+		BELT_PLACE bn[4];
+		get_belt_neighbours(bn, place_tx, place_ty);
+
+		int in_connection = -1;
+		int out_connection = -1;
+
+		TAB(0,0);
+		for (int i=0; i<4; i++)
 		{
-			in_connection = DIR_OPP(i);
-			break;
+			if (bn[i].beltID != 255 && DIR_OPP(belts[bn[i].beltID].out) == i)
+			{
+				in_connection = DIR_OPP(i);
+				break;
+			}
+			if (bn[i].beltID != 255 && DIR_OPP(belts[bn[i].beltID].in) == i)
+			{
+				out_connection = i;
+				break;
+			}
 		}
-		if (bn[i].beltID != 255 && DIR_OPP(belts[bn[i].beltID].in) == i)
+
+		if (out_connection >= 0)
 		{
-			out_connection = i;
-			break;
+			place_belt_selected = belt_rules_out[out_connection+1].rb[place_belt_index];
+		} else {
+			place_belt_selected = belt_rules_in[in_connection+1].rb[place_belt_index];
 		}
-	}
 
-	if (out_connection >= 0)
+		if (place_belt_selected>=0)
+		{
+			vdp_select_bitmap( BMOFF_BELT16 + place_belt_selected*4 );
+			vdp_draw_bitmap( placex, placey );
+		}
+
+		draw_box(placex, placey, placex+gTileSize-1, placey+gTileSize-1, 15);
+	}
+	else
 	{
-		place_belt_selected = belt_rules_out[out_connection+1].rb[place_belt_index];
-	} else {
-		place_belt_selected = belt_rules_in[in_connection+1].rb[place_belt_index];
+		draw_corners(placex, placey, placex+gTileSize-1, placey+gTileSize-1, 11);
 	}
 
-	if (place_belt_selected>=0)
-	{
-		vdp_select_bitmap( BMOFF_BELT16 + place_belt_selected*4 );
-		vdp_draw_bitmap( placex, placey );
-	}
-
-	draw_box(placex, placey, placex+gTileSize-1, placey+gTileSize-1, 15);
 	oldplacex=placex;
 	oldplacey=placey;
 	oldplace_tx = place_tx;
@@ -872,6 +895,15 @@ void draw_box(int x1,int y1, int x2, int y2, int col)
 	vdp_line_to( x2, y2 );
 	vdp_line_to( x2, y1 );
 	vdp_line_to( x1, y1 );
+}
+void draw_corners(int x1,int y1, int x2, int y2, int col)
+{
+	int w=2;
+	vdp_gcol( 0, col );
+	vdp_move_to( x1, y1 ); vdp_line_to( x1+w, y1 ); vdp_move_to( x1, y1 ); vdp_line_to( x1, y1+w );
+	vdp_move_to( x2, y1 ); vdp_line_to( x2-w, y1 ); vdp_move_to( x2, y1 ); vdp_line_to( x2, y1+w );
+	vdp_move_to( x1, y2 ); vdp_line_to( x1, y2-w ); vdp_move_to( x1, y2 ); vdp_line_to( x1+w, y2 );
+	vdp_move_to( x2, y2 ); vdp_line_to( x2, y2-w ); vdp_move_to( x2, y2 ); vdp_line_to( x2-w, y2 );
 }
 
 void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty)
