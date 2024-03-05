@@ -179,6 +179,9 @@ void print_item_pos();
 
 clock_t item_move_wait_ticks;
 
+int belt_speed = 7;
+int key_wait = 20;
+
 void wait()
 {
 	char k=getchar();
@@ -311,14 +314,14 @@ void game_loop()
 				default: break;
 			}
 			draw_place(true);
-			place_wait_ticks = clock() + 20;
+			place_wait_ticks = clock() + key_wait;
 		}
 
 		if (layer_wait_ticks < clock()) 
 		{
 			draw_place(false);
 			draw_layer();
-			layer_wait_ticks = clock() + 7; // belt anim speed
+			layer_wait_ticks = clock() + belt_speed; // belt anim speed
 			draw_bob(true,bobx,boby,xpos,ypos);
 			draw_place(true);
 		}
@@ -330,14 +333,14 @@ void game_loop()
 			if (bPlace && place_select_wait_ticks < clock() ) {
 				place_belt_index++;  
 				place_belt_index = place_belt_index % 4;
-				place_select_wait_ticks = clock() + 20;
+				place_select_wait_ticks = clock() + key_wait;
 			}
 		}
 		if ( vdp_check_key_press( KEY_R ) ) { 
 			if (bPlace && place_select_wait_ticks < clock() ) {
 				place_belt_index--;  
 				if (place_belt_index < 0) place_belt_index += 4;
-				place_select_wait_ticks = clock() + 20;
+				place_select_wait_ticks = clock() + key_wait;
 			}
 		}
 		if ( vdp_check_key_press( 0x8F ) ) // ENTER
@@ -349,7 +352,7 @@ void game_loop()
 			if (drop_item_wait_ticks < clock()) 
 			{
 				drop_item();
-				drop_item_wait_ticks = clock() + 10;
+				drop_item_wait_ticks = clock() + key_wait;
 			}
 		}
 		if ( vdp_check_key_press( 0x4A ) )  // ' - toggle belt_debug
@@ -358,7 +361,7 @@ void game_loop()
 			{
 				belt_debug = !belt_debug;
 				draw_screen();
-				drop_item_wait_ticks = clock() + 20;
+				drop_item_wait_ticks = clock() + key_wait;
 			}
 		}
 
@@ -372,7 +375,7 @@ void game_loop()
 		if ( item_move_wait_ticks <  clock() ) {
 			move_items_on_belts();
 			//print_item_pos();
-			item_move_wait_ticks = clock()+15;
+			item_move_wait_ticks = clock()+belt_speed;
 		}
 
 		vdp_update_key_state();
@@ -937,7 +940,7 @@ void do_place()
 void drop_item()
 {
 	// only one item type currently
-	insertAtFrontItemList(0, place_tx*gTileSize+4, plac_ty*gTileSize+4);
+	insertAtFrontItemList(0, place_tx*gTileSize+4, place_ty*gTileSize+4);
 }
 
 void move_items_on_belts()
