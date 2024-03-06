@@ -17,6 +17,7 @@
 #include <stdbool.h>
 #include "util.h"
 #include "item.h"
+#include "inventory.h"
 
 int gMode = 8; 
 int gScreenWidth = 320;
@@ -78,7 +79,12 @@ int8_t* layer_belts;
 
 // first node (head) of the Item list
 ItemNodePtr itemlist = NULL;
+
+// inventory
+INV_ITEM inventory[MAX_INVENTORY_ITEMS];
+
 //------------------------------------------------------------
+
 
 //------------------------------------------------------------
 // variables containing state that can be reset after game load
@@ -112,16 +118,6 @@ clock_t bob_anim_ticks;
 clock_t move_wait_ticks;
 clock_t item_move_wait_ticks;
 clock_t layer_wait_ticks;
-
-
-FILE *open_file( const char *fname, const char *mode);
-int close_file( FILE *fp );
-int read_str(FILE *fp, char *str, char stop);
-int load_bitmap_file( const char *fname, int width, int height, int bmap_id );
-
-void key_event_handler( KEY_EVENT key_event );
-void wait_clock( clock_t ticks );
-double my_atof(char *str);
 
 void load_images();
 void game_loop();
@@ -221,6 +217,8 @@ int main(/*int argc, char *argv[]*/)
 	//vdu_set_graphics_viewport()
 
 	load_images();
+
+	init_inventory(inventory);
 
 	game_loop();
 
