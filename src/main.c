@@ -18,14 +18,10 @@
 #include "util.h"
 #include "item.h"
 
-#define CHUNK_SIZE 1024
-
 int gMode = 8; 
 int gScreenWidth = 320;
 int gScreenHeight = 240;
 
-int gMapWidth = 200;
-int gMapHeight = 200;
 int gTileSize = 16;
 
 #define BMOFF_TILE16 0
@@ -59,36 +55,64 @@ int gTileSize = 16;
 #define COL(C) vdp_set_text_colour(C)
 #define TAB(X,Y) vdp_cursor_tab(X,Y)
 
-#define KEY_LEFT 0x9A
-#define KEY_RIGHT 0x9C
-#define KEY_UP 0x96
-#define KEY_DOWN 0x98
-#define KEY_w 0x2C
-#define KEY_a 0x16
-#define KEY_s 0x28
-#define KEY_d 0x19
-#define KEY_c 0x18
-#define KEY_p 0x25
-#define KEY_q 0x26
-#define KEY_r 0x27
-#define KEY_W 0x46
-#define KEY_A 0x30
-#define KEY_S 0x42
-#define KEY_D 0x33
-#define KEY_C 0x32
-#define KEY_P 0x3F
-#define KEY_Q 0x40
-#define KEY_R 0x41
-#define KEY_comma 0x5B
-#define KEY_dot 0x59
-#define KEY_lt 0x6E
-#define KEY_gt 0x6F
+bool debug = false;
+
+//------------------------------------------------------------
+// status related variables
+// need to be saved / loaded
 
 // Position of top-left of screen in world coords (pixel)
 int xpos=0, ypos=0;
+// Position of character in world coords (pixel)
+int bobx=0, boby=0;
+// cursor position position in world coords
+int cursorx=0, cursory=0;
+// cursor position in tile coords
+int cursor_tx=0, cursor_ty=0;
 
+// maps
+int gMapWidth = 200;
+int gMapHeight = 200;
 uint8_t* tilemap;
 int8_t* layer_belts;
+
+// first node (head) of the Item list
+ItemNodePtr itemlist = NULL;
+//------------------------------------------------------------
+
+//------------------------------------------------------------
+// variables containing state that can be reset after game load
+
+// previous cursor position position in world coords
+int old_cursorx=0, old_cursory=0;
+// previous cursor position in tile coords
+int oldcursor_tx=0, oldcursor_ty=0;
+// whether we are placing an item or are just moving the cursor
+bool bPlace=false;
+// belt selection changes on rotate key press
+int place_belt_index=0;
+int place_belt_selected=-1;
+// Character state - direction and frame
+int bob_facing = BOB_DOWN;
+int bob_frame = 0;
+// belt-layer animation
+int belt_layer_frame = 0;
+//------------------------------------------------------------
+
+//------------------------------------------------------------
+// Configuration vars
+int belt_speed = 7;
+int key_wait = 15;
+#define TILE_INFO_FILE "img/tileinfo.txt"
+//------------------------------------------------------------
+
+// counters
+clock_t key_wait_ticks;
+clock_t bob_anim_ticks;
+clock_t move_wait_ticks;
+clock_t item_move_wait_ticks;
+clock_t layer_wait_ticks;
+
 
 FILE *open_file( const char *fname, const char *mode);
 int close_file( FILE *fp );
@@ -120,46 +144,19 @@ void recentre();
 int load_map(char *mapname);
 void place_feature_overlay(uint8_t *data, int sx, int sy, int tile, int tx, int ty);
 
-#define TILE_INFO_FILE "img/tileinfo.txt"
 int readTileInfoFile(char *path, TileInfoFile *tif, int items);
 
-int bobx=0;
-int boby=0;
-bool bShowBob=true;
 void draw_bob(bool draw, int bx, int by, int px, int py);
 bool move_bob(int dir, int speed);
 bool bobAtEdge();
 
-int bob_facing = BOB_DOWN;
-int bob_frame = 0;
-
-clock_t key_wait_ticks;
-clock_t bob_anim_ticks;
-clock_t move_wait_ticks;
-
-bool debug = false;
-
-bool bPlace=false;
 void start_place();
 void stop_place();
 void draw_place(bool draw);
-int placex=0;
-int placey=0;
-int place_belt_index=0;
-int place_belt_selected=-1;
-int oldplacex=0;
-int oldplacey=0;
-int place_tx=0;
-int place_ty=0;
-int oldplace_tx=0;
-int oldplace_ty=0;
-int poss_belt[20];
-int poss_belt_num=0;
+
 void do_place();
 void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty);
 
-clock_t layer_wait_ticks;
-int layer_frame = 0;
 void draw_layer();
 void draw_horizontal_layer(int tx, int ty, int len);
 void draw_box(int x1,int y1, int x2, int y2, int col);
@@ -167,17 +164,8 @@ void draw_corners(int x1,int y1, int x2, int y2, int col);
 
 void drop_item();
 
-// global variable head. It points to the 
-// first node of the Item list
-ItemNodePtr itemlist = NULL;
-
 void move_items_on_belts();
 void print_item_pos();
-
-clock_t item_move_wait_ticks;
-
-int belt_speed = 7;
-int key_wait = 15;
 
 void wait()
 {
@@ -220,12 +208,12 @@ int main(/*int argc, char *argv[]*/)
 	ypos = gTileSize*(gMapHeight - gScreenHeight/gTileSize)/2; 
 	bobx = (xpos + gTileSize*(gScreenWidth/gTileSize)/2) & 0xFFFFF0;
 	boby = (ypos + gTileSize*(gScreenHeight/gTileSize)/2) & 0xFFFFF0;
-	place_tx = getTileX(bobx+gTileSize/2);
-	place_ty = getTileY(boby+gTileSize/2)+1;
-	oldplacex=placex;
-	oldplacey=placey;
-	oldplace_tx = place_tx;
-	oldplace_ty = place_ty;
+	cursor_tx = getTileX(bobx+gTileSize/2);
+	cursor_ty = getTileY(boby+gTileSize/2)+1;
+	old_cursorx=cursorx;
+	old_cursory=cursory;
+	oldcursor_tx = cursor_tx;
+	oldcursor_ty = cursor_ty;
 
 	// setup complete
 	vdp_mode(gMode);
@@ -292,19 +280,19 @@ void game_loop()
 		if ( vdp_check_key_press( KEY_DOWN ) ) {place_dir=SCROLL_DOWN; }
 
 		// keep cursor on screen
-		if ( placex < 0 ) { place_dir=SCROLL_RIGHT; }
-		if ( placey < 0 ) { place_dir=SCROLL_DOWN; }
-		if ( placex > gScreenWidth-gTileSize ) { place_dir=SCROLL_LEFT; }
-		if ( placey > gScreenHeight-gTileSize ) { place_dir=SCROLL_UP; }
+		if ( cursorx < 0 ) { place_dir=SCROLL_RIGHT; }
+		if ( cursory < 0 ) { place_dir=SCROLL_DOWN; }
+		if ( cursorx > gScreenWidth-gTileSize ) { place_dir=SCROLL_LEFT; }
+		if ( cursory > gScreenHeight-gTileSize ) { place_dir=SCROLL_UP; }
 
 		// move the cursor OR place rectangle
 		if (place_dir>=0 && ( key_wait_ticks < clock() ) ) {
 			draw_place(false);
 			switch(place_dir) {
-				case SCROLL_RIGHT: place_tx++; break;
-				case SCROLL_LEFT: place_tx--; break;
-				case SCROLL_UP: place_ty--; break;
-				case SCROLL_DOWN: place_ty++; break;
+				case SCROLL_RIGHT: cursor_tx++; break;
+				case SCROLL_LEFT: cursor_tx--; break;
+				case SCROLL_UP: cursor_ty--; break;
+				case SCROLL_DOWN: cursor_ty++; break;
 				default: break;
 			}
 			draw_place(true);
@@ -632,7 +620,6 @@ void place_feature_overlay(uint8_t *data, int sx, int sy, int tile, int tx, int 
 
 void draw_bob(bool draw, int bx, int by, int px, int py)
 {
-	if (!bShowBob) return;
 	if (draw) {
 		vdp_select_bitmap( BMOFF_BOB16 + bob_facing*4 + bob_frame);
 		vdp_draw_bitmap( bx-px, by-py );
@@ -753,20 +740,19 @@ void stop_place()
 
 void draw_place(bool draw) 
 {
-	//if (!bPlace) return;
 	// undraw
 	if (!draw) {
-		draw_tile(oldplace_tx, oldplace_ty, oldplacex, oldplacey);
+		draw_tile(oldcursor_tx, oldcursor_ty, old_cursorx, old_cursory);
 		return;
 	}
 
-	placex=getTilePosInScreenX(place_tx);
-	placey=getTilePosInScreenY(place_ty);
+	cursorx = getTilePosInScreenX(cursor_tx);
+	cursory = getTilePosInScreenY(cursor_ty);
 
 	if (bPlace)
 	{
 		BELT_PLACE bn[4];
-		get_belt_neighbours(bn, place_tx, place_ty);
+		get_belt_neighbours(bn, cursor_tx, cursor_ty);
 
 		int in_connection = -1;
 		int out_connection = -1;
@@ -796,20 +782,20 @@ void draw_place(bool draw)
 		if (place_belt_selected>=0)
 		{
 			vdp_select_bitmap( BMOFF_BELT16 + place_belt_selected*4 );
-			vdp_draw_bitmap( placex, placey );
+			vdp_draw_bitmap( cursorx, cursory );
 		}
 
-		draw_box(placex, placey, placex+gTileSize-1, placey+gTileSize-1, 15);
+		draw_box(cursorx, cursory, cursorx+gTileSize-1, cursory+gTileSize-1, 15);
 	}
 	else
 	{
-		draw_corners(placex, placey, placex+gTileSize-1, placey+gTileSize-1, 11);
+		draw_corners(cursorx, cursory, cursorx+gTileSize-1, cursory+gTileSize-1, 11);
 	}
 
-	oldplacex=placex;
-	oldplacey=placey;
-	oldplace_tx = place_tx;
-	oldplace_ty = place_ty;
+	old_cursorx=cursorx;
+	old_cursory=cursory;
+	oldcursor_tx = cursor_tx;
+	oldcursor_ty = cursor_ty;
 }
 
 void draw_layer()
@@ -823,7 +809,7 @@ void draw_layer()
 	}
 
 	vdp_update_key_state();
-	layer_frame = (layer_frame +1) % 4;
+	belt_layer_frame = (belt_layer_frame +1) % 4;
 }
 
 bool itemIsOnScreen(ItemNodePtr itemptr)
@@ -847,7 +833,7 @@ void draw_horizontal_layer(int tx, int ty, int len)
 	{
 		if ( layer_belts[ty*gMapWidth + tx+i] >= 0 )
 		{
-			vdp_select_bitmap( layer_belts[ty*gMapWidth + tx+i]*4 + BMOFF_BELT16 + layer_frame);
+			vdp_select_bitmap( layer_belts[ty*gMapWidth + tx+i]*4 + BMOFF_BELT16 + belt_layer_frame);
 			vdp_draw_bitmap( px + i*gTileSize, py );
 		}
 	}
@@ -906,7 +892,7 @@ void do_place()
 {
 	if (!bPlace || place_belt_selected<0) return;
 		       
-	layer_belts[gMapWidth * place_ty + place_tx] = place_belt_selected;
+	layer_belts[gMapWidth * cursor_ty + cursor_tx] = place_belt_selected;
 	
 	stop_place();
 }
@@ -914,7 +900,7 @@ void do_place()
 void drop_item()
 {
 	// only one item type currently
-	insertAtFrontItemList(0, place_tx*gTileSize+4, place_ty*gTileSize+4);
+	insertAtFrontItemList(0, cursor_tx*gTileSize+4, cursor_ty*gTileSize+4);
 }
 
 void move_items_on_belts()

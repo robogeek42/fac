@@ -8,8 +8,6 @@
 extern int gMode;
 extern int gScreenWidth;
 extern int gScreenHeight;
-int gMapTileWidth;
-int gMapTileHeight;
 extern int gTileSize;
 
 #endif
