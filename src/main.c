@@ -133,11 +133,11 @@ bool bobAtEdge();
 int bob_facing = BOB_DOWN;
 int bob_frame = 0;
 
-clock_t bob_wait_ticks;
+clock_t key_wait_ticks;
 clock_t bob_anim_ticks;
 clock_t move_wait_ticks;
 
-bool belt_debug = false;
+bool debug = false;
 
 bool bPlace=false;
 void start_place();
@@ -153,8 +153,6 @@ int place_tx=0;
 int place_ty=0;
 int oldplace_tx=0;
 int oldplace_ty=0;
-clock_t place_select_wait_ticks;
-clock_t place_wait_ticks;
 int poss_belt[20];
 int poss_belt_num=0;
 void do_place();
@@ -168,7 +166,6 @@ void draw_box(int x1,int y1, int x2, int y2, int col);
 void draw_corners(int x1,int y1, int x2, int y2, int col);
 
 void drop_item();
-clock_t drop_item_wait_ticks;
 
 // global variable head. It points to the 
 // first node of the Item list
@@ -180,7 +177,7 @@ void print_item_pos();
 clock_t item_move_wait_ticks;
 
 int belt_speed = 7;
-int key_wait = 20;
+int key_wait = 15;
 
 void wait()
 {
@@ -224,7 +221,7 @@ int main(/*int argc, char *argv[]*/)
 	bobx = (xpos + gTileSize*(gScreenWidth/gTileSize)/2) & 0xFFFFF0;
 	boby = (ypos + gTileSize*(gScreenHeight/gTileSize)/2) & 0xFFFFF0;
 	place_tx = getTileX(bobx+gTileSize/2);
-	place_ty = getTileY(boby+gTileSize/2);
+	place_ty = getTileY(boby+gTileSize/2)+1;
 	oldplacex=placex;
 	oldplacey=placey;
 	oldplace_tx = place_tx;
@@ -252,13 +249,10 @@ void game_loop()
 	int exit=0;
 	draw_screen();
 	draw_layer();
-	bob_wait_ticks = clock();
 	bob_anim_ticks = clock();
 	layer_wait_ticks = clock();
-	place_wait_ticks = clock();
-	place_select_wait_ticks = clock();
+	key_wait_ticks = clock();
 	item_move_wait_ticks = clock()+60;
-	drop_item_wait_ticks = clock();
 
 	recentre();
 	do {
@@ -270,26 +264,25 @@ void game_loop()
 		if ( vdp_check_key_press( KEY_s ) || vdp_check_key_press( KEY_S ) ) { bob_dir = BOB_DOWN; dir=SCROLL_DOWN; }
 		if ( vdp_check_key_press( KEY_d ) || vdp_check_key_press( KEY_D ) ) { bob_dir = BOB_RIGHT; dir=SCROLL_LEFT; }
 
+		// scroll the screen AND/OR move Bob
 		if (dir>=0 && ( move_wait_ticks < clock() ) ) {
+			move_wait_ticks = clock()+1;
+			// screen can scroll, move Bob AND screen
 			if (can_scroll_screen(dir, 1) && move_bob(bob_dir, 1) )
 			{
-				draw_place(false);
+				draw_place(false); // remove cursor or it will smeer
 				scroll_screen(dir,1);
+				// Bob only needs to be re-drawn if he was at the edge of the screen (and so was removed)
 				if (bobAtEdge()) {
 					draw_bob(true,bobx,boby,xpos,ypos);
 				}
-				draw_place(true);
+				draw_place(true); // re-daw cursor
 			}
+			// can't scroll screen, just move Bob around
 			if (!can_scroll_screen(dir, 1))
 			{
-				if ( bob_wait_ticks < clock() )
-				{
-					move_bob(bob_dir, 1);
-					bob_wait_ticks = clock()+1;
-				}
-
+				move_bob(bob_dir, 1);
 			}
-			move_wait_ticks = clock()+1;
 		}
 
 		// cursor movement
@@ -304,7 +297,8 @@ void game_loop()
 		if ( placex > gScreenWidth-gTileSize ) { place_dir=SCROLL_LEFT; }
 		if ( placey > gScreenHeight-gTileSize ) { place_dir=SCROLL_UP; }
 
-		if (place_dir>=0 && ( place_wait_ticks < clock() ) ) {
+		// move the cursor OR place rectangle
+		if (place_dir>=0 && ( key_wait_ticks < clock() ) ) {
 			draw_place(false);
 			switch(place_dir) {
 				case SCROLL_RIGHT: place_tx++; break;
@@ -314,7 +308,7 @@ void game_loop()
 				default: break;
 			}
 			draw_place(true);
-			place_wait_ticks = clock() + key_wait;
+			key_wait_ticks = clock() + key_wait;
 		}
 
 		if (layer_wait_ticks < clock()) 
@@ -330,17 +324,17 @@ void game_loop()
 		if ( vdp_check_key_press( KEY_p ) || vdp_check_key_press( KEY_P ) ) { start_place(); }
 		if ( vdp_check_key_press( KEY_q ) || vdp_check_key_press( KEY_Q ) ) { stop_place(); }
 		if ( vdp_check_key_press( KEY_r ) ) { 
-			if (bPlace && place_select_wait_ticks < clock() ) {
+			if (bPlace && key_wait_ticks < clock() ) {
 				place_belt_index++;  
 				place_belt_index = place_belt_index % 4;
-				place_select_wait_ticks = clock() + key_wait;
+				key_wait_ticks = clock() + key_wait;
 			}
 		}
 		if ( vdp_check_key_press( KEY_R ) ) { 
-			if (bPlace && place_select_wait_ticks < clock() ) {
+			if (bPlace && key_wait_ticks < clock() ) {
 				place_belt_index--;  
 				if (place_belt_index < 0) place_belt_index += 4;
-				place_select_wait_ticks = clock() + key_wait;
+				key_wait_ticks = clock() + key_wait;
 			}
 		}
 		if ( vdp_check_key_press( 0x8F ) ) // ENTER
@@ -349,19 +343,19 @@ void game_loop()
 		}
 		if ( vdp_check_key_press( 0x2F ) ) // z - drop an item
 		{
-			if (drop_item_wait_ticks < clock()) 
+			if (key_wait_ticks < clock()) 
 			{
 				drop_item();
-				drop_item_wait_ticks = clock() + key_wait;
+				key_wait_ticks = clock() + key_wait;
 			}
 		}
-		if ( vdp_check_key_press( 0x4A ) )  // ' - toggle belt_debug
+		if ( vdp_check_key_press( 0x4A ) )  // ' - toggle debug
 		{
-			if (drop_item_wait_ticks < clock()) 
+			if (key_wait_ticks < clock()) 
 			{
-				belt_debug = !belt_debug;
+				debug = !debug;
 				draw_screen();
-				drop_item_wait_ticks = clock() + key_wait;
+				key_wait_ticks = clock() + key_wait;
 			}
 		}
 
@@ -374,7 +368,7 @@ void game_loop()
 
 		if ( item_move_wait_ticks <  clock() ) {
 			move_items_on_belts();
-			//print_item_pos();
+			//if (debug) print_item_pos();
 			item_move_wait_ticks = clock()+belt_speed;
 		}
 
@@ -669,11 +663,7 @@ bool move_bob(int dir, int speed)
 	int newx=bobx, newy=boby;
 	bool moved = false;
 
-	//if ( bob_wait_ticks > clock() ) return;
-
-	//if (bob_facing != dir*4) bob_frame=0;
 	bob_facing = dir;
-	//speed *= (gTileSize/8);
 
 	switch (dir) {
 		case BOB_LEFT:
@@ -719,8 +709,6 @@ bool move_bob(int dir, int speed)
 		moved = true;
 	}
 
-	bob_wait_ticks = clock()+5;
-	
 	if (bob_anim_ticks > clock() ) return moved;
 	bob_frame=(bob_frame+1)%4; 
 	bob_anim_ticks = clock()+10;
@@ -752,20 +740,6 @@ bool bobAtEdge()
 void start_place()
 {
 	bPlace=true;
-	/*
-	place_tx = getTileX(bobx+gTileSize/2);
-	place_ty = getTileY(boby+gTileSize/2);
-	if (bob_facing == BOB_RIGHT) {
-		place_tx++;
-	} else if (bob_facing == BOB_LEFT) {
-		place_tx--;
-	} else if (bob_facing == BOB_UP) {
-		place_ty--;
-	} else if (bob_facing == BOB_DOWN) {
-		place_ty++;
-	}
-	*/
-	 
 	draw_place(true);
 }
 void stop_place()
