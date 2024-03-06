@@ -247,10 +247,10 @@ void game_loop()
 		int dir=-1;
 		int bob_dir = -1;
 		int place_dir=-1;
-		if ( vdp_check_key_press( KEY_w ) || vdp_check_key_press( KEY_W ) ) { bob_dir = BOB_UP; dir=SCROLL_UP; }
-		if ( vdp_check_key_press( KEY_a ) || vdp_check_key_press( KEY_A ) ) { bob_dir = BOB_LEFT; dir=SCROLL_RIGHT; }
-		if ( vdp_check_key_press( KEY_s ) || vdp_check_key_press( KEY_S ) ) { bob_dir = BOB_DOWN; dir=SCROLL_DOWN; }
-		if ( vdp_check_key_press( KEY_d ) || vdp_check_key_press( KEY_D ) ) { bob_dir = BOB_RIGHT; dir=SCROLL_LEFT; }
+		if ( vdp_check_key_press( KEY_w ) ) { bob_dir = BOB_UP; dir=SCROLL_UP; }
+		if ( vdp_check_key_press( KEY_a ) ) { bob_dir = BOB_LEFT; dir=SCROLL_RIGHT; }
+		if ( vdp_check_key_press( KEY_s ) ) { bob_dir = BOB_DOWN; dir=SCROLL_DOWN; }
+		if ( vdp_check_key_press( KEY_d ) ) { bob_dir = BOB_RIGHT; dir=SCROLL_LEFT; }
 
 		// scroll the screen AND/OR move Bob
 		if (dir>=0 && ( move_wait_ticks < clock() ) ) {
@@ -308,17 +308,17 @@ void game_loop()
 			draw_place(true);
 		}
 			
-		if ( vdp_check_key_press( KEY_c ) || vdp_check_key_press( KEY_C ) ) { recentre(); }
-		if ( vdp_check_key_press( KEY_p ) || vdp_check_key_press( KEY_P ) ) { start_place(); }
-		if ( vdp_check_key_press( KEY_q ) || vdp_check_key_press( KEY_Q ) ) { stop_place(); }
-		if ( vdp_check_key_press( KEY_r ) ) { 
+		if ( vdp_check_key_press( KEY_c ) ) { recentre(); }
+		if ( vdp_check_key_press( KEY_p ) ) { start_place(); }
+		if ( vdp_check_key_press( KEY_q ) ) { stop_place(); }
+		if ( key_pressed_code == KEY_r ) { // "r" Check actual key code - distinguishes lower/upper case
 			if (bPlace && key_wait_ticks < clock() ) {
 				place_belt_index++;  
 				place_belt_index = place_belt_index % 4;
 				key_wait_ticks = clock() + key_wait;
 			}
 		}
-		if ( vdp_check_key_press( KEY_R ) ) { 
+		if ( key_pressed_code == KEY_R ) { // "R" Check actual key code - distinguishes lower/upper case
 			if (bPlace && key_wait_ticks < clock() ) {
 				place_belt_index--;  
 				if (place_belt_index < 0) place_belt_index += 4;

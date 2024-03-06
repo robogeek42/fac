@@ -105,7 +105,10 @@ FILE *open_file( const char *fname, const char *mode );
 int close_file( FILE *fp );
 
 int read_str(FILE *fp, char *str, char stop) ;
-	
+
+extern uint8_t key_pressed_code;
+extern uint8_t key_pressed_ascii;
+
 void key_event_handler( KEY_EVENT key_event );
 void wait_clock( clock_t ticks );
 double my_atof(char *str);

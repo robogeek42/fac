@@ -52,6 +52,9 @@ int read_str(FILE *fp, char *str, char stop) {
 	str[cnt++]=0;
 	return bytes;
 }
+
+uint8_t key_pressed_code;
+uint8_t key_pressed_ascii;
 	
 static KEY_EVENT prev_key_event = { 0 };
 void key_event_handler( KEY_EVENT key_event )
@@ -65,7 +68,15 @@ void key_event_handler( KEY_EVENT key_event )
 
 	if ( key_event.key_data == prev_key_event.key_data ) return;
 	prev_key_event = key_event;
-	//printf("%X",key_event.code);
+
+	if (key_event.down)
+	{	
+		key_pressed_ascii = key_event.ascii; 
+		key_pressed_code = key_event.code; 
+	} else {
+		key_pressed_ascii = 0;
+		key_pressed_code = 0;
+	}
 }
 
 void wait_clock( clock_t ticks )
