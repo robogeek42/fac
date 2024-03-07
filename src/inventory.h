@@ -12,13 +12,13 @@
 
 #define MAX_INVENTORY_ITEMS 20
 typedef struct {
-	uint8_t type;
+	uint8_t item;
 	int count;
 	uint8_t bmID;
 } INV_ITEM;
 
 void init_inventory(INV_ITEM *);
-int find_item(INV_ITEM *inv, uint8_t type);
-int add_item(INV_ITEM *inv, uint8_t type, int count, uint8_t bmID);
+int find_item(INV_ITEM *inv, uint8_t item);
+int add_item(INV_ITEM *inv, uint8_t item, int count, uint8_t bmID);
 
 #endif

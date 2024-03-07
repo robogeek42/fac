@@ -156,12 +156,17 @@ void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty);
 void draw_layer();
 void draw_horizontal_layer(int tx, int ty, int len);
 void draw_box(int x1,int y1, int x2, int y2, int col);
+void draw_box2(int x,int y, int w, int h, int col);
 void draw_corners(int x1,int y1, int x2, int y2, int col);
+void draw_filled_box(int x1,int y1, int x2, int y2, int col, int bgcol);
+void draw_filled_box2(int x,int y, int w, int h, int col, int bgcol);
 
 void drop_item();
 
 void move_items_on_belts();
 void print_item_pos();
+
+void show_inventory();
 
 void wait()
 {
@@ -327,7 +332,7 @@ void game_loop()
 		{
 			do_place();
 		}
-		if ( vdp_check_key_press( 0x2F ) ) // z - drop an item
+		if ( vdp_check_key_press( KEY_z ) ) // z - drop an item
 		{
 			if (key_wait_ticks < clock()) 
 			{
@@ -345,12 +350,22 @@ void game_loop()
 			}
 		}
 
-		if ( vdp_check_key_press( 0x2D ) ) { // x
+		if ( vdp_check_key_press( KEY_x ) ) { // x
 			TAB(6,8);printf("Are you sure?");
 			char k=getchar(); 
 			if (k=='y') exit=1;
 			draw_screen();
 		}
+
+		if ( vdp_check_key_press( KEY_e ) ) 
+		{
+			if (key_wait_ticks < clock()) 
+			{
+				show_inventory();
+				key_wait_ticks = clock() + key_wait;
+			}
+		}
+
 
 		if ( item_move_wait_ticks <  clock() ) {
 			move_items_on_belts();
@@ -856,6 +871,15 @@ void draw_box(int x1,int y1, int x2, int y2, int col)
 	vdp_line_to( x2, y1 );
 	vdp_line_to( x1, y1 );
 }
+void draw_box2(int x,int y, int w, int h, int col)
+{
+	vdp_gcol( 0, col );
+	vdp_move_to( x, y );
+	vdp_line_to( x, y+h );
+	vdp_line_to( x+w, y+h );
+	vdp_line_to( x+w, y );
+	vdp_line_to( x, y );
+}
 void draw_corners(int x1,int y1, int x2, int y2, int col)
 {
 	int w=2;
@@ -864,6 +888,23 @@ void draw_corners(int x1,int y1, int x2, int y2, int col)
 	vdp_move_to( x2, y1 ); vdp_line_to( x2-w, y1 ); vdp_move_to( x2, y1 ); vdp_line_to( x2, y1+w );
 	vdp_move_to( x1, y2 ); vdp_line_to( x1, y2-w ); vdp_move_to( x1, y2 ); vdp_line_to( x1+w, y2 );
 	vdp_move_to( x2, y2 ); vdp_line_to( x2, y2-w ); vdp_move_to( x2, y2 ); vdp_line_to( x2-w, y2 );
+}
+
+void draw_filled_box(int x,int y, int w, int h, int col, int bgcol)
+{
+	vdp_gcol( 0, bgcol );
+	vdp_move_to( x, y );
+	vdp_filled_rect( x+w, y+h );
+	// border
+	if (col != bgcol)
+	{
+		vdp_gcol( 0, col );
+		vdp_move_to( x, y );
+		vdp_line_to( x, y+h );
+		vdp_line_to( x+w, y+h );
+		vdp_line_to( x+w, y );
+		vdp_line_to( x, y );
+	}
 }
 
 void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty)
@@ -898,7 +939,7 @@ void do_place()
 void drop_item()
 {
 	// only one item type currently
-	insertAtFrontItemList(0, cursor_tx*gTileSize+4, cursor_ty*gTileSize+4);
+	insertAtFrontItemList(2, cursor_tx*gTileSize+4, cursor_ty*gTileSize+4);
 }
 
 void move_items_on_belts()
@@ -1004,4 +1045,38 @@ void print_item_pos()
 		}
 		currPtr = currPtr->next;
 	}
+}
+
+int inv_items_wide = 5;
+int inv_items_high = 4;
+
+// Show inventory and run it's own mini game-loop
+void show_inventory()
+{
+	int boxw = (gTileSize + 2) * inv_items_wide + 4;
+	int boxh = (gTileSize + 2) * inv_items_high + 4;
+	int offx = (gScreenWidth-boxw)/2;
+	int offy = (gScreenHeight-boxh)/2;
+
+	draw_filled_box( offx, offy, boxw, boxh, 11,8);
+
+	for (int j=0; j<inv_items_high; j++)
+	{
+		for (int i=0; i<inv_items_wide; i++)
+		{
+			draw_box2(offx+2 + i*(gTileSize+2), offy+2 + j*(gTileSize+2),  gTileSize+2, gTileSize+2, 7);
+		}
+	}
+
+	clock_t key_wait_ticks = clock() + 20;
+	bool finish = false;
+	do {
+		if ( key_wait_ticks<clock() && vdp_check_key_press( KEY_e ) ) 
+		{
+			finish=true;
+			key_wait_ticks = clock()+20;
+		}
+		vdp_update_key_state();
+	} while (finish==false);
+	draw_screen();
 }

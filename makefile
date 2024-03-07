@@ -27,3 +27,8 @@ install: bin/$(NAME).bin
 	srec_cat bin/$(NAME).bin -binary -offset 0x40000 -o bin/$(NAME).hex -intel
 	cp bin/$(NAME).bin $(NAME)
 	#rsync -rvu ./ ~/agon/sdcard_sync/cc/fac
+
+
+run: install
+	cd ~/agon/fab-agon-emulator ;\
+	./fab-agon-emulator --firmware console8 --vdp src/vdp/vdp_console8.so 
