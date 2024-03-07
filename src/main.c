@@ -25,23 +25,39 @@ int gScreenHeight = 240;
 
 int gTileSize = 16;
 
-#define BMOFF_TILE16 0
+
+#define FN_TERR16 "img/terr16/tr%02d.rgb2"
+#define BMOFF_TERR16 0
 #define NUM_BM_TERR16 13
 
-#define BMOFF_FEAT16 BMOFF_TILE16 + NUM_BM_TERR16 
-#define NUM_BM_FEAT16 5
+#define FN_FEAT16 "img/tf16/tf%02d.rgb2"
+#define BMOFF_FEAT16 BMOFF_TERR16 + NUM_BM_TERR16 
+#define NUM_BM_FEAT16 15
 
+#define FN_BOB16  "img/b16/bob%02d.rgb2"
 #define BMOFF_BOB16 BMOFF_FEAT16 + NUM_BM_FEAT16
 #define NUM_BM_BOB16 16
 
+#define FN_BELT16 "img/belt16/belt%02d.rgb2"
+#define FN_BBELT16 "img/belt16/bbelt%02d.rgb2"
 #define BMOFF_BELT16 BMOFF_BOB16 + NUM_BM_BOB16
 #define NUM_BM_BELT16 4*4
 #define NUM_BM_BBELT16 8*4
 
+#define FN_ITEM8  "img/ti8/ti%02d.rgb2"
 #define BMOFF_ITEM8 BMOFF_BELT16 + NUM_BM_BELT16 + NUM_BM_BBELT16
-#define NUM_BM_ITEM8 1
+#define NUM_BM_ITEM8 4
 
-#define TOTAL_BM BMOFF_ITEM8 + NUM_BM_ITEM8
+#define FN_MACH16 "img/tm16/tm%02d.rgb2"
+#define BMOFF_MACH16 BMOFF_ITEM8 + NUM_BM_ITEM8 
+#define NUM_BM_MACH16 4
+
+#define FN_NUMS "img/nums4x5/num%01d.rgb2"
+#define BMOFF_NUMS BMOFF_MACH16 + NUM_BM_MACH16 
+#define NUM_BM_NUMS 10
+
+
+#define TOTAL_BM BMOFF_NUMS + NUM_BM_NUMS
 
 #define SCROLL_RIGHT 0
 #define SCROLL_LEFT 1
@@ -167,6 +183,8 @@ void move_items_on_belts();
 void print_item_pos();
 
 void show_inventory();
+void draw_digit(int i, int px, int py);
+void draw_number(int n, int px, int py);
 
 void wait()
 {
@@ -246,6 +264,7 @@ void game_loop()
 	item_move_wait_ticks = clock()+60;
 
 	recentre();
+
 	do {
 		int dir=-1;
 		int bob_dir = -1;
@@ -384,42 +403,54 @@ void load_images()
 	char fname[40];
 	for (int fn=1; fn<=NUM_BM_TERR16; fn++)
 	{
-		sprintf(fname, "img/terr16/tr%02d.rgb2",fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_TILE16 + fn-1);
+		sprintf(fname, FN_TERR16, fn);
+		load_bitmap_file(fname, 16, 16, BMOFF_TERR16 + fn-1);
 	}
 	for (int fn=1; fn<=NUM_BM_FEAT16; fn++)
 	{
-		sprintf(fname, "img/tf16/tf%02d.rgb2",fn);
+		sprintf(fname, FN_FEAT16, fn);
 		load_bitmap_file(fname, 16, 16, BMOFF_FEAT16 + fn-1);
 	}
 	for (int fn=1; fn<=NUM_BM_BOB16; fn++)
 	{
-		sprintf(fname, "img/b16/bob%02d.rgb2",fn);
+		sprintf(fname, FN_BOB16, fn);
 		load_bitmap_file(fname, 16, 16, BMOFF_BOB16 + fn-1);
 	}
 	for (int fn=1; fn<=NUM_BM_BELT16; fn++)
 	{
-		sprintf(fname, "img/belt16/belt%02d.rgb2",fn);
+		sprintf(fname, FN_BELT16, fn);
 		load_bitmap_file(fname, 16, 16, BMOFF_BELT16 + fn-1);
 	}
 	for (int fn=1; fn<=NUM_BM_BBELT16; fn++)
 	{
-		sprintf(fname, "img/belt16/bbelt%02d.rgb2",fn);
+		sprintf(fname, FN_BBELT16, fn);
 		load_bitmap_file(fname, 16, 16, BMOFF_BELT16 + NUM_BM_BELT16 + fn-1);
 	}
 	for (int fn=1; fn<=NUM_BM_ITEM8; fn++)
 	{
-		sprintf(fname, "img/ti8/ti%02d.rgb2",fn);
+		sprintf(fname, FN_ITEM8, fn);
 		load_bitmap_file(fname, 8, 8, BMOFF_ITEM8 + fn-1);
+	}
+	for (int fn=1; fn<=NUM_BM_MACH16; fn++)
+	{
+		sprintf(fname, FN_MACH16, fn);
+		load_bitmap_file(fname, 16, 16, BMOFF_MACH16 + fn-1);
+	}
+	for (int fn=0; fn<=NUM_BM_NUMS-1; fn++)
+	{
+		sprintf(fname, FN_NUMS, fn);
+		load_bitmap_file(fname, 4, 5, BMOFF_NUMS + fn);
 	}
 	
 	/*
 	TAB(0,0);
-	printf("TILES start %d count %d\n",BMOFF_TILE16,NUM_BM_TERR16);
+	printf("TILES start %d count %d\n",BMOFF_TERR16,NUM_BM_TERR16);
 	printf("FEATS start %d count %d\n",BMOFF_FEAT16,NUM_BM_FEAT16);
 	printf("BOB   start %d count %d\n",BMOFF_BOB16,NUM_BM_BOB16);
 	printf("BELTS start %d count %d + %d\n",BMOFF_BELT16,NUM_BM_BELT16,NUM_BM_BBELT16);
 	printf("ITEMS start %d count %d\n",BMOFF_ITEM8,NUM_BM_ITEM8);
+	printf("MACHS start %d count %d\n",BMOFF_MACH16,NUM_BM_MACH16);
+	printf("NUMS  start %d count %d\n",BMOFF_NUMS,NUM_BM_NUMS);
 	printf("Total %d\n",TOTAL_BM);
 	wait();
 	*/
@@ -429,11 +460,12 @@ void draw_tile(int tx, int ty, int tposx, int tposy)
 {
 	uint8_t tile = tilemap[ty*gMapWidth + tx] & 0x0F;
 	uint8_t overlay = (tilemap[ty*gMapWidth + tx] & 0xF0) >> 4;
-	vdp_select_bitmap( tile + BMOFF_TILE16);
+	vdp_select_bitmap( tile + BMOFF_TERR16);
 	vdp_draw_bitmap( tposx, tposy );
 	if (overlay > 0)
 	{
-		vdp_select_bitmap( overlay - 1 + BMOFF_FEAT16);
+		int feat = overlay - 1;
+		vdp_select_bitmap( feat + BMOFF_FEAT16);
 		vdp_draw_bitmap( tposx, tposy );
 	}
 }
@@ -559,53 +591,53 @@ bool can_scroll_screen(int dir, int step)
 	return false;
 }
 uint8_t oval1_block6x6[6*6] = {
-	0,0,1,1,0,0,
-	0,1,1,1,1,0,
-	1,1,1,1,1,0,
-	1,1,1,1,1,1,
-	0,1,1,1,1,0,
-	0,0,1,0,0,0};
+	0,0,3,3,0,0,
+	0,1,2,1,2,0,
+	3,2,1,1,2,0,
+	3,1,2,1,1,3,
+	0,3,1,3,2,0,
+	0,0,2,0,0,0};
 
 uint8_t oval2_block6x6[6*6] = {
-	0,1,1,1,0,0,
-	0,1,0,1,1,0,
-	1,1,1,1,0,0,
-	0,1,0,1,1,1,
-	0,1,1,1,1,0,
-	0,0,1,1,0,0};
+	0,3,2,1,0,0,
+	0,1,0,2,3,0,
+	3,2,1,1,0,0,
+	0,1,0,1,2,3,
+	0,3,2,1,3,0,
+	0,0,2,3,0,0};
 
 uint8_t rnd1_block5x5[5*5] = {
-	0,1,0,1,1,
-	0,0,1,0,0,
-	1,0,0,0,0,
-	0,1,0,1,0,
-	0,1,0,1,0,
+	0,3,0,2,3,
+	0,0,2,1,0,
+	3,0,0,0,0,
+	0,1,2,3,0,
+	0,2,0,2,0,
 };
 uint8_t rnd2_block5x5[5*5] = {
 	0,0,0,1,0,
-	0,1,1,1,0,
-	1,1,0,0,1,
-	0,0,1,0,0,
-	1,1,0,0,1,
+	0,3,1,2,0,
+	2,1,0,0,1,
+	0,0,2,0,0,
+	3,2,0,0,3,
 };
 
 uint8_t rnd1_block4x4[4*4] = {
-	0,1,1,0,
-	1,0,1,0,
-	0,0,0,1,
-	1,1,0,0,
+	0,3,2,0,
+	3,2,1,0,
+	0,1,0,2,
+	3,2,0,0,
 };
 
 
 int load_map(char *mapname)
 {
 	uint8_t ret = mos_load( mapname, (uint24_t) tilemap,  gMapWidth * gMapHeight );
-	place_feature_overlay(oval1_block6x6,6,6,0,30,10);
-	place_feature_overlay(oval2_block6x6,6,6,1,10,23);
-	place_feature_overlay(oval1_block6x6,6,6,2,22,29);
+	place_feature_overlay(oval1_block6x6,6,6,0,30,10); // stone    0:5:10
+	place_feature_overlay(oval2_block6x6,6,6,1,10,23); // iron ore 1:6:11
+	place_feature_overlay(oval1_block6x6,6,6,2,22,29); // copp ore 2:7:12
+	place_feature_overlay(rnd1_block5x5,6,6,3,15,8);   // coal     3:8:13
 
-	place_feature_overlay(rnd1_block5x5,5,5,4,5,5);
-	place_feature_overlay(rnd1_block5x5,5,5,4,15,8);
+	place_feature_overlay(rnd1_block5x5,5,5,4,5,5);    // tree     4:9:14
 	place_feature_overlay(rnd2_block5x5,5,5,4,20,30);
 	place_feature_overlay(rnd1_block5x5,5,5,4,7,26);
 	place_feature_overlay(rnd2_block5x5,5,5,4,32,22);
@@ -624,7 +656,7 @@ void place_feature_overlay(uint8_t *data, int sx, int sy, int tile, int tx, int 
 			if (data[x+(y*sx)] > 0)
 			{
 				tilemap[(tx+x) + (ty+y)*gMapWidth] &= 0x0F;
-				tilemap[(tx+x) + (ty+y)*gMapWidth] |= (tile+1)<<4;
+				tilemap[(tx+x) + (ty+y)*gMapWidth] |= (tile+(data[x+(y*sx)]-1)*5+1)<<4;
 			}
 		}
 	}
@@ -1068,6 +1100,8 @@ void show_inventory()
 		}
 	}
 
+	draw_number(1234, 150,150);
+
 	clock_t key_wait_ticks = clock() + 20;
 	bool finish = false;
 	do {
@@ -1079,4 +1113,29 @@ void show_inventory()
 		vdp_update_key_state();
 	} while (finish==false);
 	draw_screen();
+}
+
+void draw_digit(int i, int px, int py)
+{
+	vdp_select_bitmap( BMOFF_NUMS + i );
+	vdp_draw_bitmap( px, py );
+}
+// draw reverse digits
+void draw_number(int n, int px, int py)
+{
+	int x = px-4;
+	int y = py;
+
+	if (n==0)
+	{
+		draw_digit(0, x, y);
+		return;
+	}
+	while (n>0)
+	{
+		int dig = n % 10;
+		draw_digit( dig, x, y);
+		n /= 10;
+		x -= 4;
+	}
 }
