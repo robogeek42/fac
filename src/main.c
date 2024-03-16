@@ -58,6 +58,7 @@ int gMapWidth = 200;
 int gMapHeight = 200;
 uint8_t* tilemap;
 int8_t* layer_belts;
+int8_t* layer_machines;
 
 // first node (head) of the Item list
 ItemNodePtr itemlist = NULL;
@@ -195,6 +196,14 @@ int main(/*int argc, char *argv[]*/)
 		return -1;
 	}
 	memset(layer_belts, (int8_t)-1, gMapWidth * gMapHeight);
+
+	layer_machines = (int8_t *) malloc(sizeof(int8_t) * gMapWidth * gMapHeight);
+	if (layer_machines == NULL)
+	{
+		printf("Out of memory\n");
+		return -1;
+	}
+	memset(layer_machines, (int8_t)-1, gMapWidth * gMapHeight);
 
 	/* start screen centred */
 	xpos = gTileSize*(gMapWidth - gScreenWidth/gTileSize)/2; 
@@ -768,6 +777,12 @@ void draw_place_resource()
 			cursory + itemtypes[item_selected].size*4);
 }
 
+void draw_place_machine()
+{
+	vdp_select_bitmap( itemtypes[item_selected].bmID );
+	vdp_draw_bitmap( cursorx, cursory);
+}
+
 
 void draw_place(bool draw) 
 {
@@ -789,6 +804,10 @@ void draw_place(bool draw)
 		if ( isResource( item_selected ) )
 		{
 			draw_place_resource();
+		}
+		if ( isMachine( item_selected ) )
+		{
+			draw_place_machine();
 		}
 		
 		draw_box(cursorx, cursory, gTileSize-1, gTileSize-1, 15);
@@ -840,6 +859,11 @@ void draw_horizontal_layer(int tx, int ty, int len)
 		if ( layer_belts[ty*gMapWidth + tx+i] >= 0 )
 		{
 			vdp_select_bitmap( layer_belts[ty*gMapWidth + tx+i]*4 + BMOFF_BELT16 + belt_layer_frame);
+			vdp_draw_bitmap( px + i*gTileSize, py );
+		}
+		if ( layer_machines[ty*gMapWidth + tx+i] >= 0 )
+		{
+			vdp_select_bitmap( itemtypes[layer_machines[ty*gMapWidth + tx+i]].bmID );
 			vdp_draw_bitmap( px + i*gTileSize, py );
 		}
 	}
@@ -924,7 +948,7 @@ void do_place()
 		drop_item(item_selected);
 	}
 	if ( isMachine(item_selected) ) {
-
+		layer_machines[gMapWidth * cursor_ty + cursor_tx] = item_selected;
 	}
 	
 	stop_place();
