@@ -9,16 +9,17 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include "item.h"
+#include "util.h"
 
 #define MAX_INVENTORY_ITEMS 20
 typedef struct {
 	uint8_t item;
 	int count;
-	uint8_t bmID;
 } INV_ITEM;
 
 void init_inventory(INV_ITEM *);
 int find_item(INV_ITEM *inv, uint8_t item);
-int add_item(INV_ITEM *inv, uint8_t item, int count, uint8_t bmID);
+int add_item(INV_ITEM *inv, uint8_t item, int count);
 
 #endif

@@ -93,6 +93,8 @@
 #define KEY_lt 0x6E
 #define KEY_gt 0x6F
 
+#define COL(C) vdp_set_text_colour(C)
+#define TAB(X,Y) vdp_cursor_tab(X,Y)
 
 typedef struct {
 	char fname[20];

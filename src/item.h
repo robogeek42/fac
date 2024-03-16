@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include "images.h"
 
 // data structure for Node
 // data -> the actual value
@@ -50,26 +51,44 @@ void printItemList();
 // check if a key is in the list
 bool findItem(uint8_t key, int keyx, int keyy);
 
+#define BM_SIZE16 0
+#define BM_SIZE8 1
+
 typedef struct {
 	uint8_t item;
 	char desc[40];
 	bool isBelt;		// special handling for belts
 	bool isMachine;		// can convert resources
 	bool isResource;	// general resource type
-	bool isFeature;		// background resource feature
+	bool isOverlay;		// background feature - can't place these
+	int bmID;
+	int size; // 16x16=0, 8x8=1
 } ItemType; 
 
 static ItemType itemtypes[] = {
-	{0, "Belts", 		true, false, false, false },
-	{1, "Stone",		false, false, true, true },
-	{2, "Iron Ore", 	false, false, true, true },
-	{3, "Copper Ore",	false, false, true, true },
-	{4, "Coal",			false, false, true, true },
-	{5, "Tree",			false, false, true, true },
-	{6, "Wood",			false, false, true, true },
-	{7, "Iron Plate",	false, false, true, false },
-	{8, "Copper Plate", false, false, true, false },
-	{9, "Stone brick",	false, false, true, false },
+// belts are special
+	{0, "Belts", 		true, false, false, false, BMOFF_BELT16, BM_SIZE16 },
+// raw items
+	{1, "Stone",		false, false, true, false, BMOFF_ITEM8+4, BM_SIZE8 },
+	{2, "Iron Ore", 	false, false, true, false, BMOFF_ITEM8+5, BM_SIZE8 },
+	{3, "Copper Ore",	false, false, true, false, BMOFF_ITEM8+6, BM_SIZE8 },
+	{4, "Coal",			false, false, true, false, BMOFF_ITEM8+7, BM_SIZE8 },
+	{5, "Wood",			false, false, true, false, BMOFF_ITEM8+0, BM_SIZE8 },
+// processed items
+	{6, "Iron Plate",	false, false, true, false, BMOFF_ITEM8+1, BM_SIZE8 },
+	{7, "Copper Plate", false, false, true, false, BMOFF_ITEM8+2, BM_SIZE8 },
+	{8, "Stone brick",	false, false, true, false, BMOFF_ITEM8+3, BM_SIZE8 },
+// Machines
+    {9, "Furnace",		false, true, false, false, BMOFF_MACH16+0, BM_SIZE16 },
+    {10, "Miner",		false, true, false, false, BMOFF_MACH16+1, BM_SIZE16 },
+    {11, "Assembler",	false, true, false, false, BMOFF_MACH16+3, BM_SIZE16 },
+// Overlays
+	{12, "Stone",		false, false, false, true, BMOFF_FEAT16+0, BM_SIZE16 },
+	{13, "Iron Ore", 	false, false, false, true, BMOFF_FEAT16+1, BM_SIZE16 },
+	{14, "Copper Ore",	false, false, false, true, BMOFF_FEAT16+2, BM_SIZE16 },
+	{15, "Coal",		false, false, false, true, BMOFF_FEAT16+3, BM_SIZE16 },
+	{16, "Wood",		false, false, false, true, BMOFF_FEAT16+4, BM_SIZE16 },
+
 };
 
 #endif

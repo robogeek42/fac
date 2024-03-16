@@ -10,7 +10,6 @@ void init_inventory(INV_ITEM *inv)
 	{
 		inv[i].item = 255;
 		inv[i].count = 0;
-		inv[i].bmID = 0;
 	}
 }
 
@@ -31,7 +30,7 @@ int find_item(INV_ITEM *inv, uint8_t item)
 	return index;
 }
 
-int add_item(INV_ITEM *inv, uint8_t item, int count, uint8_t bmID)
+int add_item(INV_ITEM *inv, uint8_t item, int count)
 {
 	int index = find_item(inv, item);
 
@@ -44,6 +43,12 @@ int add_item(INV_ITEM *inv, uint8_t item, int count, uint8_t bmID)
 		{
 			index++;
 		}
+		/*
+		if (index != MAX_INVENTORY_ITEMS)
+		{
+			printf("found slot %d\n",index);
+		}
+		*/
 	}
 
 	if (index == MAX_INVENTORY_ITEMS)
@@ -55,7 +60,7 @@ int add_item(INV_ITEM *inv, uint8_t item, int count, uint8_t bmID)
 	// found an empty slot or slot with this item in it
 	inv[index].item = item;
 	inv[index].count += count;
-	inv[index].bmID = bmID;
+	//printf("add item %d at ind %d: bm %d\n",item, index, itemtypes[item].bmID);
 
 	return index;
 }

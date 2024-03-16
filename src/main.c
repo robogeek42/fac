@@ -19,45 +19,14 @@
 #include "item.h"
 #include "inventory.h"
 
+#define IMPLEMENTATION
+#include "images.h"
+
 int gMode = 8; 
 int gScreenWidth = 320;
 int gScreenHeight = 240;
 
 int gTileSize = 16;
-
-
-#define FN_TERR16 "img/terr16/tr%02d.rgb2"
-#define BMOFF_TERR16 0
-#define NUM_BM_TERR16 13
-
-#define FN_FEAT16 "img/tf16/tf%02d.rgb2"
-#define BMOFF_FEAT16 BMOFF_TERR16 + NUM_BM_TERR16 
-#define NUM_BM_FEAT16 15
-
-#define FN_BOB16  "img/b16/bob%02d.rgb2"
-#define BMOFF_BOB16 BMOFF_FEAT16 + NUM_BM_FEAT16
-#define NUM_BM_BOB16 16
-
-#define FN_BELT16 "img/belt16/belt%02d.rgb2"
-#define FN_BBELT16 "img/belt16/bbelt%02d.rgb2"
-#define BMOFF_BELT16 BMOFF_BOB16 + NUM_BM_BOB16
-#define NUM_BM_BELT16 4*4
-#define NUM_BM_BBELT16 8*4
-
-#define FN_ITEM8  "img/ti8/ti%02d.rgb2"
-#define BMOFF_ITEM8 BMOFF_BELT16 + NUM_BM_BELT16 + NUM_BM_BBELT16
-#define NUM_BM_ITEM8 4
-
-#define FN_MACH16 "img/tm16/tm%02d.rgb2"
-#define BMOFF_MACH16 BMOFF_ITEM8 + NUM_BM_ITEM8 
-#define NUM_BM_MACH16 4
-
-#define FN_NUMS "img/nums4x5/num%01d.rgb2"
-#define BMOFF_NUMS BMOFF_MACH16 + NUM_BM_MACH16 
-#define NUM_BM_NUMS 10
-
-
-#define TOTAL_BM BMOFF_NUMS + NUM_BM_NUMS
 
 #define SCROLL_RIGHT 0
 #define SCROLL_LEFT 1
@@ -68,9 +37,6 @@ int gTileSize = 16;
 #define BOB_UP 1
 #define BOB_LEFT 2
 #define BOB_RIGHT 3
-
-#define COL(C) vdp_set_text_colour(C)
-#define TAB(X,Y) vdp_cursor_tab(X,Y)
 
 bool debug = false;
 
@@ -119,6 +85,11 @@ int bob_facing = BOB_DOWN;
 int bob_frame = 0;
 // belt-layer animation
 int belt_layer_frame = 0;
+
+// Inventory position
+int inv_items_wide = 5;
+int inv_items_high = 4;
+int inv_selected = 0;
 //------------------------------------------------------------
 
 //------------------------------------------------------------
@@ -135,7 +106,6 @@ clock_t move_wait_ticks;
 clock_t item_move_wait_ticks;
 clock_t layer_wait_ticks;
 
-void load_images();
 void game_loop();
 
 int getWorldCoordX(int sx) { return (xpos + sx); }
@@ -171,20 +141,19 @@ void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty);
 
 void draw_layer();
 void draw_horizontal_layer(int tx, int ty, int len);
-void draw_box(int x1,int y1, int x2, int y2, int col);
-void draw_box2(int x,int y, int w, int h, int col);
-void draw_corners(int x1,int y1, int x2, int y2, int col);
-void draw_filled_box(int x1,int y1, int x2, int y2, int col, int bgcol);
-void draw_filled_box2(int x,int y, int w, int h, int col, int bgcol);
+void draw_box(int x,int y, int w, int h, int col);
+void draw_corners(int x1,int y1, int w, int h, int col);
+void draw_filled_box(int x,int y, int w, int h, int col, int bgcol);
 
 void drop_item();
 
 void move_items_on_belts();
 void print_item_pos();
 
-void show_inventory();
+void show_inventory(int X, int Y);
 void draw_digit(int i, int px, int py);
 void draw_number(int n, int px, int py);
+void draw_number_lj(int n, int px, int py);
 
 void wait()
 {
@@ -242,6 +211,13 @@ int main(/*int argc, char *argv[]*/)
 	load_images();
 
 	init_inventory(inventory);
+	// for test add some items
+	add_item(inventory, 0, 8);
+	add_item(inventory, 1, 121);
+	add_item(inventory, 2, 287);
+	add_item(inventory, 7, 94);
+	add_item(inventory, 9, 6);
+	add_item(inventory, 3, 9876);
 
 	game_loop();
 
@@ -380,7 +356,7 @@ void game_loop()
 		{
 			if (key_wait_ticks < clock()) 
 			{
-				show_inventory();
+				show_inventory(20,20);
 				key_wait_ticks = clock() + key_wait;
 			}
 		}
@@ -395,65 +371,6 @@ void game_loop()
 		vdp_update_key_state();
 	} while (exit==0);
 
-}
-
-
-void load_images() 
-{
-	char fname[40];
-	for (int fn=1; fn<=NUM_BM_TERR16; fn++)
-	{
-		sprintf(fname, FN_TERR16, fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_TERR16 + fn-1);
-	}
-	for (int fn=1; fn<=NUM_BM_FEAT16; fn++)
-	{
-		sprintf(fname, FN_FEAT16, fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_FEAT16 + fn-1);
-	}
-	for (int fn=1; fn<=NUM_BM_BOB16; fn++)
-	{
-		sprintf(fname, FN_BOB16, fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_BOB16 + fn-1);
-	}
-	for (int fn=1; fn<=NUM_BM_BELT16; fn++)
-	{
-		sprintf(fname, FN_BELT16, fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_BELT16 + fn-1);
-	}
-	for (int fn=1; fn<=NUM_BM_BBELT16; fn++)
-	{
-		sprintf(fname, FN_BBELT16, fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_BELT16 + NUM_BM_BELT16 + fn-1);
-	}
-	for (int fn=1; fn<=NUM_BM_ITEM8; fn++)
-	{
-		sprintf(fname, FN_ITEM8, fn);
-		load_bitmap_file(fname, 8, 8, BMOFF_ITEM8 + fn-1);
-	}
-	for (int fn=1; fn<=NUM_BM_MACH16; fn++)
-	{
-		sprintf(fname, FN_MACH16, fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_MACH16 + fn-1);
-	}
-	for (int fn=0; fn<=NUM_BM_NUMS-1; fn++)
-	{
-		sprintf(fname, FN_NUMS, fn);
-		load_bitmap_file(fname, 4, 5, BMOFF_NUMS + fn);
-	}
-	
-	/*
-	TAB(0,0);
-	printf("TILES start %d count %d\n",BMOFF_TERR16,NUM_BM_TERR16);
-	printf("FEATS start %d count %d\n",BMOFF_FEAT16,NUM_BM_FEAT16);
-	printf("BOB   start %d count %d\n",BMOFF_BOB16,NUM_BM_BOB16);
-	printf("BELTS start %d count %d + %d\n",BMOFF_BELT16,NUM_BM_BELT16,NUM_BM_BBELT16);
-	printf("ITEMS start %d count %d\n",BMOFF_ITEM8,NUM_BM_ITEM8);
-	printf("MACHS start %d count %d\n",BMOFF_MACH16,NUM_BM_MACH16);
-	printf("NUMS  start %d count %d\n",BMOFF_NUMS,NUM_BM_NUMS);
-	printf("Total %d\n",TOTAL_BM);
-	wait();
-	*/
 }
 
 void draw_tile(int tx, int ty, int tposx, int tposy)
@@ -830,11 +747,11 @@ void draw_place(bool draw)
 			vdp_draw_bitmap( cursorx, cursory );
 		}
 
-		draw_box(cursorx, cursory, cursorx+gTileSize-1, cursory+gTileSize-1, 15);
+		draw_box(cursorx, cursory, gTileSize-1, gTileSize-1, 15);
 	}
 	else
 	{
-		draw_corners(cursorx, cursory, cursorx+gTileSize-1, cursory+gTileSize-1, 11);
+		draw_corners(cursorx, cursory, gTileSize-1, gTileSize-1, 11);
 	}
 
 	old_cursorx=cursorx;
@@ -894,16 +811,7 @@ void draw_horizontal_layer(int tx, int ty, int len)
 	}
 }
 
-void draw_box(int x1,int y1, int x2, int y2, int col)
-{
-	vdp_gcol( 0, col );
-	vdp_move_to( x1, y1 );
-	vdp_line_to( x1, y2 );
-	vdp_line_to( x2, y2 );
-	vdp_line_to( x2, y1 );
-	vdp_line_to( x1, y1 );
-}
-void draw_box2(int x,int y, int w, int h, int col)
+void draw_box(int x,int y, int w, int h, int col)
 {
 	vdp_gcol( 0, col );
 	vdp_move_to( x, y );
@@ -912,14 +820,16 @@ void draw_box2(int x,int y, int w, int h, int col)
 	vdp_line_to( x+w, y );
 	vdp_line_to( x, y );
 }
-void draw_corners(int x1,int y1, int x2, int y2, int col)
+void draw_corners(int x1,int y1, int w, int h, int col)
 {
-	int w=2;
+	int cl=2;
+	int x2 = x1+w;
+	int y2 = y1+h;
 	vdp_gcol( 0, col );
-	vdp_move_to( x1, y1 ); vdp_line_to( x1+w, y1 ); vdp_move_to( x1, y1 ); vdp_line_to( x1, y1+w );
-	vdp_move_to( x2, y1 ); vdp_line_to( x2-w, y1 ); vdp_move_to( x2, y1 ); vdp_line_to( x2, y1+w );
-	vdp_move_to( x1, y2 ); vdp_line_to( x1, y2-w ); vdp_move_to( x1, y2 ); vdp_line_to( x1+w, y2 );
-	vdp_move_to( x2, y2 ); vdp_line_to( x2, y2-w ); vdp_move_to( x2, y2 ); vdp_line_to( x2-w, y2 );
+	vdp_move_to( x1, y1 ); vdp_line_to( x1+cl, y1 ); vdp_move_to( x1, y1 ); vdp_line_to( x1, y1+cl );
+	vdp_move_to( x2, y1 ); vdp_line_to( x2-cl, y1 ); vdp_move_to( x2, y1 ); vdp_line_to( x2, y1+cl );
+	vdp_move_to( x1, y2 ); vdp_line_to( x1, y2-cl ); vdp_move_to( x1, y2 ); vdp_line_to( x1+cl, y2 );
+	vdp_move_to( x2, y2 ); vdp_line_to( x2, y2-cl ); vdp_move_to( x2, y2 ); vdp_line_to( x2-cl, y2 );
 }
 
 void draw_filled_box(int x,int y, int w, int h, int col, int bgcol)
@@ -1079,36 +989,121 @@ void print_item_pos()
 	}
 }
 
-int inv_items_wide = 5;
-int inv_items_high = 4;
-
+#define INV_EXT_BORDER 3
+#define INV_INT_BORDER 5
 // Show inventory and run it's own mini game-loop
-void show_inventory()
+void show_inventory(int X, int Y)
 {
-	int boxw = (gTileSize + 2) * inv_items_wide + 4;
-	int boxh = (gTileSize + 2) * inv_items_high + 4;
-	int offx = (gScreenWidth-boxw)/2;
-	int offy = (gScreenHeight-boxh)/2;
-
-	draw_filled_box( offx, offy, boxw, boxh, 11,8);
+	int offx = X;
+	int offy = Y;
+	int inv_offsetsX[20] = {0};
+	int inv_offsetsY[20] = {0};
+	int cursor_border_on = 15;
+	int cursor_border_off = 7;
+	// yellow border of UI with dark-grey fill
+	int boxw = INV_EXT_BORDER*2 + (gTileSize + INV_INT_BORDER*2) * inv_items_wide;
+	int boxh = INV_EXT_BORDER*2 + (gTileSize + INV_INT_BORDER*2) * inv_items_high;
+	draw_filled_box( offx, offy, boxw, boxh, 11, 16 );
 
 	for (int j=0; j<inv_items_high; j++)
 	{
 		for (int i=0; i<inv_items_wide; i++)
 		{
-			draw_box2(offx+2 + i*(gTileSize+2), offy+2 + j*(gTileSize+2),  gTileSize+2, gTileSize+2, 7);
+			inv_offsetsX[i+j*inv_items_wide] = offx + INV_EXT_BORDER + i*(gTileSize+INV_INT_BORDER*2);
+			inv_offsetsY[i+j*inv_items_wide] = offy + INV_EXT_BORDER + j*(gTileSize+INV_INT_BORDER*2);
+
+			// grey border of cells
+			draw_filled_box(
+					inv_offsetsX[i+j*inv_items_wide],
+					inv_offsetsY[i+j*inv_items_wide],
+					gTileSize+INV_INT_BORDER*2, gTileSize+INV_INT_BORDER*2, cursor_border_off, 8);
 		}
 	}
 
-	draw_number(1234, 150,150);
+	// draw inventory items
+	for (int ii=0; ii<MAX_INVENTORY_ITEMS; ii++)
+	{
+		if (inventory[ii].item<255)
+		{
+			int item = inventory[ii].item;
+			ItemType *type = &itemtypes[item];
 
+			vdp_select_bitmap(type->bmID);
+
+			vdp_draw_bitmap(
+					inv_offsetsX[ii]+INV_INT_BORDER + 4*type->size,
+					inv_offsetsY[ii]+INV_INT_BORDER + 4*type->size -2);
+
+			draw_number(inventory[ii].count, 
+					inv_offsetsX[ii]+INV_INT_BORDER*2+gTileSize-1,
+					inv_offsetsY[ii]+INV_INT_BORDER*2+10);
+		}
+	}
+
+	draw_box( 
+			inv_offsetsX[inv_selected], 
+			inv_offsetsY[inv_selected], 
+			gTileSize + 2*INV_INT_BORDER, 
+			gTileSize + 2*INV_INT_BORDER,
+			cursor_border_on);
+
+	// game loop for interacting with inventory
 	clock_t key_wait_ticks = clock() + 20;
 	bool finish = false;
 	do {
-		if ( key_wait_ticks<clock() && vdp_check_key_press( KEY_e ) ) 
+
+		if ( key_wait_ticks < clock() && (vdp_check_key_press( KEY_e )||vdp_check_key_press( KEY_x )) ) 
 		{
-			finish=true;
 			key_wait_ticks = clock()+20;
+			finish=true;
+		}
+		// cursor movement
+		bool update_selected = false;
+		int new_selected = inv_selected;
+
+		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_RIGHT ) ) { 
+			key_wait_ticks = clock()+20;
+			if ( inv_selected < MAX_INVENTORY_ITEMS ) {
+				new_selected++; 
+				update_selected = true;
+			}
+		}
+		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_LEFT ) ) {
+	  		key_wait_ticks = clock()+20;
+			if ( inv_selected > 0 ) {
+				new_selected--; 
+				update_selected = true;
+			}
+		}
+		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_DOWN ) ) {
+	   		key_wait_ticks = clock()+20;
+			if ( inv_selected < MAX_INVENTORY_ITEMS - inv_items_wide ) {
+				new_selected += inv_items_wide;
+				update_selected = true;
+			}
+		}
+		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_UP ) ) { 
+			key_wait_ticks = clock()+20;
+			if ( inv_selected >= inv_items_wide ) {
+				new_selected -= inv_items_wide;
+				update_selected = true;
+			}
+		}
+		if ( update_selected )
+		{
+			draw_box( 
+					inv_offsetsX[inv_selected], 
+					inv_offsetsY[inv_selected], 
+					gTileSize + 2*INV_INT_BORDER, 
+					gTileSize + 2*INV_INT_BORDER,
+					cursor_border_off);
+			inv_selected = new_selected;
+			draw_box( 
+					inv_offsetsX[inv_selected], 
+					inv_offsetsY[inv_selected], 
+					gTileSize + 2*INV_INT_BORDER, 
+					gTileSize + 2*INV_INT_BORDER,
+					cursor_border_on);
 		}
 		vdp_update_key_state();
 	} while (finish==false);
@@ -1121,6 +1116,7 @@ void draw_digit(int i, int px, int py)
 	vdp_draw_bitmap( px, py );
 }
 // draw reverse digits
+// right justified, so specify x,y at right edge of number
 void draw_number(int n, int px, int py)
 {
 	int x = px-4;
@@ -1139,3 +1135,19 @@ void draw_number(int n, int px, int py)
 		x -= 4;
 	}
 }
+
+void draw_number_lj(int n, int px, int py)
+{
+	// left-just. x,y specifies left border 
+	int diglen = 0;
+	if (n<10) { 
+		diglen = 1; 
+	} else if (n<100) {
+		diglen = 2;
+	} else if (n<1000) {
+		diglen = 3;
+	}
+
+	draw_number(n, px+diglen*4, py);
+}
+
