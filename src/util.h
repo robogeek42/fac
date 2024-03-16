@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <time.h>
 #include "util.h"
+#include "assert.h"
 
 #define CHUNK_SIZE 1024
 
@@ -95,6 +96,8 @@
 
 #define KEY_enter 0x8F
 #define KEY_backtick 0x4A
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
 
 #define COL(C) vdp_set_text_colour(C)
 #define TAB(X,Y) vdp_cursor_tab(X,Y)
@@ -120,5 +123,20 @@ double my_atof(char *str);
 
 int load_bitmap_file( const char *fname, int width, int height, int bmap_id );
 int readTileInfoFile(char *path, TileInfoFile *tif, int items);
+
+void draw_box(int x,int y, int w, int h, int col);
+void draw_corners(int x1,int y1, int x2, int y2, int col);
+void draw_filled_box(int x,int y, int w, int h, int col, int bgcol);
+void draw_filled_box_centre(int x,int y, int w, int h, int col, int bgcol);
+
+extern float *sinLUT;
+extern int LUTslots;
+extern float LUT_ANGLE_MULT;
+
+void pop_sin_lookup();
+float sinLU(float angle);
+float cosLU(float angle);
+
+void test_progbar();
 
 #endif

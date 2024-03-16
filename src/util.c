@@ -111,7 +111,7 @@ int load_bitmap_file( const char *fname, int width, int height, int bmap_id )
 		return -1;
 	}
 
-	vdp_adv_clear_buffer(0xFA00+bmap_id);
+	vdp_adv_clear_buffer(bmap_id);
 
 	bytes_remain = width * height;
 
@@ -119,7 +119,7 @@ int load_bitmap_file( const char *fname, int width, int height, int bmap_id )
 	{
 		int size = (bytes_remain>CHUNK_SIZE)?CHUNK_SIZE:bytes_remain;
 
-		vdp_adv_write_block(0xFA00+bmap_id, size);
+		vdp_adv_write_block(bmap_id, size);
 
 		if ( fread( buffer, 1, size, fp ) != (size_t)size ) return 0;
 		mos_puts( buffer, size, 0 );
@@ -127,9 +127,9 @@ int load_bitmap_file( const char *fname, int width, int height, int bmap_id )
 
 		bytes_remain -= size;
 	}
-	vdp_adv_consolidate(0xFA00+bmap_id);
+	vdp_adv_consolidate(bmap_id);
 
-	vdp_adv_select_bitmap(0xFA00+bmap_id);
+	vdp_adv_select_bitmap(bmap_id);
 	vdp_adv_bitmap_from_buffer(width, height, 1); // RGBA2
 	
 	fclose( fp );
@@ -189,5 +189,160 @@ int readTileInfoFile(char *path, TileInfoFile *tif, int items)
 
 	close_file(fp);
 	return item;
+}
+
+void draw_box(int x,int y, int w, int h, int col)
+{
+	vdp_gcol( 0, col );
+	vdp_move_to( x, y );
+	vdp_line_to( x, y+h );
+	vdp_line_to( x+w, y+h );
+	vdp_line_to( x+w, y );
+	vdp_line_to( x, y );
+}
+
+void draw_corners(int x1,int y1, int w, int h, int col)
+{
+	int cl=2;
+	int x2 = x1+w;
+	int y2 = y1+h;
+	vdp_gcol( 0, col );
+	vdp_move_to( x1, y1 ); vdp_line_to( x1+cl, y1 ); vdp_move_to( x1, y1 ); vdp_line_to( x1, y1+cl );
+	vdp_move_to( x2, y1 ); vdp_line_to( x2-cl, y1 ); vdp_move_to( x2, y1 ); vdp_line_to( x2, y1+cl );
+	vdp_move_to( x1, y2 ); vdp_line_to( x1, y2-cl ); vdp_move_to( x1, y2 ); vdp_line_to( x1+cl, y2 );
+	vdp_move_to( x2, y2 ); vdp_line_to( x2, y2-cl ); vdp_move_to( x2, y2 ); vdp_line_to( x2-cl, y2 );
+}
+
+void draw_filled_box(int x,int y, int w, int h, int col, int bgcol)
+{
+	vdp_gcol( 0, bgcol );
+	vdp_move_to( x, y );
+	vdp_filled_rect( x+w, y+h );
+	// border
+	if (col != bgcol)
+	{
+		vdp_gcol( 0, col );
+		vdp_move_to( x, y );
+		vdp_line_to( x, y+h );
+		vdp_line_to( x+w, y+h );
+		vdp_line_to( x+w, y );
+		vdp_line_to( x, y );
+	}
+}
+
+void draw_filled_box_centre(int x,int y, int w, int h, int col, int bgcol)
+{
+	int x1 = x-w/2;
+	int y1 = y-h/2;
+
+	draw_filled_box(x1, y1, w, h, col, bgcol);
+}
+
+void pop_sin_lookup()
+{
+	LUT_ANGLE_MULT = LUTslots / M_PI_2;
+	sinLUT = (float*) malloc(LUTslots*sizeof(float));
+	if (!sinLUT)
+	{
+		printf("out of memory\n");
+		exit(-1);
+	}
+	float angle = 0.0f;
+	float inc = M_PI_2/LUTslots;
+	int index=0;
+	while ( index < LUTslots )
+	{
+		sinLUT[index++] = sin(angle);
+		angle += inc;
+	}
+}
+
+float sinLU(float angle)
+{
+	int ind;
+	if (!sinLUT) return 0;
+	while (angle>M_PI*2)
+	{
+		angle -= M_PI*2;
+	}
+	while (angle < 0.0f)
+	{
+		angle += M_PI*2;
+	}
+	if (angle > -0.005 && angle < 0.005) return 0.0f;
+	if (angle > M_PI_2-0.005 && angle < M_PI_2+0.005) return 1.0f;
+	if (angle > M_PI-0.005 && angle < M_PI+0.005) return 0.0f;
+	if (angle > M_PI+M_PI_2-0.005 && angle < M_PI+M_PI_2+0.005) return -1.0f;
+	if (angle > M_PI+M_PI-0.005 && angle < M_PI+M_PI+0.005) return 0.0f;
+	if (angle < M_PI_2)
+	{
+		ind = (int) floorf(angle * LUT_ANGLE_MULT);
+		assert(ind < LUTslots);
+		return sinLUT[ind];
+	}
+	if (angle < M_PI)
+	{
+		ind = (int) floorf((M_PI- angle) * LUT_ANGLE_MULT);
+		assert(ind < LUTslots);
+		return sinLUT[ind];
+	}
+	angle -= M_PI;
+	if (angle < M_PI_2)
+	{
+		ind = (int) floorf(angle * LUT_ANGLE_MULT);
+		assert(ind < LUTslots);
+		return -1.0f*sinLUT[ind];
+	}
+	if (angle < M_PI)
+	{
+		ind = (int) floorf((M_PI - angle) * LUT_ANGLE_MULT);
+		assert(ind < LUTslots);
+		return -1.0f*sinLUT[ind];
+	}
+	return 0;
+}
+float cosLU(float angle)
+{
+	int ind;
+	if (!sinLUT) return 0;
+	while (angle>M_PI*2)
+	{
+		angle -= M_PI*2;
+	}
+	while (angle < 0.0f)
+	{
+		angle += M_PI*2;
+	}
+	if (angle > -0.005 && angle < 0.005) return 1.0f;
+	if (angle > M_PI_2-0.005 && angle < M_PI_2+0.005) return 0.0f;
+	if (angle > M_PI-0.005 && angle < M_PI+0.005) return -1.0f;
+	if (angle > M_PI+M_PI_2-0.005 && angle < M_PI+M_PI_2+0.005) return 0.0f;
+	if (angle > M_PI+M_PI-0.005 && angle < M_PI+M_PI+0.005) return 1.0f;
+	if (angle < M_PI_2)
+	{
+		ind = (int) floorf((M_PI_2 - angle) * LUT_ANGLE_MULT);
+		assert(ind < LUTslots);
+		return sinLUT[ind];
+	}
+	if (angle < M_PI)
+	{
+		ind = (int) floorf((angle - M_PI_2) * LUT_ANGLE_MULT);
+		assert(ind < LUTslots);
+		return -1.0f*sinLUT[ind];
+	}
+	angle -= M_PI;
+	if (angle < M_PI_2)
+	{
+		ind = (int) floorf((M_PI_2 - angle) * LUT_ANGLE_MULT);
+		assert(ind < LUTslots);
+		return -1.0f*sinLUT[ind];
+	}
+	if (angle < M_PI)
+	{
+		ind = (int) floorf((angle - M_PI_2) * LUT_ANGLE_MULT);
+		assert(ind < LUTslots);
+		return sinLUT[ind];
+	}
+	return 0;
 }
 

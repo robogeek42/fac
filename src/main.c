@@ -147,9 +147,6 @@ void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty);
 
 void draw_layer();
 void draw_horizontal_layer(int tx, int ty, int len);
-void draw_box(int x,int y, int w, int h, int col);
-void draw_corners(int x1,int y1, int w, int h, int col);
-void draw_filled_box(int x,int y, int w, int h, int col, int bgcol);
 
 void drop_item(int item);
 
@@ -876,44 +873,6 @@ void draw_horizontal_layer(int tx, int ty, int len)
 			vdp_draw_bitmap( currPtr->x - xpos, currPtr->y - ypos );
 		}
 		currPtr = currPtr->next;
-	}
-}
-
-void draw_box(int x,int y, int w, int h, int col)
-{
-	vdp_gcol( 0, col );
-	vdp_move_to( x, y );
-	vdp_line_to( x, y+h );
-	vdp_line_to( x+w, y+h );
-	vdp_line_to( x+w, y );
-	vdp_line_to( x, y );
-}
-void draw_corners(int x1,int y1, int w, int h, int col)
-{
-	int cl=2;
-	int x2 = x1+w;
-	int y2 = y1+h;
-	vdp_gcol( 0, col );
-	vdp_move_to( x1, y1 ); vdp_line_to( x1+cl, y1 ); vdp_move_to( x1, y1 ); vdp_line_to( x1, y1+cl );
-	vdp_move_to( x2, y1 ); vdp_line_to( x2-cl, y1 ); vdp_move_to( x2, y1 ); vdp_line_to( x2, y1+cl );
-	vdp_move_to( x1, y2 ); vdp_line_to( x1, y2-cl ); vdp_move_to( x1, y2 ); vdp_line_to( x1+cl, y2 );
-	vdp_move_to( x2, y2 ); vdp_line_to( x2, y2-cl ); vdp_move_to( x2, y2 ); vdp_line_to( x2-cl, y2 );
-}
-
-void draw_filled_box(int x,int y, int w, int h, int col, int bgcol)
-{
-	vdp_gcol( 0, bgcol );
-	vdp_move_to( x, y );
-	vdp_filled_rect( x+w, y+h );
-	// border
-	if (col != bgcol)
-	{
-		vdp_gcol( 0, col );
-		vdp_move_to( x, y );
-		vdp_line_to( x, y+h );
-		vdp_line_to( x+w, y+h );
-		vdp_line_to( x+w, y );
-		vdp_line_to( x, y );
 	}
 }
 
