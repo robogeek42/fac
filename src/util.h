@@ -93,6 +93,9 @@
 #define KEY_lt 0x6E
 #define KEY_gt 0x6F
 
+#define KEY_enter 0x8F
+#define KEY_backtick 0x4A
+
 #define COL(C) vdp_set_text_colour(C)
 #define TAB(X,Y) vdp_cursor_tab(X,Y)
 

@@ -90,6 +90,10 @@ int belt_layer_frame = 0;
 int inv_items_wide = 5;
 int inv_items_high = 4;
 int inv_selected = 0;
+
+// item selected
+uint8_t item_selected = 0;
+
 //------------------------------------------------------------
 
 //------------------------------------------------------------
@@ -135,6 +139,7 @@ bool bobAtEdge();
 void start_place();
 void stop_place();
 void draw_place(bool draw);
+void draw_place_belt();
 
 void do_place();
 void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty);
@@ -145,7 +150,7 @@ void draw_box(int x,int y, int w, int h, int col);
 void draw_corners(int x1,int y1, int w, int h, int col);
 void draw_filled_box(int x,int y, int w, int h, int col, int bgcol);
 
-void drop_item();
+void drop_item(int item);
 
 void move_items_on_belts();
 void print_item_pos();
@@ -212,12 +217,14 @@ int main(/*int argc, char *argv[]*/)
 
 	init_inventory(inventory);
 	// for test add some items
-	add_item(inventory, 0, 8);
-	add_item(inventory, 1, 121);
-	add_item(inventory, 2, 287);
-	add_item(inventory, 7, 94);
-	add_item(inventory, 9, 6);
-	add_item(inventory, 3, 9876);
+	add_item(inventory, IT_BELT, 8); // belt
+	add_item(inventory, IT_STONE, 121);
+	add_item(inventory, IT_IRON_ORE, 287);
+	add_item(inventory, IT_COPPER_PLATE, 94);
+	add_item(inventory, IT_FURNACE, 6);
+	add_item(inventory, IT_COPPER_ORE, 9876);
+	inv_selected = 0; // belts
+	item_selected = 0; // belts
 
 	game_loop();
 
@@ -307,8 +314,24 @@ void game_loop()
 		}
 			
 		if ( vdp_check_key_press( KEY_c ) ) { recentre(); }
-		if ( vdp_check_key_press( KEY_p ) ) { start_place(); }
-		if ( vdp_check_key_press( KEY_q ) ) { stop_place(); }
+		if ( vdp_check_key_press( KEY_p ) ) { 
+			if (key_wait_ticks < clock()) 
+			{
+				if ( !bPlace ) {
+					start_place();
+				} else {
+					stop_place();
+				}
+				key_wait_ticks = clock() + key_wait;
+			}
+		}
+		if ( vdp_check_key_press( KEY_q ) ) {
+			if (key_wait_ticks < clock()) 
+			{
+				stop_place(); 
+				key_wait_ticks = clock() + key_wait;
+			}
+		}
 		if ( key_pressed_code == KEY_r ) { // "r" Check actual key code - distinguishes lower/upper case
 			if (bPlace && key_wait_ticks < clock() ) {
 				place_belt_index++;  
@@ -323,7 +346,7 @@ void game_loop()
 				key_wait_ticks = clock() + key_wait;
 			}
 		}
-		if ( vdp_check_key_press( 0x8F ) ) // ENTER
+		if ( vdp_check_key_press( KEY_enter ) ) // ENTER
 		{
 			do_place();
 		}
@@ -331,11 +354,11 @@ void game_loop()
 		{
 			if (key_wait_ticks < clock()) 
 			{
-				drop_item();
+				drop_item(item_selected);
 				key_wait_ticks = clock() + key_wait;
 			}
 		}
-		if ( vdp_check_key_press( 0x4A ) )  // ' - toggle debug
+		if ( vdp_check_key_press( KEY_backtick ) )  // ' - toggle debug
 		{
 			if (key_wait_ticks < clock()) 
 			{
@@ -700,6 +723,52 @@ void stop_place()
 
 #define DIR_OPP(D) ((D+2)%4)
 
+void draw_place_belt()
+{
+	BELT_PLACE bn[4];
+	get_belt_neighbours(bn, cursor_tx, cursor_ty);
+
+	int in_connection = -1;
+	int out_connection = -1;
+
+	for (int i=0; i<4; i++)
+	{
+		if (bn[i].beltID != 255 && DIR_OPP(belts[bn[i].beltID].out) == i)
+		{
+			in_connection = DIR_OPP(i);
+			break;
+		}
+		if (bn[i].beltID != 255 && DIR_OPP(belts[bn[i].beltID].in) == i)
+		{
+			out_connection = i;
+			break;
+		}
+	}
+
+	if (out_connection >= 0)
+	{
+		place_belt_selected = belt_rules_out[out_connection+1].rb[place_belt_index];
+	} else {
+		place_belt_selected = belt_rules_in[in_connection+1].rb[place_belt_index];
+	}
+
+	if (place_belt_selected>=0)
+	{
+		vdp_select_bitmap( BMOFF_BELT16 + place_belt_selected*4 );
+		vdp_draw_bitmap( cursorx, cursory );
+	}
+
+}
+
+void draw_place_resource()
+{
+	vdp_select_bitmap( itemtypes[item_selected].bmID );
+	vdp_draw_bitmap( 
+			cursorx + itemtypes[item_selected].size*4, 
+			cursory + itemtypes[item_selected].size*4);
+}
+
+
 void draw_place(bool draw) 
 {
 	// undraw
@@ -713,40 +782,15 @@ void draw_place(bool draw)
 
 	if (bPlace)
 	{
-		BELT_PLACE bn[4];
-		get_belt_neighbours(bn, cursor_tx, cursor_ty);
-
-		int in_connection = -1;
-		int out_connection = -1;
-
-		TAB(0,0);
-		for (int i=0; i<4; i++)
+		if ( isBelt( item_selected ) )
 		{
-			if (bn[i].beltID != 255 && DIR_OPP(belts[bn[i].beltID].out) == i)
-			{
-				in_connection = DIR_OPP(i);
-				break;
-			}
-			if (bn[i].beltID != 255 && DIR_OPP(belts[bn[i].beltID].in) == i)
-			{
-				out_connection = i;
-				break;
-			}
+			draw_place_belt();
 		}
-
-		if (out_connection >= 0)
+		if ( isResource( item_selected ) )
 		{
-			place_belt_selected = belt_rules_out[out_connection+1].rb[place_belt_index];
-		} else {
-			place_belt_selected = belt_rules_in[in_connection+1].rb[place_belt_index];
+			draw_place_resource();
 		}
-
-		if (place_belt_selected>=0)
-		{
-			vdp_select_bitmap( BMOFF_BELT16 + place_belt_selected*4 );
-			vdp_draw_bitmap( cursorx, cursory );
-		}
-
+		
 		draw_box(cursorx, cursory, gTileSize-1, gTileSize-1, 15);
 	}
 	else
@@ -804,7 +848,7 @@ void draw_horizontal_layer(int tx, int ty, int len)
 	while (currPtr != NULL) {
 		if (itemIsOnScreen(currPtr))
 		{
-			vdp_select_bitmap( currPtr->item + BMOFF_ITEM8 );
+			vdp_select_bitmap( itemtypes[currPtr->item].bmID );
 			vdp_draw_bitmap( currPtr->x - xpos, currPtr->y - ypos );
 		}
 		currPtr = currPtr->next;
@@ -871,17 +915,24 @@ void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty)
 
 void do_place()
 {
-	if (!bPlace || place_belt_selected<0) return;
-		       
-	layer_belts[gMapWidth * cursor_ty + cursor_tx] = place_belt_selected;
+	if ( !bPlace ) return;
+   	if ( isBelt(item_selected) ) {
+		if ( place_belt_selected<0 ) return;
+		layer_belts[gMapWidth * cursor_ty + cursor_tx] = place_belt_selected;
+	}
+	if ( isResource(item_selected) ) {
+		drop_item(item_selected);
+	}
+	if ( isMachine(item_selected) ) {
+
+	}
 	
 	stop_place();
 }
 
-void drop_item()
+void drop_item(int item)
 {
-	// only one item type currently
-	insertAtFrontItemList(2, cursor_tx*gTileSize+4, cursor_ty*gTileSize+4);
+	insertAtFrontItemList(item, cursor_tx*gTileSize+4, cursor_ty*gTileSize+4);
 }
 
 void move_items_on_belts()
@@ -1052,10 +1103,15 @@ void show_inventory(int X, int Y)
 	bool finish = false;
 	do {
 
-		if ( key_wait_ticks < clock() && (vdp_check_key_press( KEY_e )||vdp_check_key_press( KEY_x )) ) 
+		if ( key_wait_ticks < clock() && 
+				(vdp_check_key_press( KEY_e ) ||
+				 vdp_check_key_press( KEY_x ) ||
+				 vdp_check_key_press( KEY_enter) ) )
 		{
-			key_wait_ticks = clock()+20;
+			key_wait_ticks = clock()+10;
 			finish=true;
+			item_selected = inventory[inv_selected].item;
+			while (key_wait_ticks > clock()) vdp_update_key_state();
 		}
 		// cursor movement
 		bool update_selected = false;

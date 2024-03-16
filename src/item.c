@@ -169,3 +169,19 @@ bool findItem(uint8_t key, int keyx, int keyy)
 	return true;
 }
 
+bool isBelt(int item) {
+	return itemtypes[item].isBelt;
+}
+bool isMachine(int item) {
+	return itemtypes[item].isMachine;
+}
+bool isResource(int item) {
+	return itemtypes[item].isResource;
+}
+bool isOverlay(int item) {
+	return itemtypes[item].isOverlay;
+}
+
+
+
+

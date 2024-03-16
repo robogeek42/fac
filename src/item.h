@@ -65,31 +65,55 @@ typedef struct {
 	int size; // 16x16=0, 8x8=1
 } ItemType; 
 
+#define IT_BELT 0
+#define IT_STONE 1
+#define IT_IRON_ORE 2
+#define IT_COPPER_ORE 3
+#define IT_COAL 4
+#define IT_WOOD 5
+#define IT_IRON_PLATE 6
+#define IT_COPPER_PLATE 7
+#define IT_STONE_BRICK 8
+#define IT_FURNACE 9
+#define IT_MINER 10
+#define IT_ASSEMBLER 11
+#define IT_FEAT_STONE 12
+#define IT_FEAT_IRON 13
+#define IT_FEAT_COPPER 14
+#define IT_FEAT_COAL 15
+#define IT_FEAT_WOOD 16
+
 static ItemType itemtypes[] = {
+//                                     Belt  Machine Resouce Overlay
 // belts are special
-	{0, "Belts", 		true, false, false, false, BMOFF_BELT16, BM_SIZE16 },
+	{IT_BELT, 			"Belts", 		true, false, false, false, BMOFF_BELT16, BM_SIZE16 },
 // raw items
-	{1, "Stone",		false, false, true, false, BMOFF_ITEM8+4, BM_SIZE8 },
-	{2, "Iron Ore", 	false, false, true, false, BMOFF_ITEM8+5, BM_SIZE8 },
-	{3, "Copper Ore",	false, false, true, false, BMOFF_ITEM8+6, BM_SIZE8 },
-	{4, "Coal",			false, false, true, false, BMOFF_ITEM8+7, BM_SIZE8 },
-	{5, "Wood",			false, false, true, false, BMOFF_ITEM8+0, BM_SIZE8 },
+	{IT_STONE,			"Stone",		false, false, true, false, BMOFF_ITEM8+4, BM_SIZE8 },
+	{IT_IRON_ORE,		"Iron Ore", 	false, false, true, false, BMOFF_ITEM8+5, BM_SIZE8 },
+	{IT_COPPER_ORE,		"Copper Ore",	false, false, true, false, BMOFF_ITEM8+6, BM_SIZE8 },
+	{IT_COAL,			"Coal",			false, false, true, false, BMOFF_ITEM8+7, BM_SIZE8 },
+	{IT_WOOD,			"Wood",			false, false, true, false, BMOFF_ITEM8+0, BM_SIZE8 },
 // processed items
-	{6, "Iron Plate",	false, false, true, false, BMOFF_ITEM8+1, BM_SIZE8 },
-	{7, "Copper Plate", false, false, true, false, BMOFF_ITEM8+2, BM_SIZE8 },
-	{8, "Stone brick",	false, false, true, false, BMOFF_ITEM8+3, BM_SIZE8 },
+	{IT_IRON_PLATE,		"Iron Plate",	false, false, true, false, BMOFF_ITEM8+1, BM_SIZE8 },
+	{IT_COPPER_PLATE,	"Copper Plate", false, false, true, false, BMOFF_ITEM8+2, BM_SIZE8 },
+	{IT_STONE_BRICK,	"Stone brick",	false, false, true, false, BMOFF_ITEM8+3, BM_SIZE8 },
 // Machines
-    {9, "Furnace",		false, true, false, false, BMOFF_MACH16+0, BM_SIZE16 },
-    {10, "Miner",		false, true, false, false, BMOFF_MACH16+1, BM_SIZE16 },
-    {11, "Assembler",	false, true, false, false, BMOFF_MACH16+3, BM_SIZE16 },
+    {IT_FURNACE,		"Furnace",		false, true, false, false, BMOFF_MACH16+0, BM_SIZE16 },
+    {IT_MINER,			"Miner",		false, true, false, false, BMOFF_MACH16+1, BM_SIZE16 },
+    {IT_ASSEMBLER,		"Assembler",	false, true, false, false, BMOFF_MACH16+3, BM_SIZE16 },
 // Overlays
-	{12, "Stone",		false, false, false, true, BMOFF_FEAT16+0, BM_SIZE16 },
-	{13, "Iron Ore", 	false, false, false, true, BMOFF_FEAT16+1, BM_SIZE16 },
-	{14, "Copper Ore",	false, false, false, true, BMOFF_FEAT16+2, BM_SIZE16 },
-	{15, "Coal",		false, false, false, true, BMOFF_FEAT16+3, BM_SIZE16 },
-	{16, "Wood",		false, false, false, true, BMOFF_FEAT16+4, BM_SIZE16 },
+	{IT_FEAT_STONE,		"Stone",		false, false, false, true, BMOFF_FEAT16+0, BM_SIZE16 },
+	{IT_FEAT_IRON,		"Iron Ore", 	false, false, false, true, BMOFF_FEAT16+1, BM_SIZE16 },
+	{IT_FEAT_COPPER,	"Copper Ore",	false, false, false, true, BMOFF_FEAT16+2, BM_SIZE16 },
+	{IT_FEAT_COAL,		"Coal",			false, false, false, true, BMOFF_FEAT16+3, BM_SIZE16 },
+	{IT_FEAT_WOOD,		"Wood",			false, false, false, true, BMOFF_FEAT16+4, BM_SIZE16 },
 
 };
+
+bool isBelt(int item);
+bool isMachine(int item);
+bool isResource(int item);
+bool isOverlay(int item);
 
 #endif
 
