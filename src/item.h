@@ -106,7 +106,7 @@ static ItemType itemtypes[] = {
 	{IT_FEAT_IRON,		"Iron Ore", 	false, false, false, true, BMOFF_FEAT16+1, BM_SIZE16 },
 	{IT_FEAT_COPPER,	"Copper Ore",	false, false, false, true, BMOFF_FEAT16+2, BM_SIZE16 },
 	{IT_FEAT_COAL,		"Coal",			false, false, false, true, BMOFF_FEAT16+3, BM_SIZE16 },
-	{IT_FEAT_WOOD,		"Wood",			false, false, false, true, BMOFF_FEAT16+4, BM_SIZE16 },
+	{IT_FEAT_WOOD,		"Tree",			false, false, false, true, BMOFF_FEAT16+4, BM_SIZE16 },
 
 };
 

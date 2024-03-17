@@ -95,6 +95,9 @@ int inv_selected = 0;
 // item selected
 uint8_t item_selected = 0;
 
+// info
+bool bInfoDisplayed = false;
+
 //------------------------------------------------------------
 
 //------------------------------------------------------------
@@ -158,6 +161,7 @@ void draw_digit(int i, int px, int py);
 void draw_number(int n, int px, int py);
 void draw_number_lj(int n, int px, int py);
 void show_info();
+void clear_info();
 
 void wait()
 {
@@ -266,6 +270,7 @@ void game_loop()
 
 		// scroll the screen AND/OR move Bob
 		if (dir>=0 && ( move_wait_ticks < clock() ) ) {
+			if ( bInfoDisplayed ) clear_info();
 			move_wait_ticks = clock()+1;
 			// screen can scroll, move Bob AND screen
 			if (can_scroll_screen(dir, 1) && move_bob(bob_dir, 1) )
@@ -299,6 +304,7 @@ void game_loop()
 
 		// move the cursor OR place rectangle
 		if (place_dir>=0 && ( key_wait_ticks < clock() ) ) {
+			if ( bInfoDisplayed ) clear_info();
 			draw_place(false);
 			switch(place_dir) {
 				case SCROLL_RIGHT: cursor_tx++; break;
@@ -324,6 +330,7 @@ void game_loop()
 		if ( vdp_check_key_press( KEY_p ) ) { 
 			if (key_wait_ticks < clock()) 
 			{
+				if ( bInfoDisplayed ) clear_info();
 				if ( !bPlace ) {
 					start_place();
 				} else {
@@ -335,12 +342,14 @@ void game_loop()
 		if ( vdp_check_key_press( KEY_q ) ) {
 			if (key_wait_ticks < clock()) 
 			{
+				if ( bInfoDisplayed ) clear_info();
 				stop_place(); 
 				key_wait_ticks = clock() + key_wait;
 			}
 		}
 		if ( key_pressed_code == KEY_r ) { // "r" Check actual key code - distinguishes lower/upper case
 			if (bPlace && key_wait_ticks < clock() ) {
+				if ( bInfoDisplayed ) clear_info();
 				place_belt_index++;  
 				place_belt_index = place_belt_index % 4;
 				key_wait_ticks = clock() + key_wait;
@@ -348,6 +357,7 @@ void game_loop()
 		}
 		if ( key_pressed_code == KEY_R ) { // "R" Check actual key code - distinguishes lower/upper case
 			if (bPlace && key_wait_ticks < clock() ) {
+				if ( bInfoDisplayed ) clear_info();
 				place_belt_index--;  
 				if (place_belt_index < 0) place_belt_index += 4;
 				key_wait_ticks = clock() + key_wait;
@@ -355,6 +365,7 @@ void game_loop()
 		}
 		if ( vdp_check_key_press( KEY_enter ) ) // ENTER
 		{
+			if ( bInfoDisplayed ) clear_info();
 			do_place();
 		}
 		if ( vdp_check_key_press( KEY_backtick ) )  // ' - toggle debug
@@ -378,6 +389,7 @@ void game_loop()
 		{
 			if (key_wait_ticks < clock()) 
 			{
+				if ( bInfoDisplayed ) clear_info();
 				show_inventory(20,20);
 				key_wait_ticks = clock() + key_wait;
 			}
@@ -386,7 +398,12 @@ void game_loop()
 		{
 			if (key_wait_ticks < clock()) 
 			{
-				show_info();
+				if ( bInfoDisplayed ) 
+				{
+					clear_info();
+				} else {
+					show_info();
+				}
 				key_wait_ticks = clock() + key_wait;
 			}
 		}
@@ -407,6 +424,9 @@ void draw_tile(int tx, int ty, int tposx, int tposy)
 {
 	uint8_t tile = tilemap[ty*gMapWidth + tx] & 0x0F;
 	uint8_t overlay = (tilemap[ty*gMapWidth + tx] & 0xF0) >> 4;
+	uint8_t machine = layer_machines[ty*gMapWidth + tx];
+
+
 	vdp_adv_select_bitmap( tile + BMOFF_TERR16);
 	vdp_draw_bitmap( tposx, tposy );
 	if (overlay > 0)
@@ -414,6 +434,22 @@ void draw_tile(int tx, int ty, int tposx, int tposy)
 		int feat = overlay - 1;
 		vdp_adv_select_bitmap( feat + BMOFF_FEAT16);
 		vdp_draw_bitmap( tposx, tposy );
+	}
+	if ( machine >= 0 )
+	{
+		vdp_adv_select_bitmap( itemtypes[machine].bmID );
+		vdp_draw_bitmap( tposx, tposy );
+	}
+	ItemNodePtr currPtr = itemlist;
+	while (currPtr != NULL) {
+		int ipos_tx = getTileX(currPtr->x);
+		int ipos_ty = getTileY(currPtr->y);
+		if ( ipos_tx == tx && ipos_ty == ty )
+		{
+			vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+			vdp_draw_bitmap( currPtr->x - xpos, currPtr->y - ypos );
+		}
+		currPtr = currPtr->next;
 	}
 }
 
@@ -1211,16 +1247,28 @@ void show_info()
 	{
 		// feature
 		info_item_bmid = ( ( tilemap[ cursor_ty*gMapWidth + cursor_tx ] & 0xF0 ) >> 4 ) - 1 + BMOFF_FEAT16;
-		info_item_type = ((info_item_bmid - BMOFF_FEAT16) % 5) + IT_FEAT_STONE;
+		info_item_type = ((info_item_bmid - BMOFF_FEAT16 -1) % 5) + IT_FEAT_STONE;
 	}
 	if ( info_item_bmid >= 0 )
 	{
-		draw_filled_box( cursorx, cursory - 32, 120, 31, 11, 8);
+		bInfoDisplayed = true;
+		char * text = itemtypes[ info_item_type ].desc;
+		int textlen = strlen(text) * 8;
+		draw_filled_box( cursorx, cursory - 32, textlen+4, 31, 11, 8);
 		vdp_adv_select_bitmap( info_item_bmid );
 		vdp_draw_bitmap( cursorx+4, cursory - 28 );
 		putch(0x05); // print at graphics cursor
-		vdp_move_to( cursorx+6, cursory-9 );
+		vdp_move_to( cursorx+3, cursory-10 );
+		vdp_gcol(0, 15);
 		printf("%s",itemtypes[ info_item_type ].desc);
 		putch(0x04); // print at text cursor
 	}
+}
+
+void clear_info()
+{
+	if ( !bInfoDisplayed ) return;
+	draw_screen();
+	bInfoDisplayed = false;
+	return;
 }
