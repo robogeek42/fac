@@ -407,12 +407,12 @@ void draw_tile(int tx, int ty, int tposx, int tposy)
 {
 	uint8_t tile = tilemap[ty*gMapWidth + tx] & 0x0F;
 	uint8_t overlay = (tilemap[ty*gMapWidth + tx] & 0xF0) >> 4;
-	vdp_select_bitmap( tile + BMOFF_TERR16);
+	vdp_adv_select_bitmap( tile + BMOFF_TERR16);
 	vdp_draw_bitmap( tposx, tposy );
 	if (overlay > 0)
 	{
 		int feat = overlay - 1;
-		vdp_select_bitmap( feat + BMOFF_FEAT16);
+		vdp_adv_select_bitmap( feat + BMOFF_FEAT16);
 		vdp_draw_bitmap( tposx, tposy );
 	}
 }
@@ -613,7 +613,7 @@ void place_feature_overlay(uint8_t *data, int sx, int sy, int tile, int tx, int 
 void draw_bob(bool draw, int bx, int by, int px, int py)
 {
 	if (draw) {
-		vdp_select_bitmap( BMOFF_BOB16 + bob_facing*4 + bob_frame);
+		vdp_adv_select_bitmap( BMOFF_BOB16 + bob_facing*4 + bob_frame);
 		vdp_draw_bitmap( bx-px, by-py );
 	} else {
 		int tx=getTileX(bx);
@@ -762,7 +762,7 @@ void draw_place_belt()
 
 	if (place_belt_selected>=0)
 	{
-		vdp_select_bitmap( BMOFF_BELT16 + place_belt_selected*4 );
+		vdp_adv_select_bitmap( BMOFF_BELT16 + place_belt_selected*4 );
 		vdp_draw_bitmap( cursorx, cursory );
 	}
 
@@ -770,7 +770,7 @@ void draw_place_belt()
 
 void draw_place_resource()
 {
-	vdp_select_bitmap( itemtypes[item_selected].bmID );
+	vdp_adv_select_bitmap( itemtypes[item_selected].bmID );
 	vdp_draw_bitmap( 
 			cursorx + itemtypes[item_selected].size*4, 
 			cursory + itemtypes[item_selected].size*4);
@@ -778,7 +778,7 @@ void draw_place_resource()
 
 void draw_place_machine()
 {
-	vdp_select_bitmap( itemtypes[item_selected].bmID );
+	vdp_adv_select_bitmap( itemtypes[item_selected].bmID );
 	vdp_draw_bitmap( cursorx, cursory);
 }
 
@@ -857,12 +857,12 @@ void draw_horizontal_layer(int tx, int ty, int len)
 	{
 		if ( layer_belts[ty*gMapWidth + tx+i] >= 0 )
 		{
-			vdp_select_bitmap( layer_belts[ty*gMapWidth + tx+i]*4 + BMOFF_BELT16 + belt_layer_frame);
+			vdp_adv_select_bitmap( layer_belts[ty*gMapWidth + tx+i]*4 + BMOFF_BELT16 + belt_layer_frame);
 			vdp_draw_bitmap( px + i*gTileSize, py );
 		}
 		if ( layer_machines[ty*gMapWidth + tx+i] >= 0 )
 		{
-			vdp_select_bitmap( itemtypes[layer_machines[ty*gMapWidth + tx+i]].bmID );
+			vdp_adv_select_bitmap( itemtypes[layer_machines[ty*gMapWidth + tx+i]].bmID );
 			vdp_draw_bitmap( px + i*gTileSize, py );
 		}
 	}
@@ -871,7 +871,7 @@ void draw_horizontal_layer(int tx, int ty, int len)
 	while (currPtr != NULL) {
 		if (itemIsOnScreen(currPtr))
 		{
-			vdp_select_bitmap( itemtypes[currPtr->item].bmID );
+			vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
 			vdp_draw_bitmap( currPtr->x - xpos, currPtr->y - ypos );
 		}
 		currPtr = currPtr->next;
@@ -1064,7 +1064,7 @@ void show_inventory(int X, int Y)
 			int item = inventory[ii].item;
 			ItemType *type = &itemtypes[item];
 
-			vdp_select_bitmap(type->bmID);
+			vdp_adv_select_bitmap(type->bmID);
 
 			vdp_draw_bitmap(
 					inv_offsetsX[ii]+INV_INT_BORDER + 4*type->size,
@@ -1153,7 +1153,7 @@ void show_inventory(int X, int Y)
 
 void draw_digit(int i, int px, int py)
 {
-	vdp_select_bitmap( BMOFF_NUMS + i );
+	vdp_adv_select_bitmap( BMOFF_NUMS + i );
 	vdp_draw_bitmap( px, py );
 }
 // draw reverse digits
