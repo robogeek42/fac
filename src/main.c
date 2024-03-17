@@ -1194,29 +1194,33 @@ void draw_number_lj(int n, int px, int py)
 
 void show_info()
 {
-	int info_item = -1;
+	int info_item_bmid = -1;
+	int info_item_type = 0;
 
-	//cursorx, cursory
-	int tx = getTileX(cursorx);
-	int ty = getTileY(cursory);
-	if ( layer_belts[ cursory*gMapWidth + cursorx ] >=0 )
+	if ( layer_belts[ cursor_ty*gMapWidth + cursor_tx ] >=0 )
 	{
 		// belt
-		info_item = IT_BELT;
-	} else if ( layer_machines[  cursory*gMapWidth + cursorx ] >=0 )
+		info_item_type = IT_BELT;
+		info_item_bmid = itemtypes[ IT_BELT ].bmID;
+	} else if ( layer_machines[  cursor_ty*gMapWidth + cursor_tx ] >=0 )
 	{
 		// machine
-		info_item = layer_machines[  cursory*gMapWidth + cursorx ];
-	} else if ( tilemap[ cursory*gMapWidth + cursorx ] > 15 )
+		info_item_type = layer_machines[  cursor_ty*gMapWidth + cursor_tx ];
+		info_item_bmid = itemtypes[ info_item_type ].bmID;
+	} else if ( tilemap[ cursor_ty*gMapWidth + cursor_tx ] > 15 )
 	{
 		// feature
-		info_item = ( tilemap[ cursory*gMapWidth + cursorx ] & 0xF0 ) >> 4;
+		info_item_bmid = ( ( tilemap[ cursor_ty*gMapWidth + cursor_tx ] & 0xF0 ) >> 4 ) - 1 + BMOFF_FEAT16;
+		info_item_type = ((info_item_bmid - BMOFF_FEAT16) % 5) + IT_FEAT_STONE;
 	}
-	if ( info_item >= 0 )
+	if ( info_item_bmid >= 0 )
 	{
-		draw_filled_box( cursorx, cursory - 32, 120, 32, 11, 8);
-		vdp_adv_select_bitmap( info_item );
+		draw_filled_box( cursorx, cursory - 32, 120, 31, 11, 8);
+		vdp_adv_select_bitmap( info_item_bmid );
 		vdp_draw_bitmap( cursorx+4, cursory - 28 );
-
+		putch(0x05); // print at graphics cursor
+		vdp_move_to( cursorx+6, cursory-9 );
+		printf("%s",itemtypes[ info_item_type ].desc);
+		putch(0x04); // print at text cursor
 	}
 }
