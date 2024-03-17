@@ -1194,20 +1194,29 @@ void draw_number_lj(int n, int px, int py)
 
 void show_info()
 {
-	/*
+	int info_item = -1;
+
 	//cursorx, cursory
 	int tx = getTileX(cursorx);
 	int ty = getTileY(cursory);
 	if ( layer_belts[ cursory*gMapWidth + cursorx ] >=0 )
 	{
 		// belt
+		info_item = IT_BELT;
 	} else if ( layer_machines[  cursory*gMapWidth + cursorx ] >=0 )
 	{
 		// machine
+		info_item = layer_machines[  cursory*gMapWidth + cursorx ];
 	} else if ( tilemap[ cursory*gMapWidth + cursorx ] > 15 )
 	{
 		// feature
-		int tile = ( tilemap[ cursory*gMapWidth + cursorx ] & 0xF0 ) >> 4;
+		info_item = ( tilemap[ cursory*gMapWidth + cursorx ] & 0xF0 ) >> 4;
 	}
-	*/
+	if ( info_item >= 0 )
+	{
+		draw_filled_box( cursorx, cursory - 32, 120, 32, 11, 8);
+		vdp_adv_select_bitmap( info_item );
+		vdp_draw_bitmap( cursorx+4, cursory - 28 );
+
+	}
 }
