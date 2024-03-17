@@ -157,6 +157,7 @@ void show_inventory(int X, int Y);
 void draw_digit(int i, int px, int py);
 void draw_number(int n, int px, int py);
 void draw_number_lj(int n, int px, int py);
+void show_info();
 
 void wait()
 {
@@ -356,14 +357,6 @@ void game_loop()
 		{
 			do_place();
 		}
-		if ( vdp_check_key_press( KEY_z ) ) // z - drop an item
-		{
-			if (key_wait_ticks < clock()) 
-			{
-				drop_item(item_selected);
-				key_wait_ticks = clock() + key_wait;
-			}
-		}
 		if ( vdp_check_key_press( KEY_backtick ) )  // ' - toggle debug
 		{
 			if (key_wait_ticks < clock()) 
@@ -386,6 +379,14 @@ void game_loop()
 			if (key_wait_ticks < clock()) 
 			{
 				show_inventory(20,20);
+				key_wait_ticks = clock() + key_wait;
+			}
+		}
+		if ( vdp_check_key_press( KEY_i ) ) 
+		{
+			if (key_wait_ticks < clock()) 
+			{
+				show_info();
 				key_wait_ticks = clock() + key_wait;
 			}
 		}
@@ -628,12 +629,13 @@ void draw_bob(bool draw, int bx, int by, int px, int py)
 	}
 }
 
+// can tile be moved into?
 bool check_tile(int px, int py)
 {
 	int tx=getTileX(px);
 	int ty=getTileY(py);
 
-	return tilemap[tx+ty*gMapWidth]<16;
+	return tilemap[tx+ty*gMapWidth]<16 && layer_machines[tx+ty*gMapWidth]<0;
 }
 
 bool move_bob(int dir, int speed)
@@ -1190,3 +1192,22 @@ void draw_number_lj(int n, int px, int py)
 	draw_number(n, px+diglen*4, py);
 }
 
+void show_info()
+{
+	/*
+	//cursorx, cursory
+	int tx = getTileX(cursorx);
+	int ty = getTileY(cursory);
+	if ( layer_belts[ cursory*gMapWidth + cursorx ] >=0 )
+	{
+		// belt
+	} else if ( layer_machines[  cursory*gMapWidth + cursorx ] >=0 )
+	{
+		// machine
+	} else if ( tilemap[ cursory*gMapWidth + cursorx ] > 15 )
+	{
+		// feature
+		int tile = ( tilemap[ cursory*gMapWidth + cursorx ] & 0xF0 ) >> 4;
+	}
+	*/
+}
