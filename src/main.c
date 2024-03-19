@@ -959,36 +959,39 @@ void drop_item(int item)
 void move_items_on_belts()
 {
 	ItemNodePtr currPtr = itemlist;
+	int offset = 4;
 	while (currPtr != NULL) {
 		bool moved = false;
 		if (itemIsOnScreen(currPtr))
 		{
-			int tx = getTileX(currPtr->x);
-			int ty = getTileY(currPtr->y);
+			int centrex = currPtr->x + offset;
+			int centrey = currPtr->y + offset;
+			int tx = getTileX(centrex);
+			int ty = getTileY(centrey);
 			int beltID = layer_belts[ tx + ty*gMapWidth ];
 			if (beltID >= 0)
 			{
-				int dx = currPtr->x % gTileSize;
-				int dy = currPtr->y % gTileSize;
+				int dx = centrex % gTileSize;
+				int dy = centrey % gTileSize;
 				int in = belts[beltID].in;
 				int out = belts[beltID].out;
-				int nextx = currPtr->x;
-				int nexty = currPtr->y;
+				int nextx = centrex;
+				int nexty = centrey;
 				int nnx = nextx;
 				int nny = nexty;
 				switch (in)
 				{
 					case 0:  // in from top - move down
-						if ( !moved && dy < 4 ) { nexty++; nny+=2; moved=true; }
+						if ( !moved && dy < (offset+4) ) { nexty++; nny+=2; moved=true; }
 						break;
 					case 1: // in from right - move left
-						if ( !moved && dx >= 5 ) { nextx--; nnx-=2;  moved=true; }
+						if ( !moved && (8-dx) < ((8-offset)-4) ) { nextx--; nnx-=2;  moved=true; }
 						break;
 					case 2: // in from bottom - move up
-						if ( !moved && dy >= 4 ) { nexty--; nny-=2; moved=true; }
+						if ( !moved && (8-dy) < ((8-offset)-4) ) { nexty--; nny-=2; moved=true; }
 						break;
 					case 3: // in from left - move right
-						if ( !moved && dx < 5 ) { nextx++; nnx+=2; moved=true; }
+						if ( !moved && dx < (offset+4) ) { nextx++; nnx+=2; moved=true; }
 						break;
 					default:
 						break;
@@ -1013,12 +1016,12 @@ void move_items_on_belts()
 
 				if (moved)
 				{
-					bool found = findItem(currPtr->item, nextx, nexty);
-					found |= findItem(currPtr->item, nnx, nny);
+					bool found = findItem(currPtr->item, nextx-offset, nexty-offset);
+					found |= findItem(currPtr->item, nnx-offset, nny-offset);
 					if (!found) 
 					{
-						currPtr->x = nextx;
-						currPtr->y = nexty;
+						currPtr->x = nextx - offset;
+						currPtr->y = nexty - offset;
 					}
 				}
 			}
