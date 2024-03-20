@@ -1,3 +1,6 @@
+#ifndef _IMAGE_H
+#define _IMAGE_H
+
 #define FN_TERR16 "img/terr16/tr%02d.rgb2"
 #define BMOFF_TERR16 0
 #define NUM_BM_TERR16 13
@@ -28,13 +31,25 @@
 #define BMOFF_NUMS BMOFF_MACH16 + NUM_BM_MACH16 
 #define NUM_BM_NUMS 10
 
-
 #define TOTAL_BM BMOFF_NUMS + NUM_BM_NUMS
 
+#define BOB_SPRITE_DOWN 0
+#define BOB_SPRITE_UP 1
+#define BOB_SPRITE_LEFT 2
+#define BOB_SPRITE_RIGHT 3
+
+#define NUM_SPRITES 4
 
 void load_images();
+void create_sprites();
+int get_current_sprite();
+void select_sprite( int sprite );
 
-#ifdef IMPLEMENTATION
+static int current_sprite = 0;
+
+#endif
+
+#ifdef _IMAGE_IMPLEMENTATION
 void load_images() 
 {
 	char fname[40];
@@ -90,6 +105,43 @@ void load_images()
 	printf("NUMS  start %d count %d\n",BMOFF_NUMS,NUM_BM_NUMS);
 	printf("Total %d\n",TOTAL_BM);
 	*/
+}
+
+// Create sprites for Bob moving in each direction with 4 frames each
+void create_sprites() 
+{
+	vdp_create_sprite( BOB_SPRITE_DOWN, BMOFF_BOB16 + BOB_SPRITE_DOWN*4, 4 );
+	vdp_create_sprite( BOB_SPRITE_UP, BMOFF_BOB16 + BOB_SPRITE_UP*4, 4 );
+	vdp_create_sprite( BOB_SPRITE_LEFT, BMOFF_BOB16 + BOB_SPRITE_LEFT*4, 4 );
+	vdp_create_sprite( BOB_SPRITE_RIGHT, BMOFF_BOB16 + BOB_SPRITE_RIGHT*4, 4 );
+	vdp_activate_sprites( 4 );
+	for (int s=0; s<4; s++)
+	{
+		vdp_select_sprite( s );
+		vdp_hide_sprite();
+	}
+}
+int get_current_sprite()
+{
+	return current_sprite;
+}
+
+void select_sprite( int sprite )
+{
+	if ( sprite >= NUM_SPRITES || sprite == current_sprite ) return;
+	for (int s=0; s < NUM_SPRITES; s++)
+	{
+		vdp_select_sprite(s);
+		if (s == current_sprite)
+		{
+			vdp_show_sprite();
+		} 
+		else 
+		{
+			vdp_hide_sprite();
+		}
+	}
+	vdp_select_sprite(current_sprite);
 }
 
 #endif

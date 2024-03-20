@@ -19,7 +19,7 @@
 #include "item.h"
 #include "inventory.h"
 
-#define IMPLEMENTATION
+#define _IMAGE_IMPLEMENTATION
 #include "images.h"
 
 int gMode = 8; 
@@ -225,6 +225,7 @@ int main(/*int argc, char *argv[]*/)
 	//vdu_set_graphics_viewport()
 
 	load_images();
+	create_sprites();
 
 	init_inventory(inventory);
 	// for test add some items
