@@ -155,6 +155,7 @@ void drop_item(int item);
 
 void move_items_on_belts();
 void print_item_pos();
+void draw_items();
 
 void show_inventory(int X, int Y);
 void draw_digit(int i, int px, int py);
@@ -440,17 +441,6 @@ void draw_tile(int tx, int ty, int tposx, int tposy)
 		vdp_adv_select_bitmap( itemtypes[machine].bmID );
 		vdp_draw_bitmap( tposx, tposy );
 	}
-	ItemNodePtr currPtr = itemlist;
-	while (currPtr != NULL) {
-		int ipos_tx = getTileX(currPtr->x);
-		int ipos_ty = getTileY(currPtr->y);
-		if ( ipos_tx == tx && ipos_ty == ty )
-		{
-			vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
-			vdp_draw_bitmap( currPtr->x - xpos, currPtr->y - ypos );
-		}
-		currPtr = currPtr->next;
-	}
 }
 
 // draw full screen at World position in xpos/ypos
@@ -463,6 +453,8 @@ void draw_screen()
 	{
 		draw_horizontal(tx, ty+i, 1+(gScreenWidth/gTileSize));
 	}
+
+	draw_items();
 
 	draw_bob(true,bobx,boby,xpos,ypos);
 }
@@ -883,6 +875,12 @@ bool itemIsOnScreen(ItemNodePtr itemptr)
 	}
 	return false;
 }
+bool itemIsInHorizontal(ItemNodePtr itemptr, int tx, int ty, int len)
+{
+	if ( itemptr->y < ty*gTileSize || itemptr->y > (ty+1)*gTileSize ) return false;
+	if ( itemptr->x < tx*gTileSize || itemptr->x > (tx+len+1)*gTileSize ) return false;
+	return true;
+}
 
 void draw_horizontal_layer(int tx, int ty, int len)
 {
@@ -904,13 +902,16 @@ void draw_horizontal_layer(int tx, int ty, int len)
 	}
 
 	ItemNodePtr currPtr = itemlist;
+	int cnt=0;
 	while (currPtr != NULL) {
-		if (itemIsOnScreen(currPtr))
+		if ( itemIsInHorizontal(currPtr, tx, ty, len) )
 		{
 			vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
 			vdp_draw_bitmap( currPtr->x - xpos, currPtr->y - ypos );
 		}
 		currPtr = currPtr->next;
+		cnt++;
+		if (cnt % 4 == 0) vdp_update_key_state();
 	}
 }
 
@@ -1061,6 +1062,22 @@ void print_item_pos()
 			}
 		}
 		currPtr = currPtr->next;
+	}
+}
+
+void draw_items() 
+{
+	ItemNodePtr currPtr = itemlist;
+	int cnt=0;
+	while (currPtr != NULL) {
+		if (itemIsOnScreen(currPtr))
+		{
+			vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+			vdp_draw_bitmap( currPtr->x - xpos, currPtr->y - ypos );
+		}
+		currPtr = currPtr->next;
+		cnt++;
+		if (cnt % 4 == 0) vdp_update_key_state();
 	}
 }
 
