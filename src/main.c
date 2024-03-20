@@ -111,7 +111,6 @@ int key_wait = 15;
 clock_t key_wait_ticks;
 clock_t bob_anim_ticks;
 clock_t move_wait_ticks;
-clock_t item_move_wait_ticks;
 clock_t layer_wait_ticks;
 
 void game_loop();
@@ -256,7 +255,6 @@ void game_loop()
 	bob_anim_ticks = clock();
 	layer_wait_ticks = clock();
 	key_wait_ticks = clock();
-	item_move_wait_ticks = clock()+60;
 
 	recentre();
 
@@ -276,13 +274,13 @@ void game_loop()
 			// screen can scroll, move Bob AND screen
 			if (can_scroll_screen(dir, 1) && move_bob(bob_dir, 1) )
 			{
-				draw_place(false); // remove cursor or it will smeer
+				//draw_place(false); // remove cursor or it will smeer
 				scroll_screen(dir,1);
 				// Bob only needs to be re-drawn if he was at the edge of the screen (and so was removed)
 				if (bobAtEdge()) {
 					draw_bob(true,bobx,boby,xpos,ypos);
 				}
-				draw_place(true); // re-daw cursor
+				//draw_place(true); // re-daw cursor
 			}
 			// can't scroll screen, just move Bob around
 			if (!can_scroll_screen(dir, 1))
@@ -320,9 +318,10 @@ void game_loop()
 
 		if (layer_wait_ticks < clock()) 
 		{
+			layer_wait_ticks = clock() + belt_speed; // belt anim speed
 			draw_place(false);
 			draw_layer();
-			layer_wait_ticks = clock() + belt_speed; // belt anim speed
+			move_items_on_belts();
 			draw_bob(true,bobx,boby,xpos,ypos);
 			draw_place(true);
 		}
@@ -407,13 +406,6 @@ void game_loop()
 				}
 				key_wait_ticks = clock() + key_wait;
 			}
-		}
-
-
-		if ( item_move_wait_ticks <  clock() ) {
-			move_items_on_belts();
-			//if (debug) print_item_pos();
-			item_move_wait_ticks = clock()+belt_speed;
 		}
 
 		vdp_update_key_state();
@@ -877,7 +869,7 @@ bool itemIsOnScreen(ItemNodePtr itemptr)
 }
 bool itemIsInHorizontal(ItemNodePtr itemptr, int tx, int ty, int len)
 {
-	if ( itemptr->y < ty*gTileSize || itemptr->y > (ty+1)*gTileSize ) return false;
+	if ( itemptr->y < (ty-2)*gTileSize || itemptr->y > (ty+2)*gTileSize ) return false;
 	if ( itemptr->x < tx*gTileSize || itemptr->x > (tx+len+1)*gTileSize ) return false;
 	return true;
 }
