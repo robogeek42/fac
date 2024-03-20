@@ -1,7 +1,16 @@
 # fac
-Factory game for Agon ... eventually maybe.
+A Factory game for the Agon.
 
-So far it is terrain generation.
-My first go at this is Wave Function Collapse, but it is unsuitable.
+So far:
+- Simplified scrollable map.
+- Terrain feaures (e.g. Treesm Rocks, Ores)
+- Belts.
+- Items that can be moved by belts.
+- Inventory
 
-I need to generate structured noise terrains. Next.
+To add:
+- Machine functionality
+- Movements from/to belts/machines
+- Mining/Forestry
+
+And that is before any overt optimisation, although I can't help myself
