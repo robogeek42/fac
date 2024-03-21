@@ -1069,10 +1069,14 @@ void show_inventory(int X, int Y)
 	int inv_offsetsX[20] = {0};
 	int inv_offsetsY[20] = {0};
 	int cursor_border_on = 15;
-	int cursor_border_off = 7;
+	int cursor_border_off = 0;
 	// yellow border of UI with dark-grey fill
 	int boxw = INV_EXT_BORDER*2 + (gTileSize + INV_INT_BORDER*2) * inv_items_wide;
 	int boxh = INV_EXT_BORDER*2 + (gTileSize + INV_INT_BORDER*2) * inv_items_high;
+
+	vdp_select_sprite( CURSOR_SPRITE );
+	vdp_hide_sprite();
+
 	draw_filled_box( offx, offy, boxw, boxh, 11, 16 );
 
 	for (int j=0; j<inv_items_high; j++)
@@ -1182,7 +1186,12 @@ void show_inventory(int X, int Y)
 		}
 		vdp_update_key_state();
 	} while (finish==false);
+
 	draw_screen();
+
+	vdp_select_sprite( CURSOR_SPRITE );
+	vdp_show_sprite();
+	start_place();
 }
 
 void draw_digit(int i, int px, int py)
