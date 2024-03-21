@@ -44,20 +44,21 @@
 
 #define NUM_BOB_SPRITES 4
 
-#define CURSOR_SPRITE 5
+#define CURSOR_SPRITE 4
 
 void load_images();
 void create_sprites();
 int get_current_sprite();
-void select_sprite( int sprite );
+void select_bob_sprite( int sprite );
 
-static int current_sprite = 0;
+static int current_bob_sprite = -1;
 
 #endif
 
 #ifdef _IMAGE_IMPLEMENTATION
 void load_images() 
 {
+	//TAB(0,0);
 	char fname[40];
 	for (int fn=1; fn<=NUM_BM_TERR16; fn++)
 	{
@@ -100,8 +101,13 @@ void load_images()
 		load_bitmap_file(fname, 4, 5, BMOFF_NUMS + fn);
 	}
 	
+	for (int fn=1; fn<=NUM_BM_CURSORS; fn++)
+	{
+		sprintf(fname, FN_CURSORS, fn);
+		load_bitmap_file(fname, 16, 16, BMOFF_CURSORS + fn-1);
+	}
+	
 	/*
-	TAB(0,0);
 	printf("TILES start %d count %d\n",BMOFF_TERR16,NUM_BM_TERR16);
 	printf("FEATS start %d count %d\n",BMOFF_FEAT16,NUM_BM_FEAT16);
 	printf("BOB   start %d count %d\n",BMOFF_BOB16,NUM_BM_BOB16);
@@ -122,6 +128,7 @@ void create_sprites()
 	vdp_adv_create_sprite( BOB_SPRITE_LEFT, BMOFF_BOB16 + BOB_SPRITE_LEFT*4, 4 );
 	vdp_adv_create_sprite( BOB_SPRITE_RIGHT, BMOFF_BOB16 + BOB_SPRITE_RIGHT*4, 4 );
 	vdp_adv_create_sprite( CURSOR_SPRITE, BMOFF_CURSORS, 2 );
+
 	vdp_activate_sprites( NUM_BOB_SPRITES + 1 );
 
 	for (int s=0; s<NUM_BOB_SPRITES; s++)
@@ -129,30 +136,36 @@ void create_sprites()
 		vdp_select_sprite( s );
 		vdp_hide_sprite();
 	}
+	vdp_select_sprite( CURSOR_SPRITE );
+	vdp_show_sprite();
+	vdp_refresh_sprites();
 
 }
 int get_current_sprite()
 {
-	return current_sprite;
+	return current_bob_sprite;
 }
 
-void select_sprite( int sprite )
+void select_bob_sprite( int sprite )
 {
-	if ( sprite >= NUM_BOB_SPRITES || sprite == current_sprite ) return;
-	current_sprite = sprite;
-	for (int s=0; s < NUM_BOB_SPRITES; s++)
+	if ( sprite >= NUM_BOB_SPRITES ) return;
+	if ( sprite != current_bob_sprite )
 	{
-		vdp_select_sprite(s);
-		if (s == current_sprite)
+		current_bob_sprite = sprite;
+		for (int s=0; s < NUM_BOB_SPRITES; s++)
 		{
-			vdp_show_sprite();
-		} 
-		else 
-		{
-			vdp_hide_sprite();
+			vdp_select_sprite(s);
+			if (s == current_bob_sprite)
+			{
+				vdp_show_sprite();
+			} 
+			else 
+			{
+				vdp_hide_sprite();
+			}
 		}
 	}
-	vdp_select_sprite(current_sprite);
+	vdp_select_sprite(current_bob_sprite);
 	vdp_refresh_sprites();
 }
 

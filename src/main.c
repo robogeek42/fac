@@ -48,7 +48,7 @@ bool debug = false;
 int xpos=0, ypos=0;
 // Position of character in world coords (pixel)
 int bobx=0, boby=0;
-// cursor position position in world coords
+// cursor position position in screen pixel coords
 int cursorx=0, cursory=0;
 // cursor position in tile coords
 int cursor_tx=0, cursor_ty=0;
@@ -103,7 +103,7 @@ bool bInfoDisplayed = false;
 //------------------------------------------------------------
 // Configuration vars
 int belt_speed = 7;
-int key_wait = 15;
+int key_wait = 20;
 #define TILE_INFO_FILE "img/tileinfo.txt"
 //------------------------------------------------------------
 
@@ -206,13 +206,16 @@ int main(/*int argc, char *argv[]*/)
 	}
 	memset(layer_machines, (int8_t)-1, gMapWidth * gMapHeight);
 
-	/* start screen centred */
-	xpos = gTileSize*(gMapWidth - gScreenWidth/gTileSize)/2; 
-	ypos = gTileSize*(gMapHeight - gScreenHeight/gTileSize)/2; 
-	bobx = (xpos + gTileSize*(gScreenWidth/gTileSize)/2) & 0xFFFFF0;
-	boby = (ypos + gTileSize*(gScreenHeight/gTileSize)/2) & 0xFFFFF0;
+	/* start bob and screen centred in map */
+	bobx = (gMapWidth * gTileSize / 2) & 0xFFFFF0;
+	boby = (gMapHeight * gTileSize / 2) & 0xFFFFF0;
+	xpos = bobx - gScreenWidth/2;
+	ypos = boby - gScreenHeight/2;
+
 	cursor_tx = getTileX(bobx+gTileSize/2);
 	cursor_ty = getTileY(boby+gTileSize/2)+1;
+	cursorx = getTilePosInScreenX(cursor_tx);
+	cursory = getTilePosInScreenY(cursor_ty);
 	old_cursorx=cursorx;
 	old_cursory=cursory;
 	oldcursor_tx = cursor_tx;
@@ -250,19 +253,25 @@ my_exit:
 void game_loop()
 {
 	int exit=0;
-
+	
 	draw_screen();
 	draw_layer();
+
 	bob_anim_ticks = clock();
 	layer_wait_ticks = clock();
 	key_wait_ticks = clock();
 
-	recentre();
 
-	vdp_select_sprite( bob_facing );
+	select_bob_sprite( bob_facing );
 	vdp_move_sprite_to( bobx - xpos, boby - ypos );
+
+	vdp_select_sprite( CURSOR_SPRITE );
 	vdp_show_sprite();
+	vdp_nth_sprite_frame( 0 );
+	vdp_move_sprite_to( cursorx, cursory );
 	vdp_refresh_sprites();
+
+	wait();
 
 	do {
 		int dir=-1;
@@ -282,7 +291,7 @@ void game_loop()
 			{
 				//draw_place(false); // remove cursor or it will smeer
 				scroll_screen(dir,1);
-				//draw_place(true); // re-daw cursor
+				draw_place(true); // re-draw cursor
 			}
 			// can't scroll screen, just move Bob around
 			if (!can_scroll_screen(dir, 1))
@@ -305,6 +314,7 @@ void game_loop()
 
 		// move the cursor OR place rectangle
 		if (place_dir>=0 && ( key_wait_ticks < clock() ) ) {
+			key_wait_ticks = clock() + key_wait;
 			if ( bInfoDisplayed ) clear_info();
 			draw_place(false);
 			switch(place_dir) {
@@ -315,13 +325,12 @@ void game_loop()
 				default: break;
 			}
 			draw_place(true);
-			key_wait_ticks = clock() + key_wait;
 		}
 
 		if (layer_wait_ticks < clock()) 
 		{
 			layer_wait_ticks = clock() + belt_speed; // belt anim speed
-			draw_place(false);
+			//draw_place(false);
 			draw_layer();
 			move_items_on_belts();
 			draw_place(true);
@@ -633,7 +642,7 @@ void place_feature_overlay(uint8_t *data, int sx, int sy, int tile, int tx, int 
 
 void draw_bob(int bx, int by, int px, int py)
 {
-	select_sprite( bob_facing );
+	select_bob_sprite( bob_facing );
 	vdp_move_sprite_to( bx - px, by - py );
 	return;
 }
@@ -655,7 +664,7 @@ bool move_bob(int dir, int speed)
 	if ( bob_facing != dir )
 	{
 		bob_facing = dir;
-		select_sprite( bob_facing );
+		select_bob_sprite( bob_facing );
 	}
 
 	switch (dir) {
@@ -697,6 +706,7 @@ bool move_bob(int dir, int speed)
 	{
 		bobx=newx;
 		boby=newy;
+		vdp_select_sprite( bob_facing );
 		vdp_move_sprite_to(bobx-xpos, boby-ypos);
 		moved = true;
 	}
@@ -809,11 +819,15 @@ void draw_place(bool draw)
 			draw_place_machine();
 		}
 		
-		draw_box(cursorx, cursory, gTileSize-1, gTileSize-1, 15);
+		vdp_select_sprite( CURSOR_SPRITE );
+		vdp_move_sprite_to( cursorx, cursory );
+		vdp_nth_sprite_frame( 1 );
 	}
 	else
 	{
-		draw_corners(cursorx, cursory, gTileSize-1, gTileSize-1, 11);
+		vdp_select_sprite( CURSOR_SPRITE );
+		vdp_move_sprite_to( cursorx, cursory );
+		vdp_nth_sprite_frame( 0 );
 	}
 
 	old_cursorx=cursorx;
