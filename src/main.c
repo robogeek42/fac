@@ -265,14 +265,6 @@ void game_loop()
 	select_bob_sprite( bob_facing );
 	vdp_move_sprite_to( bobx - xpos, boby - ypos );
 
-	vdp_select_sprite( CURSOR_SPRITE );
-	vdp_show_sprite();
-	vdp_nth_sprite_frame( 0 );
-	vdp_move_sprite_to( cursorx, cursory );
-	vdp_refresh_sprites();
-
-	wait();
-
 	do {
 		int dir=-1;
 		int bob_dir = -1;
