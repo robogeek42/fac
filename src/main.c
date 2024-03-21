@@ -135,9 +135,8 @@ void place_feature_overlay(uint8_t *data, int sx, int sy, int tile, int tx, int 
 
 int readTileInfoFile(char *path, TileInfoFile *tif, int items);
 
-void draw_bob(bool draw, int bx, int by, int px, int py);
+void draw_bob(int bx, int by, int px, int py);
 bool move_bob(int dir, int speed);
-bool bobAtEdge();
 
 void start_place();
 void stop_place();
@@ -325,7 +324,6 @@ void game_loop()
 			draw_place(false);
 			draw_layer();
 			move_items_on_belts();
-			//draw_bob(true,bobx,boby,xpos,ypos);
 			draw_place(true);
 		}
 			
@@ -451,7 +449,7 @@ void draw_screen()
 
 	draw_items();
 
-	draw_bob(true,bobx,boby,xpos,ypos);
+	draw_bob(bobx,boby,xpos,ypos);
 }
 
 void draw_horizontal(int tx, int ty, int len)
@@ -633,7 +631,7 @@ void place_feature_overlay(uint8_t *data, int sx, int sy, int tile, int tx, int 
 }
 
 
-void draw_bob(bool draw, int bx, int by, int px, int py)
+void draw_bob(int bx, int by, int px, int py)
 {
 	select_sprite( bob_facing );
 	vdp_move_sprite_to( bx - px, by - py );
@@ -717,19 +715,6 @@ void recentre()
 	ypos = boby - gScreenHeight/2;
 	draw_screen();
 	move_wait_ticks = clock() + 1;
-}
-
-bool bobAtEdge()
-{
-	int bx = bobx-xpos;
-	int by = boby-ypos;
-
-	if (bx >= 0 && bx <= gTileSize*2 ) return true;
-	if (by >= 0 && by <= gTileSize*2 ) return true;
-	if (bx >= gScreenWidth - gTileSize*2 && bx <= gScreenWidth ) return true;
-	if (by >= gScreenHeight - gTileSize*2 && by <= gScreenWidth ) return true;
-
-	return false;
 }
 
 void start_place()

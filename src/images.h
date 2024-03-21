@@ -31,14 +31,20 @@
 #define BMOFF_NUMS BMOFF_MACH16 + NUM_BM_MACH16 
 #define NUM_BM_NUMS 10
 
-#define TOTAL_BM BMOFF_NUMS + NUM_BM_NUMS
+#define FN_CURSORS "img/cursor%02d.rgb2"
+#define BMOFF_CURSORS BMOFF_NUMS + NUM_BM_NUMS 
+#define NUM_BM_CURSORS 2
+
+#define TOTAL_BM BMOFF_CURSORS + NUM_BM_CURSORS
 
 #define BOB_SPRITE_DOWN 0
 #define BOB_SPRITE_UP 1
 #define BOB_SPRITE_LEFT 2
 #define BOB_SPRITE_RIGHT 3
 
-#define NUM_SPRITES 4
+#define NUM_BOB_SPRITES 4
+
+#define CURSOR_SPRITE 5
 
 void load_images();
 void create_sprites();
@@ -103,6 +109,7 @@ void load_images()
 	printf("ITEMS start %d count %d\n",BMOFF_ITEM8,NUM_BM_ITEM8);
 	printf("MACHS start %d count %d\n",BMOFF_MACH16,NUM_BM_MACH16);
 	printf("NUMS  start %d count %d\n",BMOFF_NUMS,NUM_BM_NUMS);
+	printf("CURS  start %d count %d\n",BMOFF_CURSORS,NUM_BM_CURSORS);
 	printf("Total %d\n",TOTAL_BM);
 	*/
 }
@@ -114,12 +121,15 @@ void create_sprites()
 	vdp_adv_create_sprite( BOB_SPRITE_UP, BMOFF_BOB16 + BOB_SPRITE_UP*4, 4 );
 	vdp_adv_create_sprite( BOB_SPRITE_LEFT, BMOFF_BOB16 + BOB_SPRITE_LEFT*4, 4 );
 	vdp_adv_create_sprite( BOB_SPRITE_RIGHT, BMOFF_BOB16 + BOB_SPRITE_RIGHT*4, 4 );
-	vdp_activate_sprites( 4 );
-	for (int s=0; s<4; s++)
+	vdp_adv_create_sprite( CURSOR_SPRITE, BMOFF_CURSORS, 2 );
+	vdp_activate_sprites( NUM_BOB_SPRITES + 1 );
+
+	for (int s=0; s<NUM_BOB_SPRITES; s++)
 	{
 		vdp_select_sprite( s );
 		vdp_hide_sprite();
 	}
+
 }
 int get_current_sprite()
 {
@@ -128,9 +138,9 @@ int get_current_sprite()
 
 void select_sprite( int sprite )
 {
-	if ( sprite >= NUM_SPRITES || sprite == current_sprite ) return;
+	if ( sprite >= NUM_BOB_SPRITES || sprite == current_sprite ) return;
 	current_sprite = sprite;
-	for (int s=0; s < NUM_SPRITES; s++)
+	for (int s=0; s < NUM_BOB_SPRITES; s++)
 	{
 		vdp_select_sprite(s);
 		if (s == current_sprite)
