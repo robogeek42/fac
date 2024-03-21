@@ -251,6 +251,7 @@ my_exit:
 void game_loop()
 {
 	int exit=0;
+
 	draw_screen();
 	draw_layer();
 	bob_anim_ticks = clock();
@@ -258,6 +259,11 @@ void game_loop()
 	key_wait_ticks = clock();
 
 	recentre();
+
+	vdp_select_sprite( bob_facing );
+	vdp_move_sprite_to( bobx - xpos, boby - ypos );
+	vdp_show_sprite();
+	vdp_refresh_sprites();
 
 	do {
 		int dir=-1;
@@ -277,10 +283,6 @@ void game_loop()
 			{
 				//draw_place(false); // remove cursor or it will smeer
 				scroll_screen(dir,1);
-				// Bob only needs to be re-drawn if he was at the edge of the screen (and so was removed)
-				if (bobAtEdge()) {
-					draw_bob(true,bobx,boby,xpos,ypos);
-				}
 				//draw_place(true); // re-daw cursor
 			}
 			// can't scroll screen, just move Bob around
@@ -323,7 +325,7 @@ void game_loop()
 			draw_place(false);
 			draw_layer();
 			move_items_on_belts();
-			draw_bob(true,bobx,boby,xpos,ypos);
+			//draw_bob(true,bobx,boby,xpos,ypos);
 			draw_place(true);
 		}
 			
@@ -633,21 +635,9 @@ void place_feature_overlay(uint8_t *data, int sx, int sy, int tile, int tx, int 
 
 void draw_bob(bool draw, int bx, int by, int px, int py)
 {
-	if (draw) {
-		vdp_adv_select_bitmap( BMOFF_BOB16 + bob_facing*4 + bob_frame);
-		vdp_draw_bitmap( bx-px, by-py );
-	} else {
-		int tx=getTileX(bx);
-		int ty=getTileY(by);
-		int tposx = tx*gTileSize - px;
-		int tposy = ty*gTileSize - py;
-
-		// have to re-draw the 4 tiles that are under the sprite
-		draw_tile(tx, ty, tposx, tposy);
-		draw_tile(tx+1, ty, tposx+gTileSize, tposy);
-		draw_tile(tx, ty+1, tposx, tposy+gTileSize);
-		draw_tile(tx+1, ty+1, tposx+gTileSize, tposy+gTileSize);
-	}
+	select_sprite( bob_facing );
+	vdp_move_sprite_to( bx - px, by - py );
+	return;
 }
 
 // can tile be moved into?
@@ -664,7 +654,11 @@ bool move_bob(int dir, int speed)
 	int newx=bobx, newy=boby;
 	bool moved = false;
 
-	bob_facing = dir;
+	if ( bob_facing != dir )
+	{
+		bob_facing = dir;
+		select_sprite( bob_facing );
+	}
 
 	switch (dir) {
 		case BOB_LEFT:
@@ -703,15 +697,15 @@ bool move_bob(int dir, int speed)
 	}
 	if (newx != bobx || newy != boby)
 	{
-		draw_bob(false,bobx,boby,xpos,ypos);
 		bobx=newx;
 		boby=newy;
-		draw_bob(true,newx,newy,xpos,ypos);
+		vdp_move_sprite_to(bobx-xpos, boby-ypos);
 		moved = true;
 	}
 
 	if (bob_anim_ticks > clock() ) return moved;
 	bob_frame=(bob_frame+1)%4; 
+	vdp_nth_sprite_frame( bob_frame );
 	bob_anim_ticks = clock()+10;
 
 	return moved;

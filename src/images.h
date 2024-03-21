@@ -110,10 +110,10 @@ void load_images()
 // Create sprites for Bob moving in each direction with 4 frames each
 void create_sprites() 
 {
-	vdp_create_sprite( BOB_SPRITE_DOWN, BMOFF_BOB16 + BOB_SPRITE_DOWN*4, 4 );
-	vdp_create_sprite( BOB_SPRITE_UP, BMOFF_BOB16 + BOB_SPRITE_UP*4, 4 );
-	vdp_create_sprite( BOB_SPRITE_LEFT, BMOFF_BOB16 + BOB_SPRITE_LEFT*4, 4 );
-	vdp_create_sprite( BOB_SPRITE_RIGHT, BMOFF_BOB16 + BOB_SPRITE_RIGHT*4, 4 );
+	vdp_adv_create_sprite( BOB_SPRITE_DOWN, BMOFF_BOB16 + BOB_SPRITE_DOWN*4, 4 );
+	vdp_adv_create_sprite( BOB_SPRITE_UP, BMOFF_BOB16 + BOB_SPRITE_UP*4, 4 );
+	vdp_adv_create_sprite( BOB_SPRITE_LEFT, BMOFF_BOB16 + BOB_SPRITE_LEFT*4, 4 );
+	vdp_adv_create_sprite( BOB_SPRITE_RIGHT, BMOFF_BOB16 + BOB_SPRITE_RIGHT*4, 4 );
 	vdp_activate_sprites( 4 );
 	for (int s=0; s<4; s++)
 	{
@@ -129,6 +129,7 @@ int get_current_sprite()
 void select_sprite( int sprite )
 {
 	if ( sprite >= NUM_SPRITES || sprite == current_sprite ) return;
+	current_sprite = sprite;
 	for (int s=0; s < NUM_SPRITES; s++)
 	{
 		vdp_select_sprite(s);
@@ -142,6 +143,7 @@ void select_sprite( int sprite )
 		}
 	}
 	vdp_select_sprite(current_sprite);
+	vdp_refresh_sprites();
 }
 
 #endif
