@@ -38,6 +38,11 @@ int gTileSize = 16;
 #define BOB_LEFT 2
 #define BOB_RIGHT 3
 
+#define BITS_UP 1
+#define BITS_RIGHT 2
+#define BITS_DOWN 4
+#define BITS_LEFT 8
+
 bool debug = false;
 
 //------------------------------------------------------------
@@ -268,7 +273,8 @@ void game_loop()
 	do {
 		int dir=-1;
 		int bob_dir = -1;
-		int place_dir=-1;
+		int place_dir=0;
+
 		if ( vdp_check_key_press( KEY_w ) ) { bob_dir = BOB_UP; dir=SCROLL_UP; }
 		if ( vdp_check_key_press( KEY_a ) ) { bob_dir = BOB_LEFT; dir=SCROLL_RIGHT; }
 		if ( vdp_check_key_press( KEY_s ) ) { bob_dir = BOB_DOWN; dir=SCROLL_DOWN; }
@@ -293,29 +299,28 @@ void game_loop()
 		}
 
 		// cursor movement
-		if ( vdp_check_key_press( KEY_LEFT ) ) {place_dir=SCROLL_LEFT; }
-		if ( vdp_check_key_press( KEY_RIGHT ) ) {place_dir=SCROLL_RIGHT; }
-		if ( vdp_check_key_press( KEY_UP ) ) {place_dir=SCROLL_UP; }
-		if ( vdp_check_key_press( KEY_DOWN ) ) {place_dir=SCROLL_DOWN; }
+		if ( vdp_check_key_press( KEY_LEFT ) ) {place_dir |= BITS_LEFT; }
+		if ( vdp_check_key_press( KEY_RIGHT ) ) {place_dir |= BITS_RIGHT; }
+		if ( vdp_check_key_press( KEY_UP ) ) {place_dir |= BITS_UP; }
+		if ( vdp_check_key_press( KEY_DOWN ) ) {place_dir |= BITS_DOWN; }
 
 		// keep cursor on screen
-		if ( cursorx < 0 ) { place_dir=SCROLL_RIGHT; }
-		if ( cursory < 0 ) { place_dir=SCROLL_DOWN; }
-		if ( cursorx > gScreenWidth-gTileSize ) { place_dir=SCROLL_LEFT; }
-		if ( cursory > gScreenHeight-gTileSize ) { place_dir=SCROLL_UP; }
+		if ( cursorx < 0 ) { place_dir = BITS_RIGHT; }
+		if ( cursory < 0 ) { place_dir = BITS_DOWN; }
+		if ( cursorx > gScreenWidth-gTileSize ) { place_dir = BITS_LEFT; }
+		if ( cursory > gScreenHeight-gTileSize ) { place_dir = BITS_UP; }
 
 		// move the cursor OR place rectangle
-		if (place_dir>=0 && ( key_wait_ticks < clock() ) ) {
+		if (place_dir>0 && ( key_wait_ticks < clock() ) ) {
 			key_wait_ticks = clock() + key_wait;
 			if ( bInfoDisplayed ) clear_info();
-			draw_place(false);
-			switch(place_dir) {
-				case SCROLL_RIGHT: cursor_tx++; break;
-				case SCROLL_LEFT: cursor_tx--; break;
-				case SCROLL_UP: cursor_ty--; break;
-				case SCROLL_DOWN: cursor_ty++; break;
-				default: break;
-			}
+			if ( bPlace) draw_place(false);
+
+			if ( place_dir & BITS_UP ) cursor_ty--;
+			if ( place_dir & BITS_RIGHT ) cursor_tx++;
+			if ( place_dir & BITS_DOWN ) cursor_ty++;
+			if ( place_dir & BITS_LEFT ) cursor_tx--;
+
 			draw_place(true);
 		}
 
