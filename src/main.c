@@ -374,6 +374,12 @@ void game_loop()
 			if ( bInfoDisplayed ) clear_info();
 			do_place();
 		}
+		if ( vdp_check_key_press( KEY_backspace ) ) // BACKSPACE - delete item at cursor
+		{
+			key_wait_ticks = clock() + key_wait;
+		}
+
+
 		if ( vdp_check_key_press( KEY_backtick ) )  // ' - toggle debug
 		{
 			if (key_wait_ticks < clock()) 
