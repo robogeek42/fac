@@ -128,7 +128,6 @@ void scroll_screen(int dir, int step);
 bool can_scroll_screen(int dir, int step);
 void draw_horizontal(int tx, int ty, int len);
 void draw_vertical(int tx, int ty, int len);
-void recentre();
 
 int load_map(char *mapname);
 void place_feature_overlay(uint8_t *data, int sx, int sy, int tile, int tx, int ty);
@@ -161,6 +160,7 @@ void draw_number(int n, int px, int py);
 void draw_number_lj(int n, int px, int py);
 void show_info();
 void clear_info();
+void do_mining();
 
 void wait()
 {
@@ -328,44 +328,43 @@ void game_loop()
 			draw_place(true);
 		}
 			
-		if ( vdp_check_key_press( KEY_c ) ) { recentre(); }
-		if ( vdp_check_key_press( KEY_p ) ) { 
+		if ( vdp_check_key_press( KEY_p ) ) { // do place - get ready to place an item from inventory
 			if (key_wait_ticks < clock()) 
 			{
+				key_wait_ticks = clock() + key_wait;
 				if ( bInfoDisplayed ) clear_info();
 				if ( !bPlace ) {
 					start_place();
 				} else {
 					stop_place();
 				}
-				key_wait_ticks = clock() + key_wait;
 			}
 		}
-		if ( vdp_check_key_press( KEY_q ) ) {
+		if ( vdp_check_key_press( KEY_q ) ) { // quit out of place state
 			if (key_wait_ticks < clock()) 
 			{
+				key_wait_ticks = clock() + key_wait;
 				if ( bInfoDisplayed ) clear_info();
 				stop_place(); 
-				key_wait_ticks = clock() + key_wait;
 			}
 		}
-		if ( key_pressed_code == KEY_r ) { // "r" Check actual key code - distinguishes lower/upper case
+		if ( key_pressed_code == KEY_r ) { // "r" rotate belt. Check actual key code - distinguishes lower/upper case
 			if (bPlace && key_wait_ticks < clock() ) {
+				key_wait_ticks = clock() + key_wait;
 				if ( bInfoDisplayed ) clear_info();
 				place_belt_index++;  
 				place_belt_index = place_belt_index % 4;
-				key_wait_ticks = clock() + key_wait;
 			}
 		}
-		if ( key_pressed_code == KEY_R ) { // "R" Check actual key code - distinguishes lower/upper case
+		if ( key_pressed_code == KEY_R ) { // "R" rotate belt. Check actual key code - distinguishes lower/upper case
 			if (bPlace && key_wait_ticks < clock() ) {
+				key_wait_ticks = clock() + key_wait;
 				if ( bInfoDisplayed ) clear_info();
 				place_belt_index--;  
 				if (place_belt_index < 0) place_belt_index += 4;
-				key_wait_ticks = clock() + key_wait;
 			}
 		}
-		if ( vdp_check_key_press( KEY_enter ) ) // ENTER
+		if ( vdp_check_key_press( KEY_enter ) ) // ENTER - start placement state
 		{
 			if ( bInfoDisplayed ) clear_info();
 			do_place();
@@ -374,39 +373,48 @@ void game_loop()
 		{
 			if (key_wait_ticks < clock()) 
 			{
+				key_wait_ticks = clock() + key_wait;
 				debug = !debug;
 				draw_screen();
-				key_wait_ticks = clock() + key_wait;
 			}
 		}
 
-		if ( vdp_check_key_press( KEY_x ) ) { // x
+		if ( vdp_check_key_press( KEY_x ) ) { // x - exit
 			TAB(6,8);printf("Are you sure?");
 			char k=getchar(); 
 			if (k=='y') exit=1;
 			draw_screen();
 		}
 
-		if ( vdp_check_key_press( KEY_e ) ) 
+		if ( vdp_check_key_press( KEY_e ) ) // Brung up inventory
 		{
 			if (key_wait_ticks < clock()) 
 			{
+				key_wait_ticks = clock() + key_wait;
 				if ( bInfoDisplayed ) clear_info();
 				show_inventory(20,20);
-				key_wait_ticks = clock() + key_wait;
 			}
 		}
-		if ( vdp_check_key_press( KEY_i ) ) 
+		if ( vdp_check_key_press( KEY_i ) ) // i for item info
 		{
 			if (key_wait_ticks < clock()) 
 			{
+				key_wait_ticks = clock() + key_wait;
 				if ( bInfoDisplayed ) 
 				{
 					clear_info();
 				} else {
 					show_info();
 				}
+			}
+		}
+		if ( vdp_check_key_press( KEY_m ) )  // m for MINE
+		{
+			if (key_wait_ticks < clock()) 
+			{
 				key_wait_ticks = clock() + key_wait;
+				do_mining();
+
 			}
 		}
 
@@ -709,14 +717,6 @@ bool move_bob(int dir, int speed)
 	bob_anim_ticks = clock()+10;
 
 	return moved;
-}
-
-void recentre()
-{
-	xpos = bobx - gScreenWidth/2;
-	ypos = boby - gScreenHeight/2;
-	draw_screen();
-	move_wait_ticks = clock() + 1;
 }
 
 void start_place()
@@ -1124,16 +1124,19 @@ void show_inventory(int X, int Y)
 	// game loop for interacting with inventory
 	clock_t key_wait_ticks = clock() + 20;
 	bool finish = false;
+	bool bDoPlaceAfterInventory = false;
 	do {
 
 		if ( key_wait_ticks < clock() && 
 				(vdp_check_key_press( KEY_e ) ||
 				 vdp_check_key_press( KEY_x ) ||
-				 vdp_check_key_press( KEY_enter) ) )
+				 vdp_check_key_press( KEY_enter ) ) )
 		{
 			key_wait_ticks = clock()+10;
+			if ( vdp_check_key_press( KEY_enter ) ) bDoPlaceAfterInventory=true;
 			finish=true;
 			item_selected = inventory[inv_selected].item;
+			// delay otherwise x will cause exit from program
 			while (key_wait_ticks > clock()) vdp_update_key_state();
 		}
 		// cursor movement
@@ -1191,7 +1194,7 @@ void show_inventory(int X, int Y)
 
 	vdp_select_sprite( CURSOR_SPRITE );
 	vdp_show_sprite();
-	start_place();
+	if ( bDoPlaceAfterInventory ) start_place();
 }
 
 void draw_digit(int i, int px, int py)
@@ -1278,4 +1281,48 @@ void clear_info()
 	draw_screen();
 	bInfoDisplayed = false;
 	return;
+}
+
+void do_mining()
+{
+	// Mining/Tree-cutting
+	// 1) cursor must be next o bob in direction they are facing
+	// 2) cursor must be on an ore or tree (currently all FEATURES)
+	// 3) reduce feature count by 1 every n ticks and add to inventory
+	// 4) if count is < 0, remove
+
+	bool bNext=false;
+	int bx = getTileX(bobx);
+	int by = getTileY(boby);
+	switch ( bob_facing )
+	{
+		case BOB_LEFT:
+			if ( cursor_tx == bx - 1 ) bNext=true;
+			break;
+		case BOB_RIGHT:
+			if ( cursor_tx == bx + 1 ) bNext=true;
+			break;
+		case BOB_UP:
+			if ( cursor_ty == by - 1 ) bNext=true;
+			break;
+		case BOB_DOWN:
+			if ( cursor_ty == by + 1 ) bNext=true;
+			break;
+		default:
+			break;
+	}
+
+	int feature = (tilemap[ cursor_ty*gMapWidth +  cursor_tx] >> 4) -1;
+	if ( !bNext || feature < 0 ) return;
+	
+	// resource count not implemented yet
+
+	int feat_type = item_feature_map[feature].feature_type;
+	uint8_t raw_item = process_map[feat_type - IT_FEAT_STONE].raw_type;
+
+	if ( raw_item > 0)
+	{
+		// add to inventory
+		add_item(inventory, raw_item, 1);
+	}
 }
