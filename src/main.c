@@ -1000,8 +1000,9 @@ void move_items_on_belts()
 
 				if (moved)
 				{
-					bool found = findItem(currPtr->item, nextx-offset, nexty-offset);
-					found |= findItem(currPtr->item, nnx-offset, nny-offset);
+					// check next pixel and the one after in the same direction
+					bool found = isAnythingAtXY( nextx-offset, nexty-offset );
+					found |= isAnythingAtXY( nnx-offset, nny-offset );
 					if (!found) 
 					{
 						currPtr->x = nextx - offset;

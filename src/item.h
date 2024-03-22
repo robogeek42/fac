@@ -48,8 +48,11 @@ ItemNodePtr popBackItem();
 // print the linked list 
 void printItemList();
 
-// check if a key is in the list
-bool findItem(uint8_t key, int keyx, int keyy);
+// check if a full key is in the list
+bool isItemInList(uint8_t key, int keyx, int keyy);
+
+// check if a anything is at X,Y in the list
+bool isAnythingAtXY(int keyx, int keyy);
 
 #define BM_SIZE16 0
 #define BM_SIZE8 1

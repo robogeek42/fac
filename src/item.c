@@ -147,7 +147,7 @@ void printItemList()
 }
 
 // check if a key is in the list
-bool findItem(uint8_t key, int keyx, int keyy) 
+bool isItemInList(uint8_t key, int keyx, int keyy) 
 {
 	if (isEmptyItemList()) {
 		return false;
@@ -156,6 +156,27 @@ bool findItem(uint8_t key, int keyx, int keyy)
 	ItemNodePtr currPtr = itemlist;
 	while (currPtr != NULL ) {
 		if (currPtr->item == key && currPtr->x == keyx && currPtr->y == keyy)
+		{
+			break;
+		}
+		currPtr = currPtr->next;
+	}
+
+	if (currPtr == NULL) {
+		return false;
+	}
+
+	return true;
+}
+bool isAnythingAtXY(int keyx, int keyy) 
+{
+	if (isEmptyItemList()) {
+		return false;
+	}
+
+	ItemNodePtr currPtr = itemlist;
+	while (currPtr != NULL ) {
+		if ( currPtr->x == keyx && currPtr->y == keyy )
 		{
 			break;
 		}

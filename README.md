@@ -11,6 +11,7 @@ So far:
 To add:
 - Machine functionality
 - Movements from/to belts/machines
-- Mining/Forestry
+- Mining/Forestry (part done)
+- SOUND!
 
 And that is before any overt optimisation, although I can't help myself
