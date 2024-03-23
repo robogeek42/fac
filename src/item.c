@@ -4,15 +4,15 @@
 */
 #include "item.h"
 
-extern ItemNodePtr itemlist;
+extern int gTileSize;
 
 // check if the list is empty
-bool isEmptyItemList() {
-	return itemlist == NULL;
+bool isEmptyItemList(ItemNodePtr* listptr) {
+	return (*listptr) == NULL;
 }
 
 // Insert data at the front of the list
-void insertAtFrontItemList(uint8_t item, int x, int y) 
+void insertAtFrontItemList(ItemNodePtr *listptr, uint8_t item, int x, int y) 
 {
 	ItemNodePtr node = (ItemNodePtr) malloc(sizeof(struct ItemNode));
 	if (node==NULL) {
@@ -24,19 +24,19 @@ void insertAtFrontItemList(uint8_t item, int x, int y)
 	node->y = y;
 	node->next = NULL;
 	//printf("Insert %p: %u %d,%d\n", node, node->item, node->x, node->y);
-	if (isEmptyItemList()) {
-		itemlist = node;
+	if (isEmptyItemList(listptr)) {
+		(*listptr) = node;
 		//printf("empty\n");
 	} else {
-		node->next = itemlist;
-		itemlist = node;
+		node->next = (*listptr);
+		(*listptr) = node;
 		//printf("next %p\n",node->next);
 	}
 
 }
 	
 // insert data at the back of the linked list
-void insertAtBackItemList(uint8_t item, int x, int y) 
+void insertAtBackItemList(ItemNodePtr *listptr, uint8_t item, int x, int y) 
 {
 	ItemNodePtr node = (ItemNodePtr) malloc(sizeof(struct ItemNode));
 	if (node==NULL) {
@@ -48,11 +48,11 @@ void insertAtBackItemList(uint8_t item, int x, int y)
 	node->y = y;
 	node->next = NULL;
 	
-	if (isEmptyItemList()) {
-		itemlist = node;
+	if (isEmptyItemList(listptr)) {
+		(*listptr) = node;
 	} else {
 		// find the last node 
-		ItemNodePtr currPtr = itemlist;
+		ItemNodePtr currPtr = (*listptr);
 		while (currPtr->next != NULL) {
 			currPtr = currPtr->next;
 		}
@@ -63,26 +63,26 @@ void insertAtBackItemList(uint8_t item, int x, int y)
 }
 	
 // returns the data at first node 
-ItemNodePtr topFrontItem() 
+ItemNodePtr topFrontItem(ItemNodePtr *listptr) 
 {
-	if (isEmptyItemList()) {
+	if (isEmptyItemList(listptr)) {
 		//printf("%s", "List is empty");
 		return NULL;
 	} else {
-		return itemlist;
+		return (*listptr);
 	}
 }
 
 // returns the data at last node 
-ItemNodePtr topBackItem() 
+ItemNodePtr topBackItem(ItemNodePtr *listptr) 
 {
-	if (isEmptyItemList()) {
+	if (isEmptyItemList(listptr)) {
 		//printf("%s", "List is empty");
 		return NULL;
-	} else if (itemlist->next == NULL) {
-		return itemlist;
+	} else if ((*listptr)->next == NULL) {
+		return (*listptr);
 	} else {
-		ItemNodePtr currPtr = itemlist;
+		ItemNodePtr currPtr = (*listptr);
 		while (currPtr->next != NULL) {
 			currPtr = currPtr->next;
 		}
@@ -91,45 +91,40 @@ ItemNodePtr topBackItem()
 }
 
 // removes the item at front of the linked list and return 
-ItemNodePtr popFrontItem() 
+ItemNodePtr popFrontItem(ItemNodePtr *listptr) 
 {
 	ItemNodePtr itemPtr = NULL;
-	if (isEmptyItemList()) {
+	if (isEmptyItemList(listptr)) {
 		//printf("%s", "List is empty");
 	} else {
-		ItemNodePtr nextPtr = itemlist->next;
-		itemPtr = itemlist;
-		// remove head
-		//free(itemlist);
+		ItemNodePtr nextPtr = (*listptr)->next;
+		itemPtr = (*listptr);
+		itemPtr->next = NULL;
 		
 		// make nextptr head 
-		itemlist = nextPtr;
+		(*listptr) = nextPtr;
 	}
 	
 	return itemPtr;
 }
 
 // remove the item at the back of the linked list and return 
-ItemNodePtr popBackItem() 
+ItemNodePtr popBackItem(ItemNodePtr *listptr) 
 {
 	ItemNodePtr itemPtr = NULL;
-	if (isEmptyItemList()) {
+	if (isEmptyItemList(listptr)) {
 		//printf("%s", "List is empty");
 		return NULL;
-	} else if (itemlist->next == NULL) {
-	   itemPtr = itemlist;
-	   //free(itemlist);
-	   //itemlist = NULL;
+	} else if ((*listptr)->next == NULL) {
+	   itemPtr = (*listptr);
 	} else {
-		ItemNodePtr currPtr = itemlist;
+		ItemNodePtr currPtr = (*listptr);
 		ItemNodePtr prevPtr = NULL;
 		while (currPtr->next != NULL) {
 			prevPtr = currPtr;
 			currPtr = currPtr->next;
 		}
 		itemPtr = currPtr;
-		//free(currPtr);
-		//currPtr = NULL;
 		prevPtr->next = NULL;
 	} 
 	
@@ -137,9 +132,9 @@ ItemNodePtr popBackItem()
 }
 
 // print the linked list 
-void printItemList() 
+void printItemList(ItemNodePtr *listptr) 
 {
-	ItemNodePtr currPtr = itemlist;
+	ItemNodePtr currPtr = (*listptr);
 	while (currPtr != NULL) {
 		printf("%p: %u %d,%d\n", currPtr, currPtr->item, currPtr->x, currPtr->y);
 		currPtr = currPtr->next;
@@ -147,13 +142,13 @@ void printItemList()
 }
 
 // check if a key is in the list
-bool isItemInList(uint8_t key, int keyx, int keyy) 
+bool isItemInList(ItemNodePtr *listptr, uint8_t key, int keyx, int keyy) 
 {
-	if (isEmptyItemList()) {
+	if (isEmptyItemList(listptr)) {
 		return false;
 	}
 
-	ItemNodePtr currPtr = itemlist;
+	ItemNodePtr currPtr = (*listptr);
 	while (currPtr != NULL ) {
 		if (currPtr->item == key && currPtr->x == keyx && currPtr->y == keyy)
 		{
@@ -168,13 +163,13 @@ bool isItemInList(uint8_t key, int keyx, int keyy)
 
 	return true;
 }
-bool isAnythingAtXY(int keyx, int keyy) 
+bool isAnythingAtXY(ItemNodePtr *listptr, int keyx, int keyy) 
 {
-	if (isEmptyItemList()) {
+	if (isEmptyItemList(listptr)) {
 		return false;
 	}
 
-	ItemNodePtr currPtr = itemlist;
+	ItemNodePtr currPtr = (*listptr);
 	while (currPtr != NULL ) {
 		if ( currPtr->x == keyx && currPtr->y == keyy )
 		{
@@ -188,6 +183,47 @@ bool isAnythingAtXY(int keyx, int keyy)
 	}
 
 	return true;
+}
+
+ItemNodePtr popItemsAtTile(ItemNodePtr *listptr, int tx, int ty )
+{
+	if (isEmptyItemList(listptr)) {
+		return NULL;
+	}
+	ItemNodePtr tilelist = NULL; // head of list of items on this tile
+
+	ItemNodePtr prevPtr = NULL;
+	ItemNodePtr currPtr = (*listptr);
+	ItemNodePtr currNext = NULL;
+	while (currPtr != NULL ) {
+		currNext = currPtr->next;
+
+		if ( currPtr->x >= tx*gTileSize &&
+			 currPtr->x < (tx+1)*gTileSize &&
+		  	 currPtr->y >= ty*gTileSize &&
+		  	 currPtr->y < (ty+1)*gTileSize )
+		{
+			// cut the current item from the main list
+			if (prevPtr)
+			{
+				// case where we are at middle or end (currNext==NUL)
+				prevPtr->next = currNext;
+			} else {
+				// case where we were at begining or only item 
+				(*listptr) = currNext;
+				prevPtr = NULL;
+			}
+
+			// insert at front of the new list
+			currPtr->next = tilelist;
+			tilelist = currPtr;
+
+		} else {
+			prevPtr = currPtr;
+		}
+		currPtr = currNext;
+	}
+	return tilelist;
 }
 
 bool isBelt(int item) {

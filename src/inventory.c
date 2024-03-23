@@ -30,6 +30,9 @@ int find_item(INV_ITEM *inv, uint8_t item)
 	return index;
 }
 
+// add count items to inventory in slot containing that item
+// if not found find a slot and add
+// return -1 if inventory is full
 int add_item(INV_ITEM *inv, uint8_t item, int count)
 {
 	int index = find_item(inv, item);
@@ -64,3 +67,21 @@ int add_item(INV_ITEM *inv, uint8_t item, int count)
 
 	return index;
 }
+
+// reduce item count by count
+// if not found return -1, or index of item in inventory
+int remove_item(INV_ITEM *inv, uint8_t item, int count)
+{
+	int index = find_item(inv, item);
+	if ( index < 0 )
+	{
+		return index;
+	}
+	inv[index].count -= count;
+	if ( inv[index].count == 0 )
+	{
+		inv[index].item = 255;
+	}
+	return index;
+}
+

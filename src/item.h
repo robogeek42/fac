@@ -25,34 +25,37 @@ struct ItemNode {
 typedef struct ItemNode *ItemNodePtr;
 
 // check if the list is empty
-bool isEmptyItemList();
+bool isEmptyItemList(ItemNodePtr *listptr);
 
 // Insert data at the front of the list
-void insertAtFrontItemList(uint8_t item, int x, int y);
+void insertAtFrontItemList(ItemNodePtr *listptr, uint8_t item, int x, int y);
 	
 // insert data at the back of the linked list
-void insertAtBackItemList(uint8_t item, int x, int y);
+void insertAtBackItemList(ItemNodePtr *listptr, uint8_t item, int x, int y);
 	
 // returns the data at first node 
-ItemNodePtr topFrontItem();
+ItemNodePtr topFrontItem(ItemNodePtr *listptr);
 
 // returns the data at last node 
-ItemNodePtr topBackItem();
+ItemNodePtr topBackItem(ItemNodePtr *listptr);
 
 // removes the item at front of the linked list and return 
-ItemNodePtr popFrontItem();
+ItemNodePtr popFrontItem(ItemNodePtr *listptr);
 
 // remove the item at the back of the linked list and return 
-ItemNodePtr popBackItem();
+ItemNodePtr popBackItem(ItemNodePtr *listptr);
 
 // print the linked list 
-void printItemList();
+void printItemList(ItemNodePtr *listptr);
 
 // check if a full key is in the list
-bool isItemInList(uint8_t key, int keyx, int keyy);
+bool isItemInList(ItemNodePtr *listptr, uint8_t key, int keyx, int keyy);
 
 // check if a anything is at X,Y in the list
-bool isAnythingAtXY(int keyx, int keyy);
+bool isAnythingAtXY(ItemNodePtr *listptr, int keyx, int keyy);
+
+// return list of items at a tile and remove them from the itemlist
+ItemNodePtr popItemsAtTile(ItemNodePtr *listptr,  int tx, int ty );
 
 #define BM_SIZE16 0
 #define BM_SIZE8 1

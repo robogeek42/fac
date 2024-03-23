@@ -158,6 +158,7 @@ void drop_item(int item);
 void move_items_on_belts();
 void print_item_pos();
 void draw_items();
+void draw_items_at_tile(int tx, int ty);
 
 void show_inventory(int X, int Y);
 void draw_digit(int i, int px, int py);
@@ -166,6 +167,8 @@ void draw_number_lj(int n, int px, int py);
 void show_info();
 void clear_info();
 void do_mining();
+void removeAtCursor();
+void pickupItemsAtTile(int tx, int ty);
 
 void wait()
 {
@@ -374,9 +377,11 @@ void game_loop()
 			if ( bInfoDisplayed ) clear_info();
 			do_place();
 		}
-		if ( vdp_check_key_press( KEY_backspace ) ) // BACKSPACE - delete item at cursor
+
+		if ( vdp_check_key_press( KEY_delete ) ) // DELETE - delete item at cursor
 		{
 			key_wait_ticks = clock() + key_wait;
+			removeAtCursor();
 		}
 
 
@@ -393,7 +398,7 @@ void game_loop()
 		if ( vdp_check_key_press( KEY_x ) ) { // x - exit
 			TAB(6,8);printf("Are you sure?");
 			char k=getchar(); 
-			if (k=='y') exit=1;
+			if (k=='y' || k=='Y') exit=1;
 			draw_screen();
 		}
 
@@ -426,6 +431,16 @@ void game_loop()
 				key_wait_ticks = clock() + key_wait;
 				do_mining();
 
+			}
+		}
+		if ( vdp_check_key_press( KEY_z ) )  // z - pick-up items under cursor
+		{
+			if (key_wait_ticks < clock()) 
+			{
+				key_wait_ticks = clock() + key_wait;
+			
+				pickupItemsAtTile(cursor_tx, cursor_ty);	
+				draw_screen();
 			}
 		}
 
@@ -929,13 +944,26 @@ void do_place()
 	if ( !bPlace ) return;
    	if ( isBelt(item_selected) ) {
 		if ( place_belt_selected<0 ) return;
-		layer_belts[gMapWidth * cursor_ty + cursor_tx] = place_belt_selected;
+
+		int ret = remove_item( inventory, IT_BELT, 1 );
+		if ( ret >= 0 )
+		{
+			layer_belts[gMapWidth * cursor_ty + cursor_tx] = place_belt_selected;
+		}
 	}
 	if ( isResource(item_selected) ) {
-		drop_item(item_selected);
+		int ret = remove_item( inventory, item_selected, 1 );
+		if ( ret >= 0 )
+		{
+			drop_item(item_selected);
+		}
 	}
 	if ( isMachine(item_selected) ) {
-		layer_machines[gMapWidth * cursor_ty + cursor_tx] = item_selected;
+		int ret = remove_item( inventory, item_selected, 1 );
+		if ( ret >= 0 )
+		{
+			layer_machines[gMapWidth * cursor_ty + cursor_tx] = item_selected;
+		}
 	}
 	
 	stop_place();
@@ -943,7 +971,7 @@ void do_place()
 
 void drop_item(int item)
 {
-	insertAtFrontItemList(item, cursor_tx*gTileSize+4, cursor_ty*gTileSize+4);
+	insertAtFrontItemList(&itemlist, item, cursor_tx*gTileSize+4, cursor_ty*gTileSize+4);
 }
 
 void move_items_on_belts()
@@ -1007,8 +1035,8 @@ void move_items_on_belts()
 				if (moved)
 				{
 					// check next pixel and the one after in the same direction
-					bool found = isAnythingAtXY( nextx-offset, nexty-offset );
-					found |= isAnythingAtXY( nnx-offset, nny-offset );
+					bool found = isAnythingAtXY(&itemlist, nextx-offset, nexty-offset );
+					found |= isAnythingAtXY(&itemlist, nnx-offset, nny-offset );
 					if (!found) 
 					{
 						currPtr->x = nextx - offset;
@@ -1025,6 +1053,7 @@ void move_items_on_belts()
 			int px=getTilePosInScreenX(tx);
 			int py=getTilePosInScreenY(ty);
 			draw_tile(tx, ty, px, py);
+			draw_items_at_tile(tx, ty);
 		}	
 		currPtr = currPtr->next;
 	}
@@ -1068,6 +1097,21 @@ void draw_items()
 		currPtr = currPtr->next;
 		cnt++;
 		if (cnt % 4 == 0) vdp_update_key_state();
+	}
+}
+void draw_items_at_tile(int tx, int ty) 
+{
+	ItemNodePtr currPtr = itemlist;
+	while (currPtr != NULL) {
+		if ( currPtr->x >= tx*gTileSize &&
+			 currPtr->x < (tx+1)*gTileSize &&
+		  	 currPtr->y >= ty*gTileSize &&
+		  	 currPtr->y < (ty+1)*gTileSize )
+		{
+			vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+			vdp_draw_bitmap( currPtr->x - xpos, currPtr->y - ypos );
+		}
+		currPtr = currPtr->next;
 	}
 }
 
@@ -1335,6 +1379,57 @@ void do_mining()
 	if ( raw_item > 0)
 	{
 		// add to inventory
-		add_item(inventory, raw_item, 1);
+		/* int ret = */add_item(inventory, raw_item, 1);
+		// not doing anything if inventory is full ...
+	}
+}
+
+// remove Belt or Machine at cursor (eith delete key)
+void removeAtCursor()
+{
+	if ( layer_belts[ cursor_tx + cursor_ty * gMapWidth ] >= 0 )
+	{
+		add_item( inventory, IT_BELT, 1 );
+		layer_belts[ cursor_tx + cursor_ty * gMapWidth ] = -1;
+	}
+	if ( layer_machines[ cursor_tx + cursor_ty * gMapWidth ] >= 0 )
+	{
+		int machine = layer_machines[ cursor_tx + cursor_ty * gMapWidth ];
+		add_item( inventory, machine, 1 );
+		layer_machines[ cursor_tx + cursor_ty * gMapWidth ] = -1;
+	}
+	draw_tile( cursor_tx, cursor_ty, cursorx, cursory );
+}
+
+void pickupItemsAtTile(int tx, int ty)
+{
+	if ( !isEmptyItemList(&itemlist) ) 
+	{
+		//TAB(0,0);
+		//printItemList(&itemlist);
+
+		ItemNodePtr itptr = popItemsAtTile(&itemlist, tx, ty);
+
+		//printf("after\n");
+		//printItemList(&itemlist);
+		//printf("in new list\n");
+		//printItemList(&itptr);
+		//wait();
+
+		if ( itptr != NULL )
+		{
+			ItemNodePtr ip = popFrontItem(&itptr);
+			//printf("pop %p ip->next %p \n",ip, ip->next);
+			while (ip)
+			{
+				//printf("remove %p %d %d,%d\n", ip, ip->item, ip->x, ip->y);
+				add_item( inventory, ip->item, 1 );
+				free(ip);
+				ip=NULL;
+				
+				ip = popFrontItem(&itptr);
+			}
+			//wait();
+		}	
 	}
 }

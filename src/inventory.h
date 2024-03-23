@@ -21,5 +21,6 @@ typedef struct {
 void init_inventory(INV_ITEM *);
 int find_item(INV_ITEM *inv, uint8_t item);
 int add_item(INV_ITEM *inv, uint8_t item, int count);
+int remove_item(INV_ITEM *inv, uint8_t item, int count);
 
 #endif
