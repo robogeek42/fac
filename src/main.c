@@ -103,6 +103,14 @@ uint8_t item_selected = 0;
 // info
 bool bInfoDisplayed = false;
 
+// Mining state
+bool bIsMining = false;
+int mining_time = 100;
+clock_t mining_time_ticks;
+int bob_mining_anim_time = 20;
+clock_t bob_mining_anim_ticks;
+int bob_mining_anim_frame = 0;
+
 //------------------------------------------------------------
 
 //------------------------------------------------------------
@@ -167,6 +175,7 @@ void draw_number_lj(int n, int px, int py);
 void show_info();
 void clear_info();
 void do_mining();
+bool check_can_mine();
 void removeAtCursor();
 void pickupItemsAtTile(int tx, int ty);
 
@@ -429,10 +438,31 @@ void game_loop()
 			if (key_wait_ticks < clock()) 
 			{
 				key_wait_ticks = clock() + key_wait;
-				do_mining();
+				if ( ! bIsMining && check_can_mine() )
+				{
+					mining_time_ticks = clock() + mining_time;;
+					bob_mining_anim_ticks = clock() + bob_mining_anim_time;;
+					bIsMining = true;
+				}
 
 			}
 		}
+
+		if ( bIsMining )
+		{
+			if ( bob_mining_anim_ticks < clock() )
+			{
+				bob_mining_anim_ticks = clock() + bob_mining_anim_time;
+				vdp_nth_sprite_frame( bob_mining_anim_frame++ );
+				bob_mining_anim_frame %= 2;
+			}
+		  	if ( mining_time_ticks < clock() )
+			{
+				bIsMining = false;
+				do_mining();
+			}
+		}
+
 		if ( vdp_check_key_press( KEY_z ) )  // z - pick-up items under cursor
 		{
 			if (key_wait_ticks < clock()) 
@@ -668,7 +698,12 @@ void place_feature_overlay(uint8_t *data, int sx, int sy, int tile, int tx, int 
 
 void draw_bob(int bx, int by, int px, int py)
 {
-	select_bob_sprite( bob_facing );
+	if ( bIsMining )
+	{
+		select_bob_sprite( bob_facing + BOB_SPRITE_ACT_DOWN );
+	} else {
+		select_bob_sprite( bob_facing );
+	}
 	vdp_move_sprite_to( bx - px, by - py );
 	return;
 }
@@ -1339,14 +1374,8 @@ void clear_info()
 	return;
 }
 
-void do_mining()
+bool check_can_mine()
 {
-	// Mining/Tree-cutting
-	// 1) cursor must be next o bob in direction they are facing
-	// 2) cursor must be on an ore or tree (currently all FEATURES)
-	// 3) reduce feature count by 1 every n ticks and add to inventory
-	// 4) if count is < 0, remove
-
 	bool bNext=false;
 	int bx = getTileX(bobx);
 	int by = getTileY(boby);
@@ -1369,7 +1398,22 @@ void do_mining()
 	}
 
 	int feature = (tilemap[ cursor_ty*gMapWidth +  cursor_tx] >> 4) -1;
-	if ( !bNext || feature < 0 ) return;
+	if ( bNext && feature >= 0 ) return true;
+	return false;
+}
+
+void do_mining()
+{
+	// Mining/Tree-cutting
+	// 1) cursor must be next to bob in direction they are facing
+	// 2) cursor must be on an ore or tree (currently all FEATURES)
+	// 3) reduce feature count by 1 every n ticks and add to inventory
+	// 4) if count is < 0, remove
+
+	if (bIsMining) return;
+	if ( ! check_can_mine() ) return;
+
+	int feature = (tilemap[ cursor_ty*gMapWidth +  cursor_tx] >> 4) -1;
 	
 	// resource count not implemented yet
 

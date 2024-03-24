@@ -9,9 +9,9 @@
 #define BMOFF_FEAT16 BMOFF_TERR16 + NUM_BM_TERR16 
 #define NUM_BM_FEAT16 15
 
-#define FN_BOB16  "img/b16/bob%02d.rgb2"
+#define FN_BOB16  "img/facbob/fb%02d.rgb2"
 #define BMOFF_BOB16 BMOFF_FEAT16 + NUM_BM_FEAT16
-#define NUM_BM_BOB16 16
+#define NUM_BM_BOB16 24
 
 #define FN_BELT16 "img/belt16/belt%02d.rgb2"
 #define FN_BBELT16 "img/belt16/bbelt%02d.rgb2"
@@ -41,10 +41,15 @@
 #define BOB_SPRITE_UP 1
 #define BOB_SPRITE_LEFT 2
 #define BOB_SPRITE_RIGHT 3
+#define BOB_SPRITE_ACT_DOWN 4
+#define BOB_SPRITE_ACT_UP 5
+#define BOB_SPRITE_ACT_LEFT 6
+#define BOB_SPRITE_ACT_RIGHT 7
 
-#define NUM_BOB_SPRITES 4
 
-#define CURSOR_SPRITE 4
+#define NUM_BOB_SPRITES 8
+
+#define CURSOR_SPRITE 8
 
 void load_images();
 void create_sprites();
@@ -127,6 +132,12 @@ void create_sprites()
 	vdp_adv_create_sprite( BOB_SPRITE_UP, BMOFF_BOB16 + BOB_SPRITE_UP*4, 4 );
 	vdp_adv_create_sprite( BOB_SPRITE_LEFT, BMOFF_BOB16 + BOB_SPRITE_LEFT*4, 4 );
 	vdp_adv_create_sprite( BOB_SPRITE_RIGHT, BMOFF_BOB16 + BOB_SPRITE_RIGHT*4, 4 );
+
+	vdp_adv_create_sprite( BOB_SPRITE_ACT_DOWN, BMOFF_BOB16 + 16 + BOB_SPRITE_DOWN*2, 2 );
+	vdp_adv_create_sprite( BOB_SPRITE_ACT_UP, BMOFF_BOB16 + 16 + BOB_SPRITE_UP*2, 2 );
+	vdp_adv_create_sprite( BOB_SPRITE_ACT_LEFT, BMOFF_BOB16 + 16 + BOB_SPRITE_LEFT*2, 2 );
+	vdp_adv_create_sprite( BOB_SPRITE_ACT_RIGHT, BMOFF_BOB16 + 16 + BOB_SPRITE_RIGHT*2, 2 );
+
 	vdp_adv_create_sprite( CURSOR_SPRITE, BMOFF_CURSORS, 2 );
 
 	vdp_activate_sprites( NUM_BOB_SPRITES + 1 );
