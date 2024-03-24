@@ -256,12 +256,13 @@ int main(/*int argc, char *argv[]*/)
 
 	init_inventory(inventory);
 	// for test add some items
-	add_item(inventory, IT_BELT, 8); // belt
-	add_item(inventory, IT_STONE, 121);
-	add_item(inventory, IT_IRON_ORE, 287);
-	add_item(inventory, IT_COPPER_PLATE, 94);
+	add_item(inventory, IT_BELT, 20); // belt
+	add_item(inventory, IT_IRON_ORE, 12);
+	add_item(inventory, IT_COAL, 7);
+	add_item(inventory, IT_COPPER_PLATE, 10);
 	add_item(inventory, IT_FURNACE, 6);
-	add_item(inventory, IT_COPPER_ORE, 9876);
+	add_item(inventory, IT_MINER, 4);
+
 	inv_selected = 0; // belts
 	item_selected = 0; // belts
 
