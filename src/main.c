@@ -105,9 +105,9 @@ bool bInfoDisplayed = false;
 
 // Mining state
 bool bIsMining = false;
-int mining_time = 100;
+int mining_time = 200;
 clock_t mining_time_ticks;
-int bob_mining_anim_time = 20;
+int bob_mining_anim_time = 40;
 clock_t bob_mining_anim_ticks;
 int bob_mining_anim_frame = 0;
 
@@ -443,6 +443,8 @@ void game_loop()
 					mining_time_ticks = clock() + mining_time;;
 					bob_mining_anim_ticks = clock() + bob_mining_anim_time;;
 					bIsMining = true;
+					select_bob_sprite( BOB_SPRITE_ACT_DOWN+bob_facing );
+					vdp_move_sprite_to( bobx - xpos, boby - ypos );
 				}
 
 			}
@@ -453,13 +455,16 @@ void game_loop()
 			if ( bob_mining_anim_ticks < clock() )
 			{
 				bob_mining_anim_ticks = clock() + bob_mining_anim_time;
-				vdp_nth_sprite_frame( bob_mining_anim_frame++ );
-				bob_mining_anim_frame %= 2;
+				bob_mining_anim_frame = ( bob_mining_anim_frame+1 ) % 2;
+				vdp_select_sprite( BOB_SPRITE_ACT_DOWN + bob_facing );
+				vdp_nth_sprite_frame( bob_mining_anim_frame );
+				vdp_refresh_sprites();
 			}
 		  	if ( mining_time_ticks < clock() )
 			{
 				bIsMining = false;
 				do_mining();
+				select_bob_sprite( bob_facing );
 			}
 		}
 
@@ -1397,8 +1402,8 @@ bool check_can_mine()
 			break;
 	}
 
-	int feature = (tilemap[ cursor_ty*gMapWidth +  cursor_tx] >> 4) -1;
-	if ( bNext && feature >= 0 ) return true;
+	int overlay = (tilemap[ cursor_ty*gMapWidth +  cursor_tx] >> 4);
+	if ( bNext && overlay > 0 ) return true;
 	return false;
 }
 
