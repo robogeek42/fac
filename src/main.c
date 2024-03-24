@@ -126,6 +126,13 @@ clock_t bob_anim_ticks;
 clock_t move_wait_ticks;
 clock_t layer_wait_ticks;
 
+// message
+bool bMessage = false;
+int message_len = 0;
+int message_posx = 0;
+int message_posy = 0;
+clock_t message_timeout_ticks;
+
 void game_loop();
 
 int getWorldCoordX(int sx) { return (xpos + sx); }
@@ -178,6 +185,7 @@ void do_mining();
 bool check_can_mine();
 void removeAtCursor();
 void pickupItemsAtTile(int tx, int ty);
+void message_with_bm8(char *message, int bmID, int timeout);
 
 void wait()
 {
@@ -479,6 +487,16 @@ void game_loop()
 			}
 		}
 
+		if ( bMessage && message_timeout_ticks < clock() )
+		{
+			bMessage = false;
+			int tx=getTileX(message_posx);
+			int ty=getTileY(message_posy);
+			draw_horizontal( tx, ty, message_len+1 );
+			draw_horizontal_layer( tx, ty, message_len+1 );
+			draw_horizontal( tx, ty+1, message_len+1 );
+			draw_horizontal_layer( tx, ty+1, message_len+1 );
+		}
 		vdp_update_key_state();
 	} while (exit==0);
 
@@ -1430,6 +1448,7 @@ void do_mining()
 		// add to inventory
 		/* int ret = */add_item(inventory, raw_item, 1);
 		// not doing anything if inventory is full ...
+		message_with_bm8("+1",itemtypes[raw_item].bmID, 100);
 	}
 }
 
@@ -1481,4 +1500,24 @@ void pickupItemsAtTile(int tx, int ty)
 			//wait();
 		}	
 	}
+}
+
+void message_with_bm8(char *message, int bmID, int timeout)
+{
+	//int sx = gScreenWidth - 8*(strlen(message)+1);
+	//int sy = 0;
+	int sx = bobx-xpos +8;
+	int sy = boby-ypos -8;
+	message_posx = sx + xpos;
+	message_posy = sy + ypos;
+
+	vdp_adv_select_bitmap( bmID );
+	vdp_draw_bitmap( sx, sy );
+
+	TAB((sx/8)+1,(sy/8)); 
+	printf("%s",message);
+
+	bMessage = true;
+	message_len = strlen(message)+1;
+	message_timeout_ticks = clock()+timeout;
 }
