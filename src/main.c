@@ -116,7 +116,7 @@ int bob_mining_anim_frame = 0;
 //------------------------------------------------------------
 // Configuration vars
 int belt_speed = 7;
-int key_wait = 20;
+int key_wait = 15;
 #define TILE_INFO_FILE "img/tileinfo.txt"
 //------------------------------------------------------------
 
@@ -132,6 +132,11 @@ int message_len = 0;
 int message_posx = 0;
 int message_posy = 0;
 clock_t message_timeout_ticks;
+
+// FPS 
+int frame_time_in_ticks;
+clock_t ticks_start;
+clock_t display_fps_ticks;
 
 void game_loop();
 
@@ -286,7 +291,7 @@ void game_loop()
 	bob_anim_ticks = clock();
 	layer_wait_ticks = clock();
 	key_wait_ticks = clock();
-
+	display_fps_ticks = clock();
 
 	select_bob_sprite( bob_facing );
 	vdp_move_sprite_to( bobx - xpos, boby - ypos );
@@ -295,6 +300,7 @@ void game_loop()
 		int dir=-1;
 		int bob_dir = -1;
 		int place_dir=0;
+		ticks_start = clock();
 
 		if ( vdp_check_key_press( KEY_w ) ) { bob_dir = BOB_UP; dir=SCROLL_UP; }
 		if ( vdp_check_key_press( KEY_a ) ) { bob_dir = BOB_LEFT; dir=SCROLL_RIGHT; }
@@ -380,6 +386,7 @@ void game_loop()
 				if ( bInfoDisplayed ) clear_info();
 				place_belt_index++;  
 				place_belt_index = place_belt_index % 4;
+				draw_tile( cursor_tx, cursor_ty, cursorx, cursory );
 			}
 		}
 		if ( key_pressed_code == KEY_R ) { // "R" rotate belt. Check actual key code - distinguishes lower/upper case
@@ -498,7 +505,17 @@ void game_loop()
 			draw_horizontal( tx, ty+1, message_len+1 );
 			draw_horizontal_layer( tx, ty+1, message_len+1 );
 		}
+
+		if (debug && display_fps_ticks < clock() )
+		{
+			display_fps_ticks = clock() + 10;
+			COL(15);COL(128);
+			TAB(0,29); printf("%d",frame_time_in_ticks);
+		}
+
 		vdp_update_key_state();
+
+		frame_time_in_ticks = clock() - ticks_start;
 	} while (exit==0);
 
 }
@@ -1039,75 +1056,74 @@ void move_items_on_belts()
 	int offset = 4;
 	while (currPtr != NULL) {
 		bool moved = false;
-		if (itemIsOnScreen(currPtr))
-		{
-			int centrex = currPtr->x + offset;
-			int centrey = currPtr->y + offset;
-			int tx = getTileX(centrex);
-			int ty = getTileY(centrey);
-			int beltID = layer_belts[ tx + ty*gMapWidth ];
-			if (beltID >= 0)
-			{
-				int dx = centrex % gTileSize;
-				int dy = centrey % gTileSize;
-				int in = belts[beltID].in;
-				int out = belts[beltID].out;
-				int nextx = centrex;
-				int nexty = centrey;
-				int nnx = nextx;
-				int nny = nexty;
-				switch (in)
-				{
-					case 0:  // in from top - move down
-						if ( !moved && dy < (offset+4) ) { nexty++; nny+=2; moved=true; }
-						break;
-					case 1: // in from right - move left
-						if ( !moved && (8-dx) < ((8-offset)-4) ) { nextx--; nnx-=2;  moved=true; }
-						break;
-					case 2: // in from bottom - move up
-						if ( !moved && (8-dy) < ((8-offset)-4) ) { nexty--; nny-=2; moved=true; }
-						break;
-					case 3: // in from left - move right
-						if ( !moved && dx < (offset+4) ) { nextx++; nnx+=2; moved=true; }
-						break;
-					default:
-						break;
-				}
-				if (!moved) switch (out)
-				{
-					case 0: // out to top - move up
-						if ( !moved ) { nexty--; nny-=2; moved=true; }
-						break;
-					case 1: // out to right - move right
-						if ( !moved ) { nextx++; nnx+=2; moved=true; }
-						break;
-					case 2: // out to bottom - move down
-						if ( !moved ) { nexty++; nny+=2; moved=true; }
-						break;
-					case 3: // out to left - move left
-						if ( !moved ) { nextx--; nnx-=2; moved=true; }
-						break;
-					default:
-						break;
-				}
+		int centrex = currPtr->x + offset;
+		int centrey = currPtr->y + offset;
 
-				if (moved)
+		int tx = centrex >> 4; //getTileX(centrex);
+		int ty = centrey >> 4; //getTileY(centrey);
+		int beltID = layer_belts[ tx + ty*gMapWidth ];
+
+		if (beltID >= 0)
+		{
+			int dx = centrex % gTileSize;
+			int dy = centrey % gTileSize;
+			int in = belts[beltID].in;
+			int out = belts[beltID].out;
+			int nextx = centrex;
+			int nexty = centrey;
+			int nnx = nextx;
+			int nny = nexty;
+			switch (in)
+			{
+				case 0:  // in from top - move down
+					if ( !moved && dy < (offset+4) ) { nexty++; nny+=2; moved=true; }
+					break;
+				case 1: // in from right - move left
+					if ( !moved && (8-dx) < ((8-offset)-4) ) { nextx--; nnx-=2;  moved=true; }
+					break;
+				case 2: // in from bottom - move up
+					if ( !moved && (8-dy) < ((8-offset)-4) ) { nexty--; nny-=2; moved=true; }
+					break;
+				case 3: // in from left - move right
+					if ( !moved && dx < (offset+4) ) { nextx++; nnx+=2; moved=true; }
+					break;
+				default:
+					break;
+			}
+			if (!moved) switch (out)
+			{
+				case 0: // out to top - move up
+					if ( !moved ) { nexty--; nny-=2; moved=true; }
+					break;
+				case 1: // out to right - move right
+					if ( !moved ) { nextx++; nnx+=2; moved=true; }
+					break;
+				case 2: // out to bottom - move down
+					if ( !moved ) { nexty++; nny+=2; moved=true; }
+					break;
+				case 3: // out to left - move left
+					if ( !moved ) { nextx--; nnx-=2; moved=true; }
+					break;
+				default:
+					break;
+			}
+
+			if (moved)
+			{
+				// check next pixel and the one after in the same direction
+				bool found = isAnythingAtXY(&itemlist, nextx-offset, nexty-offset );
+				found |= isAnythingAtXY(&itemlist, nnx-offset, nny-offset );
+				if (!found) 
 				{
-					// check next pixel and the one after in the same direction
-					bool found = isAnythingAtXY(&itemlist, nextx-offset, nexty-offset );
-					found |= isAnythingAtXY(&itemlist, nnx-offset, nny-offset );
-					if (!found) 
-					{
-						currPtr->x = nextx - offset;
-						currPtr->y = nexty - offset;
-					}
+					currPtr->x = nextx - offset;
+					currPtr->y = nexty - offset;
 				}
 			}
 		}
-		int tx = getTileX(currPtr->x);
-		int ty = getTileY(currPtr->y);
-		int beltID = layer_belts[ tx + ty*gMapWidth ];
-		if (moved && beltID<0)
+		tx = currPtr->x >> 4; // getTileX(currPtr->x);
+		ty = currPtr->y >> 4; // getTileY(currPtr->y);
+		beltID = layer_belts[ tx + ty*gMapWidth ];
+		if (itemIsOnScreen(currPtr) && moved && beltID<0)
 		{
 			int px=getTilePosInScreenX(tx);
 			int py=getTilePosInScreenY(ty);
@@ -1512,11 +1528,13 @@ void message_with_bm8(char *message, int bmID, int timeout)
 	message_posx = sx + xpos;
 	message_posy = sy + ypos;
 
+	TAB((sx/8),(sy/8)); 
+	COL(15);COL(8+128);
+	printf("  %s",message);
+	COL(15);COL(128);
+
 	vdp_adv_select_bitmap( bmID );
 	vdp_draw_bitmap( sx, sy );
-
-	TAB((sx/8)+1,(sy/8)); 
-	printf("%s",message);
 
 	bMessage = true;
 	message_len = strlen(message)+1;

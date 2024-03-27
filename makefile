@@ -24,9 +24,9 @@ check: bin/$(NAME).bin
 	@if [ $(shell stat -L -c %s $<) -gt 65535 ]; then echo "WARNING !! Executable is greater than 64k!"; fi;
 
 install: bin/$(NAME).bin
-	#srec_cat bin/$(NAME).bin -binary -offset 0x40000 -o bin/$(NAME).hex -intel
+	srec_cat bin/$(NAME).bin -binary -offset 0x40000 -o bin/$(NAME).hex -intel
 	cp bin/$(NAME).bin $(NAME)
-	#rsync -rvu ./ ~/agon/sdcard_sync/cc/fac
+	rsync -rvu ./ ~/agon/sdcard_sync/fac
 
 
 run: install
