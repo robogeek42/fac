@@ -10,7 +10,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "item.h"
-#include "util.h"
 
 #define MAX_INVENTORY_ITEMS 20
 typedef struct {

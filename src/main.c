@@ -15,7 +15,7 @@
 #include <math.h>
 #include <time.h>
 #include <stdbool.h>
-#include "util.h"
+#include "../../agon_ccode/common/util.h"
 #include "item.h"
 #include "inventory.h"
 
