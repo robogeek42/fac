@@ -138,6 +138,9 @@ int frame_time_in_ticks;
 clock_t ticks_start;
 clock_t display_fps_ticks;
 
+clock_t func_start;
+int func_time[4] = { 0 };
+
 void game_loop();
 
 int getWorldCoordX(int sx) { return (xpos + sx); }
@@ -164,14 +167,14 @@ bool move_bob(int dir, int speed);
 
 void start_place();
 void stop_place();
-void draw_place(bool draw);
+void draw_cursor(bool draw);
 void draw_place_belt();
 
 void do_place();
 void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty);
 
-void draw_layer();
-void draw_horizontal_layer(int tx, int ty, int len);
+void draw_layer(bool draw_items);
+void draw_horizontal_layer(int tx, int ty, int len, bool draw_belts, bool draw_machines, bool draw_items);
 
 void drop_item(int item);
 
@@ -253,7 +256,8 @@ int main(/*int argc, char *argv[]*/)
 
 	// setup complete
 	vdp_mode(gMode);
-	vdp_logical_scr_dims(false);
+	vdp_cursor_enable( false );
+	vdp_logical_scr_dims( false );
 	//vdu_set_graphics_viewport()
 
 	load_images();
@@ -264,7 +268,7 @@ int main(/*int argc, char *argv[]*/)
 	add_item(inventory, IT_BELT, 20); // belt
 	add_item(inventory, IT_IRON_ORE, 12);
 	add_item(inventory, IT_COAL, 7);
-	add_item(inventory, IT_COPPER_PLATE, 10);
+	add_item(inventory, IT_COPPER_PLATE, 255);
 	add_item(inventory, IT_FURNACE, 6);
 	add_item(inventory, IT_MINER, 4);
 
@@ -276,7 +280,7 @@ int main(/*int argc, char *argv[]*/)
 my_exit:
 	free(tilemap);
 	vdp_mode(0);
-	vdp_logical_scr_dims(true);
+	vdp_logical_scr_dims( true );
 	vdp_cursor_enable( true );
 	return 0;
 }
@@ -286,15 +290,17 @@ void game_loop()
 	int exit=0;
 	
 	draw_screen();
-	draw_layer();
+	draw_layer(true);
 
 	bob_anim_ticks = clock();
 	layer_wait_ticks = clock();
 	key_wait_ticks = clock();
 	display_fps_ticks = clock();
+	frame_time_in_ticks = 0;
 
 	select_bob_sprite( bob_facing );
 	vdp_move_sprite_to( bobx - xpos, boby - ypos );
+	vdp_refresh_sprites();
 
 	do {
 		int dir=-1;
@@ -314,9 +320,16 @@ void game_loop()
 			// screen can scroll, move Bob AND screen
 			if (can_scroll_screen(dir, 1) && move_bob(bob_dir, 1) )
 			{
-				//draw_place(false); // remove cursor or it will smeer
+				if (debug)
+				{
+					int tx=getTileX(xpos);
+					int ty=getTileY(ypos + gScreenHeight -1);
+					draw_horizontal(tx,ty-1,6);
+					draw_horizontal(tx,ty,6);
+				}
+
 				scroll_screen(dir,1);
-				draw_place(true); // re-draw cursor
+				draw_cursor(true); // re-draw cursor
 			}
 			// can't scroll screen, just move Bob around
 			if (!can_scroll_screen(dir, 1))
@@ -341,23 +354,28 @@ void game_loop()
 		if (place_dir>0 && ( key_wait_ticks < clock() ) ) {
 			key_wait_ticks = clock() + key_wait;
 			if ( bInfoDisplayed ) clear_info();
-			if ( bPlace) draw_place(false);
+			if ( bPlace) draw_cursor(false);
 
 			if ( place_dir & BITS_UP ) cursor_ty--;
 			if ( place_dir & BITS_RIGHT ) cursor_tx++;
 			if ( place_dir & BITS_DOWN ) cursor_ty++;
 			if ( place_dir & BITS_LEFT ) cursor_tx--;
 
-			draw_place(true);
+			draw_cursor(true);
 		}
 
 		if (layer_wait_ticks < clock()) 
 		{
 			layer_wait_ticks = clock() + belt_speed; // belt anim speed
-			//draw_place(false);
-			draw_layer();
+			//draw_cursor(false);
+			draw_layer(true);
 			move_items_on_belts();
-			draw_place(true);
+			draw_cursor(true);
+		}
+		if (debug)
+		{
+			COL(15);COL(128);
+			TAB(0,29); printf("%d %d  ",frame_time_in_ticks,func_time[0]);
 		}
 			
 		if ( vdp_check_key_press( KEY_p ) ) { // do place - get ready to place an item from inventory
@@ -412,12 +430,9 @@ void game_loop()
 
 		if ( vdp_check_key_press( KEY_backtick ) )  // ' - toggle debug
 		{
-			if (key_wait_ticks < clock()) 
-			{
-				key_wait_ticks = clock() + key_wait;
-				debug = !debug;
-				draw_screen();
-			}
+			debug = !debug;
+			while ( vdp_check_key_press( KEY_backtick ) );
+			draw_screen();
 		}
 
 		if ( vdp_check_key_press( KEY_x ) ) { // x - exit
@@ -461,6 +476,7 @@ void game_loop()
 					bIsMining = true;
 					select_bob_sprite( BOB_SPRITE_ACT_DOWN+bob_facing );
 					vdp_move_sprite_to( bobx - xpos, boby - ypos );
+					vdp_refresh_sprites();
 				}
 
 			}
@@ -501,16 +517,9 @@ void game_loop()
 			int tx=getTileX(message_posx);
 			int ty=getTileY(message_posy);
 			draw_horizontal( tx, ty, message_len+1 );
-			draw_horizontal_layer( tx, ty, message_len+1 );
+			draw_horizontal_layer( tx, ty, message_len+1, true, true, true );
 			draw_horizontal( tx, ty+1, message_len+1 );
-			draw_horizontal_layer( tx, ty+1, message_len+1 );
-		}
-
-		if (debug && display_fps_ticks < clock() )
-		{
-			display_fps_ticks = clock() + 10;
-			COL(15);COL(128);
-			TAB(0,29); printf("%d",frame_time_in_ticks);
+			draw_horizontal_layer( tx, ty+1, message_len+1, true, true, true );
 		}
 
 		vdp_update_key_state();
@@ -817,6 +826,7 @@ bool move_bob(int dir, int speed)
 	bob_frame=(bob_frame+1)%4; 
 	vdp_nth_sprite_frame( bob_frame );
 	bob_anim_ticks = clock()+10;
+	vdp_refresh_sprites();
 
 	return moved;
 }
@@ -824,12 +834,12 @@ bool move_bob(int dir, int speed)
 void start_place()
 {
 	bPlace=true;
-	draw_place(true);
+	draw_cursor(true);
 }
 void stop_place()
 {
 	if (!bPlace) return;
-	draw_place(false);
+	draw_cursor(false);
 	bPlace=false;
 }
 
@@ -887,7 +897,7 @@ void draw_place_machine()
 }
 
 
-void draw_place(bool draw) 
+void draw_cursor(bool draw) 
 {
 	// undraw
 	if (!draw) {
@@ -923,25 +933,12 @@ void draw_place(bool draw)
 		vdp_move_sprite_to( cursorx, cursory );
 		vdp_nth_sprite_frame( 0 );
 	}
+	vdp_refresh_sprites();
 
 	old_cursorx=cursorx;
 	old_cursory=cursory;
 	oldcursor_tx = cursor_tx;
 	oldcursor_ty = cursor_ty;
-}
-
-void draw_layer()
-{
-	int tx=getTileX(xpos);
-	int ty=getTileY(ypos);
-
-	for (int i=0; i < (1+gScreenHeight/gTileSize); i++) 
-	{
-		draw_horizontal_layer(tx, ty+i, 1+(gScreenWidth/gTileSize));
-	}
-
-	vdp_update_key_state();
-	belt_layer_frame = (belt_layer_frame +1) % 4;
 }
 
 bool itemIsOnScreen(ItemNodePtr itemptr)
@@ -962,36 +959,71 @@ bool itemIsInHorizontal(ItemNodePtr itemptr, int tx, int ty, int len)
 	return true;
 }
 
-void draw_horizontal_layer(int tx, int ty, int len)
+// draws the additional layers: belts, machines and items
+void draw_layer(bool draw_items)
+{
+	int tx=getTileX(xpos);
+	int ty=getTileY(ypos);
+
+	for (int i=0; i < (1+gScreenHeight/gTileSize); i++) 
+	{
+		draw_horizontal_layer(tx, ty+i, 1+(gScreenWidth/gTileSize), true, true, false);
+	}
+
+	if ( draw_items )
+	{
+		ItemNodePtr currPtr = itemlist;
+		int cnt=0;
+		while (currPtr != NULL) {
+			if ( itemIsOnScreen(currPtr) )
+			{
+				vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+				vdp_draw_bitmap( currPtr->x - xpos, currPtr->y - ypos );
+			}
+			currPtr = currPtr->next;
+			cnt++;
+			if (cnt % 4 == 0) vdp_update_key_state();
+		}
+	}		
+
+	vdp_update_key_state();
+	belt_layer_frame = (belt_layer_frame +1) % 4;
+}
+
+// draws the a single row of the additional layers: belts, machines and items
+void draw_horizontal_layer(int tx, int ty, int len, bool draw_belts, bool draw_machines, bool draw_items)
 {
 	int px=getTilePosInScreenX(tx);
 	int py=getTilePosInScreenY(ty);
 
 	for (int i=0; i<len; i++)
 	{
-		if ( layer_belts[ty*gMapWidth + tx+i] >= 0 )
+		if ( draw_belts && layer_belts[ty*gMapWidth + tx+i] >= 0 )
 		{
 			vdp_adv_select_bitmap( layer_belts[ty*gMapWidth + tx+i]*4 + BMOFF_BELT16 + belt_layer_frame);
 			vdp_draw_bitmap( px + i*gTileSize, py );
 		}
-		if ( layer_machines[ty*gMapWidth + tx+i] >= 0 )
+		if ( draw_machines && layer_machines[ty*gMapWidth + tx+i] >= 0 )
 		{
 			vdp_adv_select_bitmap( itemtypes[layer_machines[ty*gMapWidth + tx+i]].bmID );
 			vdp_draw_bitmap( px + i*gTileSize, py );
 		}
 	}
 
-	ItemNodePtr currPtr = itemlist;
-	int cnt=0;
-	while (currPtr != NULL) {
-		if ( itemIsInHorizontal(currPtr, tx, ty, len) )
-		{
-			vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
-			vdp_draw_bitmap( currPtr->x - xpos, currPtr->y - ypos );
+	if ( draw_items )
+	{
+		ItemNodePtr currPtr = itemlist;
+		int cnt=0;
+		while (currPtr != NULL) {
+			if ( itemIsInHorizontal(currPtr, tx, ty, len) )
+			{
+				vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+				vdp_draw_bitmap( currPtr->x - xpos, currPtr->y - ypos );
+			}
+			currPtr = currPtr->next;
+			cnt++;
+			if (cnt % 4 == 0) vdp_update_key_state();
 		}
-		currPtr = currPtr->next;
-		cnt++;
-		if (cnt % 4 == 0) vdp_update_key_state();
 	}
 }
 
@@ -1052,6 +1084,7 @@ void drop_item(int item)
 
 void move_items_on_belts()
 {
+	func_start = clock();
 	ItemNodePtr currPtr = itemlist;
 	int offset = 4;
 	while (currPtr != NULL) {
@@ -1132,6 +1165,7 @@ void move_items_on_belts()
 		}	
 		currPtr = currPtr->next;
 	}
+	func_time[0]=clock()-func_start;
 
 }
 
@@ -1207,6 +1241,7 @@ void show_inventory(int X, int Y)
 
 	vdp_select_sprite( CURSOR_SPRITE );
 	vdp_hide_sprite();
+	vdp_refresh_sprites();
 
 	draw_filled_box( offx, offy, boxw, boxh, 11, 16 );
 
@@ -1325,6 +1360,7 @@ void show_inventory(int X, int Y)
 
 	vdp_select_sprite( CURSOR_SPRITE );
 	vdp_show_sprite();
+	vdp_refresh_sprites();
 	if ( bDoPlaceAfterInventory ) start_place();
 }
 
