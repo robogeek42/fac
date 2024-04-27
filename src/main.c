@@ -18,6 +18,7 @@
 #include "../../agon_ccode/common/util.h"
 #include "item.h"
 #include "inventory.h"
+#include "filedialog.h"
 
 #define _IMAGE_IMPLEMENTATION
 #include "images.h"
@@ -194,6 +195,7 @@ bool check_can_mine();
 void removeAtCursor();
 void pickupItemsAtTile(int tx, int ty);
 void message_with_bm8(char *message, int bmID, int timeout);
+void show_filedialog();
 
 void wait()
 {
@@ -520,6 +522,17 @@ void game_loop()
 			draw_horizontal_layer( tx, ty, message_len+1, true, true, true );
 			draw_horizontal( tx, ty+1, message_len+1 );
 			draw_horizontal_layer( tx, ty+1, message_len+1, true, true, true );
+		}
+
+		if ( vdp_check_key_press( KEY_f ) ) // file dialog
+		{
+			if (key_wait_ticks < clock()) 
+			{
+				key_wait_ticks = clock() + key_wait;
+
+				show_filedialog();
+			}
+			
 		}
 
 		vdp_update_key_state();
@@ -1575,4 +1588,47 @@ void message_with_bm8(char *message, int bmID, int timeout)
 	bMessage = true;
 	message_len = strlen(message)+1;
 	message_timeout_ticks = clock()+timeout;
+}
+
+// Show file dialog
+void show_filedialog()
+{
+	vdp_select_sprite( CURSOR_SPRITE );
+	vdp_hide_sprite();
+	hide_bob();
+	vdp_refresh_sprites();
+
+	char filename[80];
+	bool isload = false;
+
+	vdp_mode(3);
+	vdp_logical_scr_dims( false );
+	vdp_cursor_enable( false );
+	wait_clock(10);
+
+	int fd_return = file_dialog("./maps", filename, 80, &isload);
+
+	/*
+	vdp_cls();
+	TAB(0,0);
+	if (fd_return)
+	{
+		printf("File: %s. %s\n", filename, isload?"LOAD":"SAVE");
+	}
+	printf("any key");
+	wait();
+	*/
+
+	vdp_mode(gMode);
+	vdp_cursor_enable( false );
+	vdp_logical_scr_dims( false );
+
+	vdp_activate_sprites( NUM_BOB_SPRITES + 1 );
+	vdp_select_sprite( CURSOR_SPRITE );
+	vdp_show_sprite();
+	show_bob();
+
+	draw_screen();
+
+	vdp_refresh_sprites();
 }

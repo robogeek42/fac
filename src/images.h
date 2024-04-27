@@ -55,6 +55,8 @@ void load_images();
 void create_sprites();
 int get_current_sprite();
 void select_bob_sprite( int sprite );
+void show_bob();
+void hide_bob();
 
 static int current_bob_sprite = -1;
 
@@ -177,6 +179,24 @@ void select_bob_sprite( int sprite )
 		}
 	}
 	vdp_select_sprite(current_bob_sprite);
+	vdp_show_sprite();
+	vdp_refresh_sprites();
+}
+
+void hide_bob( )
+{
+	for (int s=0; s<NUM_BOB_SPRITES; s++)
+	{
+		vdp_select_sprite( s );
+		vdp_hide_sprite();
+	}
+	vdp_refresh_sprites();
+}
+
+void show_bob( )
+{
+	vdp_select_sprite( current_bob_sprite );
+	vdp_show_sprite();
 	vdp_refresh_sprites();
 }
 
