@@ -46,18 +46,22 @@ int gTileSize = 16;
 
 bool debug = false;
 
+char sigref[4] = "FAC";
+
 //------------------------------------------------------------
 // status related variables
 // need to be saved / loaded
 
-// Position of top-left of screen in world coords (pixel)
-int xpos=0, ypos=0;
-// Position of character in world coords (pixel)
-int bobx=0, boby=0;
-// cursor position position in screen pixel coords
-int cursorx=0, cursory=0;
-// cursor position in tile coords
-int cursor_tx=0, cursor_ty=0;
+typedef struct {
+	int xpos;
+	int ypos;		// Position of top-left of screen in world coords (pixel)
+	int bobx;
+	int boby;		// Position of character in world coords (pixel)
+	int mapWidth;
+	int mapHeight;
+} FacState;
+
+FacState fac;
 
 // maps
 int gMapWidth = 200;
@@ -77,6 +81,11 @@ INV_ITEM inventory[MAX_INVENTORY_ITEMS];
 
 //------------------------------------------------------------
 // variables containing state that can be reset after game load
+
+// cursor position position in screen pixel coords
+int cursorx=0, cursory=0;
+// cursor position in tile coords
+int cursor_tx=0, cursor_ty=0;
 
 // previous cursor position position in world coords
 int old_cursorx=0, old_cursory=0;
@@ -144,12 +153,12 @@ int func_time[4] = { 0 };
 
 void game_loop();
 
-int getWorldCoordX(int sx) { return (xpos + sx); }
-int getWorldCoordY(int sy) { return (ypos + sy); }
+int getWorldCoordX(int sx) { return (fac.xpos + sx); }
+int getWorldCoordY(int sy) { return (fac.ypos + sy); }
 int getTileX(int sx) { return (sx/gTileSize); }
 int getTileY(int sy) { return (sy/gTileSize); }
-int getTilePosInScreenX(int tx) { return ((tx * gTileSize) - xpos); }
-int getTilePosInScreenY(int ty) { return ((ty * gTileSize) - ypos); }
+int getTilePosInScreenX(int tx) { return ((tx * gTileSize) - fac.xpos); }
+int getTilePosInScreenY(int ty) { return ((ty * gTileSize) - fac.ypos); }
 
 void draw_tile(int tx, int ty, int tposx, int tposy);
 void draw_screen();
@@ -242,13 +251,13 @@ int main(/*int argc, char *argv[]*/)
 	memset(layer_machines, (int8_t)-1, gMapWidth * gMapHeight);
 
 	/* start bob and screen centred in map */
-	bobx = (gMapWidth * gTileSize / 2) & 0xFFFFF0;
-	boby = (gMapHeight * gTileSize / 2) & 0xFFFFF0;
-	xpos = bobx - gScreenWidth/2;
-	ypos = boby - gScreenHeight/2;
+	fac.bobx = (gMapWidth * gTileSize / 2) & 0xFFFFF0;
+	fac.boby = (gMapHeight * gTileSize / 2) & 0xFFFFF0;
+	fac.xpos = fac.bobx - gScreenWidth/2;
+	fac.ypos = fac.boby - gScreenHeight/2;
 
-	cursor_tx = getTileX(bobx+gTileSize/2);
-	cursor_ty = getTileY(boby+gTileSize/2)+1;
+	cursor_tx = getTileX(fac.bobx+gTileSize/2);
+	cursor_ty = getTileY(fac.boby+gTileSize/2)+1;
 	cursorx = getTilePosInScreenX(cursor_tx);
 	cursory = getTilePosInScreenY(cursor_ty);
 	old_cursorx=cursorx;
@@ -301,7 +310,7 @@ void game_loop()
 	frame_time_in_ticks = 0;
 
 	select_bob_sprite( bob_facing );
-	vdp_move_sprite_to( bobx - xpos, boby - ypos );
+	vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
 	vdp_refresh_sprites();
 
 	do {
@@ -324,8 +333,8 @@ void game_loop()
 			{
 				if (debug)
 				{
-					int tx=getTileX(xpos);
-					int ty=getTileY(ypos + gScreenHeight -1);
+					int tx=getTileX(fac.xpos);
+					int ty=getTileY(fac.ypos + gScreenHeight -1);
 					draw_horizontal(tx,ty-1,6);
 					draw_horizontal(tx,ty,6);
 				}
@@ -477,7 +486,7 @@ void game_loop()
 					bob_mining_anim_ticks = clock() + bob_mining_anim_time;;
 					bIsMining = true;
 					select_bob_sprite( BOB_SPRITE_ACT_DOWN+bob_facing );
-					vdp_move_sprite_to( bobx - xpos, boby - ypos );
+					vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
 					vdp_refresh_sprites();
 				}
 
@@ -564,11 +573,11 @@ void draw_tile(int tx, int ty, int tposx, int tposy)
 	}
 }
 
-// draw full screen at World position in xpos/ypos
+// draw full screen at World position in fac.xpos/fac.ypos
 void draw_screen()
 {
-	int tx=getTileX(xpos);
-	int ty=getTileY(ypos);
+	int tx=getTileX(fac.xpos);
+	int ty=getTileY(fac.ypos);
 
 	for (int i=0; i < (1+gScreenHeight/gTileSize); i++) 
 	{
@@ -577,7 +586,7 @@ void draw_screen()
 
 	draw_items();
 
-	draw_bob(bobx,boby,xpos,ypos);
+	draw_bob(fac.bobx,fac.boby,fac.xpos,fac.ypos);
 }
 
 void draw_horizontal(int tx, int ty, int len)
@@ -609,46 +618,46 @@ void scroll_screen(int dir, int step)
 {
 	switch (dir) {
 		case SCROLL_RIGHT: // scroll screen to right, view moves left
-			if (xpos > step)
+			if (fac.xpos > step)
 			{
-				xpos -= step;
+				fac.xpos -= step;
 				vdp_scroll_screen(dir, step);
 				// draw tiles (tx,ty) to (tx,ty+len)
-				int tx=getTileX(xpos);
-				int ty=getTileY(ypos);
+				int tx=getTileX(fac.xpos);
+				int ty=getTileY(fac.ypos);
 				draw_vertical(tx,ty, 1+(gScreenHeight/gTileSize));
 			}
 			break;
 		case SCROLL_LEFT: // scroll screen to left, view moves right
-			if ((xpos + gScreenWidth + step) < (gMapWidth * gTileSize))
+			if ((fac.xpos + gScreenWidth + step) < (gMapWidth * gTileSize))
 			{
-				xpos += step;
+				fac.xpos += step;
 				vdp_scroll_screen(dir, step);
 				// draw tiles (tx,ty) to (tx,ty+len)
-				int tx=getTileX(xpos + gScreenWidth -1);
-				int ty=getTileY(ypos);
+				int tx=getTileX(fac.xpos + gScreenWidth -1);
+				int ty=getTileY(fac.ypos);
 				draw_vertical(tx,ty, 1+(gScreenHeight/gTileSize));
 			}
 			break;
 		case SCROLL_UP:
-			if (ypos > step)
+			if (fac.ypos > step)
 			{
-				ypos -= step;
+				fac.ypos -= step;
 				vdp_scroll_screen(dir, step);
 				// draw tiles (tx,ty) to (tx+len,ty)
-				int tx=getTileX(xpos);
-				int ty=getTileY(ypos);
+				int tx=getTileX(fac.xpos);
+				int ty=getTileY(fac.ypos);
 				draw_horizontal(tx,ty, 1+(gScreenWidth/gTileSize));
 			}
 			break;
 		case SCROLL_DOWN:
-			if ((ypos + gScreenHeight + step) < (gMapHeight * gTileSize))
+			if ((fac.ypos + gScreenHeight + step) < (gMapHeight * gTileSize))
 			{
-				ypos += step;
+				fac.ypos += step;
 				vdp_scroll_screen(dir, step);
 				// draw tiles (tx,ty) to (tx+len,ty)
-				int tx=getTileX(xpos);
-				int ty=getTileY(ypos + gScreenHeight -1);
+				int tx=getTileX(fac.xpos);
+				int ty=getTileY(fac.ypos + gScreenHeight -1);
 				draw_horizontal(tx,ty, 1+(gScreenWidth/gTileSize));
 			}
 			break;
@@ -660,26 +669,26 @@ void scroll_screen(int dir, int step)
 bool can_scroll_screen(int dir, int step)
 {
 	if (dir == SCROLL_RIGHT || dir == SCROLL_LEFT) {
-		if ((bobx - xpos) < gScreenWidth/2) { return false; }
-		if ((bobx - xpos) > gScreenWidth/2) { return false; }
+		if ((fac.bobx - fac.xpos) < gScreenWidth/2) { return false; }
+		if ((fac.bobx - fac.xpos) > gScreenWidth/2) { return false; }
 	}
 	if (dir == SCROLL_UP || dir == SCROLL_DOWN) {
-		if ((boby - ypos) < gScreenHeight/2) { return false; }
-		if ((boby - ypos) > gScreenHeight/2) { return false; }
+		if ((fac.boby - fac.ypos) < gScreenHeight/2) { return false; }
+		if ((fac.boby - fac.ypos) > gScreenHeight/2) { return false; }
 	}
 
 	switch (dir) {
 		case SCROLL_RIGHT: // scroll screen to right, view moves left
-			if (xpos > step) { return true; }
+			if (fac.xpos > step) { return true; }
 			break;
 		case SCROLL_LEFT: // scroll screen to left, view moves right
-			if ((xpos + gScreenWidth + step) < (gMapWidth * gTileSize)) { return true; }
+			if ((fac.xpos + gScreenWidth + step) < (gMapWidth * gTileSize)) { return true; }
 			break;
 		case SCROLL_UP:
-			if (ypos > step) { return true; }
+			if (fac.ypos > step) { return true; }
 			break;
 		case SCROLL_DOWN:
-			if ((ypos + gScreenHeight + step) < (gMapHeight * gTileSize)) { return true; }
+			if ((fac.ypos + gScreenHeight + step) < (gMapHeight * gTileSize)) { return true; }
 			break;
 		default:
 			break;
@@ -782,7 +791,7 @@ bool check_tile(int px, int py)
 
 bool move_bob(int dir, int speed)
 {
-	int newx=bobx, newy=boby;
+	int newx=fac.bobx, newy=fac.boby;
 	bool moved = false;
 
 	if ( bob_facing != dir )
@@ -793,45 +802,45 @@ bool move_bob(int dir, int speed)
 
 	switch (dir) {
 		case BOB_LEFT:
-			if (bobx > speed 
-					&& check_tile(bobx-speed,boby)
-					&& check_tile(bobx-speed,boby+gTileSize-1)
+			if (fac.bobx > speed 
+					&& check_tile(fac.bobx-speed,fac.boby)
+					&& check_tile(fac.bobx-speed,fac.boby+gTileSize-1)
 					) {
 				newx -= speed;
 			}
 			break;
 		case BOB_RIGHT:
-			if (bobx < gMapWidth*gTileSize - speed 
-					&& check_tile(bobx+speed+gTileSize-1,boby)
-					&& check_tile(bobx+speed+gTileSize-1, boby+gTileSize-1)
+			if (fac.bobx < gMapWidth*gTileSize - speed 
+					&& check_tile(fac.bobx+speed+gTileSize-1,fac.boby)
+					&& check_tile(fac.bobx+speed+gTileSize-1, fac.boby+gTileSize-1)
 						) {
 				newx += speed;
 			}
 			break;
 		case BOB_UP:
-			if (boby > speed 
-					&& check_tile(bobx,boby-speed)
-					&& check_tile(bobx+gTileSize-1,boby-speed)
+			if (fac.boby > speed 
+					&& check_tile(fac.bobx,fac.boby-speed)
+					&& check_tile(fac.bobx+gTileSize-1,fac.boby-speed)
 					) {
 				newy -= speed;
 			}
 			break;
 		case BOB_DOWN:
-			if (boby < gMapHeight*gTileSize - speed 
-				&& check_tile(bobx,boby+speed+gTileSize-1)
-				&& check_tile(bobx+gTileSize-1,boby+speed+gTileSize-1)
+			if (fac.boby < gMapHeight*gTileSize - speed 
+				&& check_tile(fac.bobx,fac.boby+speed+gTileSize-1)
+				&& check_tile(fac.bobx+gTileSize-1,fac.boby+speed+gTileSize-1)
 				) {
 				newy += speed;
 			}
 			break;
 		default: break;
 	}
-	if (newx != bobx || newy != boby)
+	if (newx != fac.bobx || newy != fac.boby)
 	{
-		bobx=newx;
-		boby=newy;
+		fac.bobx=newx;
+		fac.boby=newy;
 		vdp_select_sprite( bob_facing );
-		vdp_move_sprite_to(bobx-xpos, boby-ypos);
+		vdp_move_sprite_to(fac.bobx-fac.xpos, fac.boby-fac.ypos);
 		moved = true;
 	}
 
@@ -956,10 +965,10 @@ void draw_cursor(bool draw)
 
 bool itemIsOnScreen(ItemNodePtr itemptr)
 {
-	if (itemptr->x > xpos - 8 &&
-		itemptr->x < xpos + gScreenWidth &&
-		itemptr->y > ypos - 8 &&
-		itemptr->y < ypos + gScreenHeight)
+	if (itemptr->x > fac.xpos - 8 &&
+		itemptr->x < fac.xpos + gScreenWidth &&
+		itemptr->y > fac.ypos - 8 &&
+		itemptr->y < fac.ypos + gScreenHeight)
 	{
 		return true;
 	}
@@ -975,8 +984,8 @@ bool itemIsInHorizontal(ItemNodePtr itemptr, int tx, int ty, int len)
 // draws the additional layers: belts, machines and items
 void draw_layer(bool draw_items)
 {
-	int tx=getTileX(xpos);
-	int ty=getTileY(ypos);
+	int tx=getTileX(fac.xpos);
+	int ty=getTileY(fac.ypos);
 
 	for (int i=0; i < (1+gScreenHeight/gTileSize); i++) 
 	{
@@ -991,7 +1000,7 @@ void draw_layer(bool draw_items)
 			if ( itemIsOnScreen(currPtr) )
 			{
 				vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
-				vdp_draw_bitmap( currPtr->x - xpos, currPtr->y - ypos );
+				vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
 			}
 			currPtr = currPtr->next;
 			cnt++;
@@ -1031,7 +1040,7 @@ void draw_horizontal_layer(int tx, int ty, int len, bool draw_belts, bool draw_m
 			if ( itemIsInHorizontal(currPtr, tx, ty, len) )
 			{
 				vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
-				vdp_draw_bitmap( currPtr->x - xpos, currPtr->y - ypos );
+				vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
 			}
 			currPtr = currPtr->next;
 			cnt++;
@@ -1214,7 +1223,7 @@ void draw_items()
 		if (itemIsOnScreen(currPtr))
 		{
 			vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
-			vdp_draw_bitmap( currPtr->x - xpos, currPtr->y - ypos );
+			vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
 		}
 		currPtr = currPtr->next;
 		cnt++;
@@ -1231,7 +1240,7 @@ void draw_items_at_tile(int tx, int ty)
 		  	 currPtr->y < (ty+1)*gTileSize )
 		{
 			vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
-			vdp_draw_bitmap( currPtr->x - xpos, currPtr->y - ypos );
+			vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
 		}
 		currPtr = currPtr->next;
 	}
@@ -1466,8 +1475,8 @@ void clear_info()
 bool check_can_mine()
 {
 	bool bNext=false;
-	int bx = getTileX(bobx);
-	int by = getTileY(boby);
+	int bx = getTileX(fac.bobx);
+	int by = getTileY(fac.boby);
 	switch ( bob_facing )
 	{
 		case BOB_LEFT:
@@ -1572,10 +1581,10 @@ void message_with_bm8(char *message, int bmID, int timeout)
 {
 	//int sx = gScreenWidth - 8*(strlen(message)+1);
 	//int sy = 0;
-	int sx = bobx-xpos +8;
-	int sy = boby-ypos -8;
-	message_posx = sx + xpos;
-	message_posy = sy + ypos;
+	int sx = fac.bobx-fac.xpos +8;
+	int sy = fac.boby-fac.ypos -8;
+	message_posx = sx + fac.xpos;
+	message_posy = sy + fac.ypos;
 
 	TAB((sx/8),(sy/8)); 
 	COL(15);COL(8+128);
@@ -1589,6 +1598,76 @@ void message_with_bm8(char *message, int bmID, int timeout)
 	message_len = strlen(message)+1;
 	message_timeout_ticks = clock()+timeout;
 }
+
+bool save_game( char *filepath )
+{
+	bool ret = true;
+	FILE *fp;
+	int objs_written = 0;
+
+	// Open the file for writing
+	if ( !(fp = fopen( filepath, "wb" ) ) ) {
+		printf( "Error opening file \"%s\"a\n.", filepath );
+		return false;
+	}
+
+	// write file signature to 1st 3 bytes "FAC"	
+	for (int i=0;i<3;i++)
+	{
+		fputc( sigref[i], fp );
+	}
+
+	printf("done.\n");
+	fclose(fp);
+	return ret;
+}
+bool load_game( char *filepath )
+{
+	bool ret = true;
+	FILE *fp;
+
+	// open file for reading
+	if ( !(fp = fopen( filepath, "rb" ) ) ) {
+		printf("Error opening file \"%s\".\n", filepath );
+		return false;
+	}
+
+	char sig[4];
+	/*
+	int i=0;
+	while ( !feof( fp ) && i < 3 )
+	{
+		sig[i] = fgetc( fp );
+		if ( sig[i] != sigref[i] )
+		{
+			printf("File type not recognised i=%d [",i);
+			for (int j=0;j<i;j++)
+			{
+				printf("%c",sig[j]>31?sig[j]:'?');
+			}
+			fclose(fp);
+			return false;
+		}
+	}
+	*/
+
+	fgets( sig, 4, fp );
+	for (int i=0; i<3; i++)
+	{
+		if ( sig[i] != sigref[i] )
+		{
+			printf("Error reading signature. i=%d\n", i );
+			fclose(fp);
+			return false;
+		}
+	}
+
+
+	printf("done.\n");
+	fclose(fp);
+	return ret;
+}
+
 
 // Show file dialog
 void show_filedialog()
@@ -1606,18 +1685,25 @@ void show_filedialog()
 	vdp_cursor_enable( false );
 	wait_clock(10);
 
-	int fd_return = file_dialog("./maps", filename, 80, &isload);
+	int fd_return = file_dialog("./saves", filename, 80, &isload);
 
-	/*
+	COL(11);COL(128+16);
 	vdp_cls();
 	TAB(0,0);
 	if (fd_return)
 	{
-		printf("File: %s. %s\n", filename, isload?"LOAD":"SAVE");
+		if ( isload )
+		{
+			printf("Loading %s ... \n",filename);
+			load_game( filename );
+		} else {
+			printf("Saving %s ... \n",filename);
+			save_game( filename );
+		}
+
+		printf("\nPress any key\n");
+		wait();
 	}
-	printf("any key");
-	wait();
-	*/
 
 	vdp_mode(gMode);
 	vdp_cursor_enable( false );
@@ -1632,3 +1718,4 @@ void show_filedialog()
 
 	vdp_refresh_sprites();
 }
+
