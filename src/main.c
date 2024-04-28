@@ -47,12 +47,14 @@ int gTileSize = 16;
 bool debug = false;
 
 char sigref[4] = "FAC";
+#define SAVE_VERSION 1
 
 //------------------------------------------------------------
 // status related variables
 // need to be saved / loaded
 
 typedef struct {
+	int version;
 	int xpos;
 	int ypos;		// Position of top-left of screen in world coords (pixel)
 	int bobx;
@@ -64,8 +66,6 @@ typedef struct {
 FacState fac;
 
 // maps
-int gMapWidth = 200;
-int gMapHeight = 200;
 uint8_t* tilemap;
 int8_t* layer_belts;
 int8_t* layer_machines;
@@ -212,21 +212,46 @@ void wait()
 	if (k=='q') exit(0);
 }
 
+bool alloc_map()
+{
+	tilemap = (uint8_t *) malloc(sizeof(uint8_t) * fac.mapWidth * fac.mapHeight);
+	if (tilemap == NULL)
+	{
+		printf("Out of memory\n");
+		return false;
+	}
+
+	layer_belts = (int8_t *) malloc(sizeof(int8_t) * fac.mapWidth * fac.mapHeight);
+	if (layer_belts == NULL)
+	{
+		printf("Out of memory\n");
+		return false;
+	}
+	memset(layer_belts, (int8_t)-1, fac.mapWidth * fac.mapHeight);
+
+	layer_machines = (int8_t *) malloc(sizeof(int8_t) * fac.mapWidth * fac.mapHeight);
+	if (layer_machines == NULL)
+	{
+		printf("Out of memory\n");
+		return false;
+	}
+	memset(layer_machines, (int8_t)-1, fac.mapWidth * fac.mapHeight);
+	return true;
+}
+
 int main(/*int argc, char *argv[]*/)
 {
 	vdp_vdu_init();
 	if ( vdp_key_init() == -1 ) return 1;
 	vdp_set_key_event_handler( key_event_handler );
 
+	fac.version = SAVE_VERSION;
+
 	// custom map which is 256x256 tiles
-	gMapWidth = 45;
-	gMapHeight = 45;
-	tilemap = (uint8_t *) malloc(sizeof(uint8_t) * gMapWidth * gMapHeight);
-	if (tilemap == NULL)
-	{
-		printf("Out of memory\n");
-		return -1;
-	}
+	fac.mapWidth = 45;
+	fac.mapHeight = 45;
+
+	if ( !alloc_map() ) return -1;
 
 	if (load_map("maps/fmap.data") != 0)
 	{
@@ -234,25 +259,9 @@ int main(/*int argc, char *argv[]*/)
 		goto my_exit;
 	}
 
-	layer_belts = (int8_t *) malloc(sizeof(int8_t) * gMapWidth * gMapHeight);
-	if (layer_belts == NULL)
-	{
-		printf("Out of memory\n");
-		return -1;
-	}
-	memset(layer_belts, (int8_t)-1, gMapWidth * gMapHeight);
-
-	layer_machines = (int8_t *) malloc(sizeof(int8_t) * gMapWidth * gMapHeight);
-	if (layer_machines == NULL)
-	{
-		printf("Out of memory\n");
-		return -1;
-	}
-	memset(layer_machines, (int8_t)-1, gMapWidth * gMapHeight);
-
 	/* start bob and screen centred in map */
-	fac.bobx = (gMapWidth * gTileSize / 2) & 0xFFFFF0;
-	fac.boby = (gMapHeight * gTileSize / 2) & 0xFFFFF0;
+	fac.bobx = (fac.mapWidth * gTileSize / 2) & 0xFFFFF0;
+	fac.boby = (fac.mapHeight * gTileSize / 2) & 0xFFFFF0;
 	fac.xpos = fac.bobx - gScreenWidth/2;
 	fac.ypos = fac.boby - gScreenHeight/2;
 
@@ -553,9 +562,9 @@ void game_loop()
 
 void draw_tile(int tx, int ty, int tposx, int tposy)
 {
-	uint8_t tile = tilemap[ty*gMapWidth + tx] & 0x0F;
-	uint8_t overlay = (tilemap[ty*gMapWidth + tx] & 0xF0) >> 4;
-	uint8_t machine = layer_machines[ty*gMapWidth + tx];
+	uint8_t tile = tilemap[ty*fac.mapWidth + tx] & 0x0F;
+	uint8_t overlay = (tilemap[ty*fac.mapWidth + tx] & 0xF0) >> 4;
+	uint8_t machine = layer_machines[ty*fac.mapWidth + tx];
 
 
 	vdp_adv_select_bitmap( tile + BMOFF_TERR16);
@@ -629,7 +638,7 @@ void scroll_screen(int dir, int step)
 			}
 			break;
 		case SCROLL_LEFT: // scroll screen to left, view moves right
-			if ((fac.xpos + gScreenWidth + step) < (gMapWidth * gTileSize))
+			if ((fac.xpos + gScreenWidth + step) < (fac.mapWidth * gTileSize))
 			{
 				fac.xpos += step;
 				vdp_scroll_screen(dir, step);
@@ -651,7 +660,7 @@ void scroll_screen(int dir, int step)
 			}
 			break;
 		case SCROLL_DOWN:
-			if ((fac.ypos + gScreenHeight + step) < (gMapHeight * gTileSize))
+			if ((fac.ypos + gScreenHeight + step) < (fac.mapHeight * gTileSize))
 			{
 				fac.ypos += step;
 				vdp_scroll_screen(dir, step);
@@ -682,13 +691,13 @@ bool can_scroll_screen(int dir, int step)
 			if (fac.xpos > step) { return true; }
 			break;
 		case SCROLL_LEFT: // scroll screen to left, view moves right
-			if ((fac.xpos + gScreenWidth + step) < (gMapWidth * gTileSize)) { return true; }
+			if ((fac.xpos + gScreenWidth + step) < (fac.mapWidth * gTileSize)) { return true; }
 			break;
 		case SCROLL_UP:
 			if (fac.ypos > step) { return true; }
 			break;
 		case SCROLL_DOWN:
-			if ((fac.ypos + gScreenHeight + step) < (gMapHeight * gTileSize)) { return true; }
+			if ((fac.ypos + gScreenHeight + step) < (fac.mapHeight * gTileSize)) { return true; }
 			break;
 		default:
 			break;
@@ -736,7 +745,7 @@ uint8_t rnd1_block4x4[4*4] = {
 
 int load_map(char *mapname)
 {
-	uint8_t ret = mos_load( mapname, (uint24_t) tilemap,  gMapWidth * gMapHeight );
+	uint8_t ret = mos_load( mapname, (uint24_t) tilemap,  fac.mapWidth * fac.mapHeight );
 	place_feature_overlay(oval1_block6x6,6,6,0,30,10); // stone    0:5:10
 	place_feature_overlay(oval2_block6x6,6,6,1,10,23); // iron ore 1:6:11
 	place_feature_overlay(oval1_block6x6,6,6,2,22,29); // copp ore 2:7:12
@@ -760,8 +769,8 @@ void place_feature_overlay(uint8_t *data, int sx, int sy, int tile, int tx, int 
 		{
 			if (data[x+(y*sx)] > 0)
 			{
-				tilemap[(tx+x) + (ty+y)*gMapWidth] &= 0x0F;
-				tilemap[(tx+x) + (ty+y)*gMapWidth] |= (tile+(data[x+(y*sx)]-1)*5+1)<<4;
+				tilemap[(tx+x) + (ty+y)*fac.mapWidth] &= 0x0F;
+				tilemap[(tx+x) + (ty+y)*fac.mapWidth] |= (tile+(data[x+(y*sx)]-1)*5+1)<<4;
 			}
 		}
 	}
@@ -786,7 +795,7 @@ bool check_tile(int px, int py)
 	int tx=getTileX(px);
 	int ty=getTileY(py);
 
-	return tilemap[tx+ty*gMapWidth]<16 && layer_machines[tx+ty*gMapWidth]<0;
+	return tilemap[tx+ty*fac.mapWidth]<16 && layer_machines[tx+ty*fac.mapWidth]<0;
 }
 
 bool move_bob(int dir, int speed)
@@ -810,7 +819,7 @@ bool move_bob(int dir, int speed)
 			}
 			break;
 		case BOB_RIGHT:
-			if (fac.bobx < gMapWidth*gTileSize - speed 
+			if (fac.bobx < fac.mapWidth*gTileSize - speed 
 					&& check_tile(fac.bobx+speed+gTileSize-1,fac.boby)
 					&& check_tile(fac.bobx+speed+gTileSize-1, fac.boby+gTileSize-1)
 						) {
@@ -826,7 +835,7 @@ bool move_bob(int dir, int speed)
 			}
 			break;
 		case BOB_DOWN:
-			if (fac.boby < gMapHeight*gTileSize - speed 
+			if (fac.boby < fac.mapHeight*gTileSize - speed 
 				&& check_tile(fac.bobx,fac.boby+speed+gTileSize-1)
 				&& check_tile(fac.bobx+gTileSize-1,fac.boby+speed+gTileSize-1)
 				) {
@@ -1020,14 +1029,14 @@ void draw_horizontal_layer(int tx, int ty, int len, bool draw_belts, bool draw_m
 
 	for (int i=0; i<len; i++)
 	{
-		if ( draw_belts && layer_belts[ty*gMapWidth + tx+i] >= 0 )
+		if ( draw_belts && layer_belts[ty*fac.mapWidth + tx+i] >= 0 )
 		{
-			vdp_adv_select_bitmap( layer_belts[ty*gMapWidth + tx+i]*4 + BMOFF_BELT16 + belt_layer_frame);
+			vdp_adv_select_bitmap( layer_belts[ty*fac.mapWidth + tx+i]*4 + BMOFF_BELT16 + belt_layer_frame);
 			vdp_draw_bitmap( px + i*gTileSize, py );
 		}
-		if ( draw_machines && layer_machines[ty*gMapWidth + tx+i] >= 0 )
+		if ( draw_machines && layer_machines[ty*fac.mapWidth + tx+i] >= 0 )
 		{
-			vdp_adv_select_bitmap( itemtypes[layer_machines[ty*gMapWidth + tx+i]].bmID );
+			vdp_adv_select_bitmap( itemtypes[layer_machines[ty*fac.mapWidth + tx+i]].bmID );
 			vdp_draw_bitmap( px + i*gTileSize, py );
 		}
 	}
@@ -1051,19 +1060,19 @@ void draw_horizontal_layer(int tx, int ty, int len, bool draw_belts, bool draw_m
 
 void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty)
 {
-	bn[0].beltID = layer_belts[tx   + (ty-1)*gMapWidth];
+	bn[0].beltID = layer_belts[tx   + (ty-1)*fac.mapWidth];
 	bn[0].locX = tx;
 	bn[0].locY = ty-1;
 
-	bn[1].beltID = layer_belts[tx+1 + (ty)*gMapWidth];
+	bn[1].beltID = layer_belts[tx+1 + (ty)*fac.mapWidth];
 	bn[1].locX = tx+1;
 	bn[1].locY = ty;
 
-	bn[2].beltID = layer_belts[tx   + (ty+1)*gMapWidth];
+	bn[2].beltID = layer_belts[tx   + (ty+1)*fac.mapWidth];
 	bn[2].locX = tx;
 	bn[2].locY = ty+1;
 
-	bn[3].beltID = layer_belts[tx-1 + (ty)*gMapWidth];
+	bn[3].beltID = layer_belts[tx-1 + (ty)*fac.mapWidth];
 	bn[3].locX = tx-1;
 	bn[3].locY = ty;
 
@@ -1078,7 +1087,7 @@ void do_place()
 		int ret = remove_item( inventory, IT_BELT, 1 );
 		if ( ret >= 0 )
 		{
-			layer_belts[gMapWidth * cursor_ty + cursor_tx] = place_belt_selected;
+			layer_belts[fac.mapWidth * cursor_ty + cursor_tx] = place_belt_selected;
 		}
 	}
 	if ( isResource(item_selected) ) {
@@ -1092,7 +1101,7 @@ void do_place()
 		int ret = remove_item( inventory, item_selected, 1 );
 		if ( ret >= 0 )
 		{
-			layer_machines[gMapWidth * cursor_ty + cursor_tx] = item_selected;
+			layer_machines[fac.mapWidth * cursor_ty + cursor_tx] = item_selected;
 		}
 	}
 	
@@ -1116,7 +1125,7 @@ void move_items_on_belts()
 
 		int tx = centrex >> 4; //getTileX(centrex);
 		int ty = centrey >> 4; //getTileY(centrey);
-		int beltID = layer_belts[ tx + ty*gMapWidth ];
+		int beltID = layer_belts[ tx + ty*fac.mapWidth ];
 
 		if (beltID >= 0)
 		{
@@ -1177,7 +1186,7 @@ void move_items_on_belts()
 		}
 		tx = currPtr->x >> 4; // getTileX(currPtr->x);
 		ty = currPtr->y >> 4; // getTileY(currPtr->y);
-		beltID = layer_belts[ tx + ty*gMapWidth ];
+		beltID = layer_belts[ tx + ty*fac.mapWidth ];
 		if (itemIsOnScreen(currPtr) && moved && beltID<0)
 		{
 			int px=getTilePosInScreenX(tx);
@@ -1200,7 +1209,7 @@ void print_item_pos()
 		{
 			int tx = getTileX(currPtr->x);
 			int ty = getTileY(currPtr->y);
-			int beltID = layer_belts[ tx + ty*gMapWidth ];
+			int beltID = layer_belts[ tx + ty*fac.mapWidth ];
 			if (beltID >= 0)
 			{
 				int dx = currPtr->x % gTileSize;
@@ -1432,20 +1441,20 @@ void show_info()
 	int info_item_bmid = -1;
 	int info_item_type = 0;
 
-	if ( layer_belts[ cursor_ty*gMapWidth + cursor_tx ] >=0 )
+	if ( layer_belts[ cursor_ty*fac.mapWidth + cursor_tx ] >=0 )
 	{
 		// belt
 		info_item_type = IT_BELT;
 		info_item_bmid = itemtypes[ IT_BELT ].bmID;
-	} else if ( layer_machines[  cursor_ty*gMapWidth + cursor_tx ] >=0 )
+	} else if ( layer_machines[  cursor_ty*fac.mapWidth + cursor_tx ] >=0 )
 	{
 		// machine
-		info_item_type = layer_machines[  cursor_ty*gMapWidth + cursor_tx ];
+		info_item_type = layer_machines[  cursor_ty*fac.mapWidth + cursor_tx ];
 		info_item_bmid = itemtypes[ info_item_type ].bmID;
-	} else if ( tilemap[ cursor_ty*gMapWidth + cursor_tx ] > 15 )
+	} else if ( tilemap[ cursor_ty*fac.mapWidth + cursor_tx ] > 15 )
 	{
 		// feature
-		info_item_bmid = ( ( tilemap[ cursor_ty*gMapWidth + cursor_tx ] & 0xF0 ) >> 4 ) - 1 + BMOFF_FEAT16;
+		info_item_bmid = ( ( tilemap[ cursor_ty*fac.mapWidth + cursor_tx ] & 0xF0 ) >> 4 ) - 1 + BMOFF_FEAT16;
 		info_item_type = ((info_item_bmid - BMOFF_FEAT16 -1) % 5) + IT_FEAT_STONE;
 	}
 	if ( info_item_bmid >= 0 )
@@ -1495,7 +1504,7 @@ bool check_can_mine()
 			break;
 	}
 
-	int overlay = (tilemap[ cursor_ty*gMapWidth +  cursor_tx] >> 4);
+	int overlay = (tilemap[ cursor_ty*fac.mapWidth +  cursor_tx] >> 4);
 	if ( bNext && overlay > 0 ) return true;
 	return false;
 }
@@ -1511,7 +1520,7 @@ void do_mining()
 	if (bIsMining) return;
 	if ( ! check_can_mine() ) return;
 
-	int feature = (tilemap[ cursor_ty*gMapWidth +  cursor_tx] >> 4) -1;
+	int feature = (tilemap[ cursor_ty*fac.mapWidth +  cursor_tx] >> 4) -1;
 	
 	// resource count not implemented yet
 
@@ -1530,16 +1539,16 @@ void do_mining()
 // remove Belt or Machine at cursor (eith delete key)
 void removeAtCursor()
 {
-	if ( layer_belts[ cursor_tx + cursor_ty * gMapWidth ] >= 0 )
+	if ( layer_belts[ cursor_tx + cursor_ty * fac.mapWidth ] >= 0 )
 	{
 		add_item( inventory, IT_BELT, 1 );
-		layer_belts[ cursor_tx + cursor_ty * gMapWidth ] = -1;
+		layer_belts[ cursor_tx + cursor_ty * fac.mapWidth ] = -1;
 	}
-	if ( layer_machines[ cursor_tx + cursor_ty * gMapWidth ] >= 0 )
+	if ( layer_machines[ cursor_tx + cursor_ty * fac.mapWidth ] >= 0 )
 	{
-		int machine = layer_machines[ cursor_tx + cursor_ty * gMapWidth ];
+		int machine = layer_machines[ cursor_tx + cursor_ty * fac.mapWidth ];
 		add_item( inventory, machine, 1 );
-		layer_machines[ cursor_tx + cursor_ty * gMapWidth ] = -1;
+		layer_machines[ cursor_tx + cursor_ty * fac.mapWidth ] = -1;
 	}
 	draw_tile( cursor_tx, cursor_ty, cursorx, cursory );
 }
@@ -1604,6 +1613,7 @@ bool save_game( char *filepath )
 	bool ret = true;
 	FILE *fp;
 	int objs_written = 0;
+	char *msg;
 
 	// Open the file for writing
 	if ( !(fp = fopen( filepath, "wb" ) ) ) {
@@ -1612,19 +1622,90 @@ bool save_game( char *filepath )
 	}
 
 	// write file signature to 1st 3 bytes "FAC"	
+	printf("Save: signature\n");
 	for (int i=0;i<3;i++)
 	{
 		fputc( sigref[i], fp );
 	}
 
+	// write the fac state
+	printf("Save: fac state\n");
+	objs_written = fwrite( (const void*) &fac, sizeof(FacState), 1, fp);
+	if (objs_written!=1) {
+		msg = "Fail: fac state\n"; goto save_game_errexit;
+	}
+	
+	// write the tile map and layers
+	printf("Save: tilemap\n");
+	objs_written = fwrite( (const void*) tilemap, sizeof(uint8_t) * fac.mapWidth * fac.mapHeight, 1, fp);
+	if (objs_written!=1) {
+		msg = "Fail: tilemap\n"; goto save_game_errexit;
+	}
+	printf("Save: layer_belts\n");
+	objs_written = fwrite( (const void*) layer_belts, sizeof(uint8_t) * fac.mapWidth * fac.mapHeight, 1, fp);
+	if (objs_written!=1) {
+		msg = "Fail: layer_belts\n"; goto save_game_errexit;
+	}
+	printf("Save: layer_machines\n");
+	objs_written = fwrite( (const void*) layer_machines, sizeof(uint8_t) * fac.mapWidth * fac.mapHeight, 1, fp);
+	if (objs_written!=1) {
+		msg = "Fail: layer_machines\n"; goto save_game_errexit;
+	}
+
+	// save the item list
+	
+	// get and write number of items
+	ItemNodePtr currPtr = itemlist;
+	int cnt=0;
+	while (currPtr != NULL) {
+		currPtr = currPtr->next;
+		cnt++;
+	}
+	printf("Save: num item count %d\n",cnt);
+	objs_written = fwrite( (const void*) &cnt, sizeof(int), 1, fp);
+	if (objs_written!=1) {
+		msg = "Fail: item count\n"; goto save_game_errexit;
+	}
+
+	// back to begining
+	currPtr = itemlist;
+	ItemNodePtr nextPtr = NULL;
+
+	// must write data and no ll pointers
+	printf("Save: items\n");
+	while (currPtr != NULL) {
+		nextPtr = currPtr->next;
+	
+		objs_written = fwrite( (const void*) currPtr, sizeof(ItemNodeSave), 1, fp);
+		if (objs_written!=1) {
+			msg = "Fail: item\n"; goto save_game_errexit;
+		}
+		currPtr = nextPtr;
+	}
+	
+	// write the inventory
+	printf("Save: inventory\n");
+	objs_written = fwrite( (const void*) inventory, sizeof(INV_ITEM), MAX_INVENTORY_ITEMS, fp);
+	if (objs_written!=MAX_INVENTORY_ITEMS) {
+		msg = "Fail: inventory\n"; goto save_game_errexit;
+	}
+
 	printf("done.\n");
 	fclose(fp);
 	return ret;
+
+save_game_errexit:
+	printf("%s",msg);
+	fclose(fp);
+	return false;
+
 }
 bool load_game( char *filepath )
 {
 	bool ret = true;
 	FILE *fp;
+	int objs_read = 0;
+	char *msg;
 
 	// open file for reading
 	if ( !(fp = fopen( filepath, "rb" ) ) ) {
@@ -1633,25 +1714,10 @@ bool load_game( char *filepath )
 	}
 
 	char sig[4];
-	/*
-	int i=0;
-	while ( !feof( fp ) && i < 3 )
-	{
-		sig[i] = fgetc( fp );
-		if ( sig[i] != sigref[i] )
-		{
-			printf("File type not recognised i=%d [",i);
-			for (int j=0;j<i;j++)
-			{
-				printf("%c",sig[j]>31?sig[j]:'?');
-			}
-			fclose(fp);
-			return false;
-		}
-	}
-	*/
 
+	printf("Load: signature\n");
 	fgets( sig, 4, fp );
+
 	for (int i=0; i<3; i++)
 	{
 		if ( sig[i] != sigref[i] )
@@ -1662,10 +1728,94 @@ bool load_game( char *filepath )
 		}
 	}
 
+	// read the fac state
+	printf("Load: fac state\n");
+	objs_read = fread( &fac, sizeof(FacState), 1, fp );
+	if ( objs_read != 1 || fac.version != SAVE_VERSION )
+	{
+		printf("Fail L %d!=1 v%d\n", objs_read, fac.version );
+		fclose(fp);
+		return NULL;
+	}
 
-	printf("done.\n");
+	// clear and read tilemap and layers
+	free(tilemap);
+	free(layer_belts);
+	free(layer_machines);
+	if ( ! alloc_map() ) return false;
+
+	// read the tilemap
+	printf("Load: tilemap\n");
+	objs_read = fread( tilemap, sizeof(uint8_t) * fac.mapWidth * fac.mapHeight, 1, fp );
+	if ( objs_read != 1 ) {
+		msg = "Fail read tilemap\n"; goto load_game_errexit;
+	}
+	// read the layer_belts
+	printf("Load: layer_belts\n");
+	objs_read = fread( layer_belts, sizeof(uint8_t) * fac.mapWidth * fac.mapHeight, 1, fp );
+	if ( objs_read != 1 ) {
+		msg = "Fail read layer_belts\n"; goto load_game_errexit;
+	}
+	// read the layer_machines
+	printf("Load: layer_machines\n");
+	objs_read = fread( layer_machines, sizeof(uint8_t) * fac.mapWidth * fac.mapHeight, 1, fp );
+	if ( objs_read != 1 ) {
+		msg = "Fail read layer_machines\n"; goto load_game_errexit;
+	}
+
+	// clear out item list
+	ItemNodePtr currPtr = itemlist;
+	ItemNodePtr nextPtr = NULL;
+	while ( currPtr != NULL )
+	{
+		nextPtr = currPtr->next;
+		ItemNodePtr pitem = popFrontItem(&itemlist);
+		free(pitem);
+		currPtr = nextPtr;
+	}
+	itemlist = NULL;
+	
+	// read number of items in list
+	int num_items = 0;
+
+	printf("Load: items ");
+	objs_read = fread( &num_items, sizeof(int), 1, fp );
+	if ( objs_read != 1 ) {
+		msg = "Fail read num items\n"; goto load_game_errexit;
+	}
+	printf("%d\n",num_items);
+
+	// add items in one by one
+	while (num_items > 0 && !feof( fp ) )
+	{
+		ItemNodeSave newitem;
+
+		objs_read = fread( &newitem, sizeof(ItemNodeSave), 1, fp );
+		if ( objs_read != 1 ) {
+			msg = "Fail read item\n"; goto load_game_errexit;
+		}
+		insertAtBackItemList( &itemlist, newitem.item, newitem.x, newitem.y );
+		num_items--;
+	}
+
+	// read the inventory
+	printf("Load: inventory\n");
+	for ( int i=0;i<MAX_INVENTORY_ITEMS; i++)
+	{
+		objs_read = fread( &inventory[i], sizeof(INV_ITEM), 1, fp );
+		if ( objs_read != 1 ) {
+			msg = "Fail read inv item\n"; goto load_game_errexit;
+		}
+	}
+
+	printf("\nDone.\n");
 	fclose(fp);
 	return ret;
+
+load_game_errexit:
+	printf("%s",msg);
+	fclose(fp);
+	return false;
 }
 
 

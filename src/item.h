@@ -21,8 +21,13 @@ struct ItemNode {
 	int y;
 	struct ItemNode *next;
 };
-
 typedef struct ItemNode *ItemNodePtr;
+
+typedef struct {
+	uint8_t item;
+	int x;
+	int y;
+} ItemNodeSave;
 
 // check if the list is empty
 bool isEmptyItemList(ItemNodePtr *listptr);

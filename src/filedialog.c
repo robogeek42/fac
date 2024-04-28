@@ -258,6 +258,7 @@ bool file_dialog( char *dir, char *filenamestr, int maxstr, bool *isload )
 			char buffer[255];
 			key_wait_ticks = clock() + key_wait_time;
 			// save
+			clear_partline( file_line, 1, scrwidth_text-2 );
 			input_string_noclear(1,file_line,"Filename",buffer,MAX_FILENAME_LENGTH);
 			// remove return
 			buffer[strlen(buffer)-1] = '\0';
