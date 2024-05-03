@@ -68,7 +68,13 @@ FacState fac;
 // maps
 uint8_t* tilemap;
 int8_t* layer_belts;
-int8_t* layer_machines;
+
+// machine layer 
+// top bit set means no machine at location
+// can hold 8 different types of machine each with 4 in and 4 out variants
+// bit     7    6 5   4 3   2 1 0
+//     valid outdir indir      ID   
+uint8_t* layer_machines;
 
 // first node (head) of the Item list
 ItemNodePtr itemlist = NULL;
@@ -101,6 +107,8 @@ int bob_facing = BOB_DOWN;
 int bob_frame = 0;
 // belt-layer animation
 int belt_layer_frame = 0;
+// miners have a 3 frame animation
+int miner_frame = 0;
 
 // Inventory position
 int inv_items_wide = 5;
@@ -205,6 +213,11 @@ void removeAtCursor();
 void pickupItemsAtTile(int tx, int ty);
 void message_with_bm8(char *message, int bmID, int timeout);
 void show_filedialog();
+bool isMachineValid( int machine_byte );
+int getMachineBMID(uint8_t machine_byte);
+int getMachineItemType(uint8_t machine_byte);
+int getOverlayAtOffset( int offset );
+int getOverlayAtCursor();
 
 void wait()
 {
@@ -229,13 +242,13 @@ bool alloc_map()
 	}
 	memset(layer_belts, (int8_t)-1, fac.mapWidth * fac.mapHeight);
 
-	layer_machines = (int8_t *) malloc(sizeof(int8_t) * fac.mapWidth * fac.mapHeight);
+	layer_machines = (uint8_t *) malloc(sizeof(uint8_t) * fac.mapWidth * fac.mapHeight);
 	if (layer_machines == NULL)
 	{
 		printf("Out of memory\n");
 		return false;
 	}
-	memset(layer_machines, (int8_t)-1, fac.mapWidth * fac.mapHeight);
+	memset(layer_machines, (uint8_t) 1<<7, fac.mapWidth * fac.mapHeight);
 	return true;
 }
 
@@ -285,12 +298,14 @@ int main(/*int argc, char *argv[]*/)
 
 	init_inventory(inventory);
 	// for test add some items
-	add_item(inventory, IT_BELT, 20); // belt
+	add_item(inventory, IT_BELT, 112); // belt
 	add_item(inventory, IT_IRON_ORE, 12);
 	add_item(inventory, IT_COAL, 7);
 	add_item(inventory, IT_COPPER_PLATE, 255);
-	add_item(inventory, IT_FURNACE, 6);
-	add_item(inventory, IT_MINER, 4);
+	add_item(inventory, IT_FURNACE, 8);
+	add_item(inventory, IT_MINER, 6);
+	add_item(inventory, IT_ASSEMBLER, 1);
+	add_item(inventory, IT_INSERTER, 1);
 
 	inv_selected = 0; // belts
 	item_selected = 0; // belts
@@ -560,11 +575,53 @@ void game_loop()
 
 }
 
+bool isMachineValid( int machine_byte )
+{
+	return ( machine_byte & 0x80 ) == 0;
+}
+
+int getMachineItemType(uint8_t machine_byte)
+{
+	// machine byte is
+	// bit     7    6 5   4 3   2 1 0
+	//     valid outdir indir      ID   
+
+	return (machine_byte & 0x7) + IT_TYPES_MACHINE;
+}
+int getMachineBMID(uint8_t machine_byte)
+{
+	// machine byte is
+	// bit     7    6 5   4 3   2 1 0
+	//     valid outdir indir      ID   
+
+	int machine_itemtype = getMachineItemType(machine_byte);
+
+	if ( machine_itemtype == IT_MINER)
+	{
+		int machine_outdir = (machine_byte & 0x60) >> 5;
+		int bmid = BMOFF_MINERS + 3*machine_outdir;
+		bmid += miner_frame;
+		return bmid;
+	} else {
+		return itemtypes[machine_itemtype].bmID;
+	}
+}
+
+int getOverlayAtOffset( int offset )
+{
+	return (tilemap[offset] & 0xF0) >> 4;
+}
+int getOverlayAtCursor()
+{
+	return (tilemap[cursor_ty*fac.mapWidth +  cursor_tx] & 0xF0) >> 4;
+}
+
 void draw_tile(int tx, int ty, int tposx, int tposy)
 {
-	uint8_t tile = tilemap[ty*fac.mapWidth + tx] & 0x0F;
-	uint8_t overlay = (tilemap[ty*fac.mapWidth + tx] & 0xF0) >> 4;
-	uint8_t machine = layer_machines[ty*fac.mapWidth + tx];
+	int offset = ty*fac.mapWidth + tx;
+	uint8_t tile = tilemap[offset] & 0x0F;
+	uint8_t overlay = getOverlayAtOffset(offset);
+	uint8_t machine_byte = layer_machines[offset];
 
 
 	vdp_adv_select_bitmap( tile + BMOFF_TERR16);
@@ -575,9 +632,10 @@ void draw_tile(int tx, int ty, int tposx, int tposy)
 		vdp_adv_select_bitmap( feat + BMOFF_FEAT16);
 		vdp_draw_bitmap( tposx, tposy );
 	}
-	if ( machine >= 0 )
+	if ( isMachineValid(machine_byte) )
 	{
-		vdp_adv_select_bitmap( itemtypes[machine].bmID );
+		int bmid = getMachineBMID(machine_byte);
+		vdp_adv_select_bitmap( bmid );
 		vdp_draw_bitmap( tposx, tposy );
 	}
 }
@@ -795,7 +853,8 @@ bool check_tile(int px, int py)
 	int tx=getTileX(px);
 	int ty=getTileY(py);
 
-	return tilemap[tx+ty*fac.mapWidth]<16 && layer_machines[tx+ty*fac.mapWidth]<0;
+	int offset = tx+ty*fac.mapWidth;
+	return tilemap[offset]<16 && !isMachineValid(layer_machines[offset]);
 }
 
 bool move_bob(int dir, int speed)
@@ -876,6 +935,8 @@ void stop_place()
 
 #define DIR_OPP(D) ((D+2)%4)
 
+// Function draws the appropriate belt pice that fits in the place
+// where the cursor is
 void draw_place_belt()
 {
 	BELT_PLACE bn[4];
@@ -884,6 +945,7 @@ void draw_place_belt()
 	int in_connection = -1;
 	int out_connection = -1;
 
+	// work out what might connect to this piece of belt
 	for (int i=0; i<4; i++)
 	{
 		if (bn[i].beltID != 255 && DIR_OPP(belts[bn[i].beltID].out) == i)
@@ -898,6 +960,7 @@ void draw_place_belt()
 		}
 	}
 
+	// update the displayed belt piece according to connection rules
 	if (out_connection >= 0)
 	{
 		place_belt_selected = belt_rules_out[out_connection+1].rb[place_belt_index];
@@ -905,6 +968,7 @@ void draw_place_belt()
 		place_belt_selected = belt_rules_in[in_connection+1].rb[place_belt_index];
 	}
 
+	// draw
 	if (place_belt_selected>=0)
 	{
 		vdp_adv_select_bitmap( BMOFF_BELT16 + place_belt_selected*4 );
@@ -913,6 +977,7 @@ void draw_place_belt()
 
 }
 
+// drawing resources is simple - no rotate
 void draw_place_resource()
 {
 	vdp_adv_select_bitmap( itemtypes[item_selected].bmID );
@@ -921,13 +986,22 @@ void draw_place_resource()
 			cursory + itemtypes[item_selected].size*4);
 }
 
+// Draw machines. These can be rotated, so draw approriate rotation.
 void draw_place_machine()
 {
-	vdp_adv_select_bitmap( itemtypes[item_selected].bmID );
-	vdp_draw_bitmap( cursorx, cursory);
+	if ( item_selected == IT_MINER )
+	{
+		vdp_adv_select_bitmap( BMOFF_MINERS + place_belt_index*3 );
+		vdp_draw_bitmap( cursorx, cursory);
+		
+	} else {
+		vdp_adv_select_bitmap( itemtypes[item_selected].bmID );
+		vdp_draw_bitmap( cursorx, cursory);
+	}
 }
 
 
+// draw cursor or placement cursor along with the item selected
 void draw_cursor(bool draw) 
 {
 	// undraw
@@ -939,7 +1013,7 @@ void draw_cursor(bool draw)
 	cursorx = getTilePosInScreenX(cursor_tx);
 	cursory = getTilePosInScreenY(cursor_ty);
 
-	if (bPlace)
+	if (bPlace) // placement cursor is active
 	{
 		if ( isBelt( item_selected ) )
 		{
@@ -1019,6 +1093,7 @@ void draw_layer(bool draw_items)
 
 	vdp_update_key_state();
 	belt_layer_frame = (belt_layer_frame +1) % 4;
+	miner_frame = (miner_frame +1) % 3;
 }
 
 // draws the a single row of the additional layers: belts, machines and items
@@ -1029,14 +1104,16 @@ void draw_horizontal_layer(int tx, int ty, int len, bool draw_belts, bool draw_m
 
 	for (int i=0; i<len; i++)
 	{
-		if ( draw_belts && layer_belts[ty*fac.mapWidth + tx+i] >= 0 )
+		int offset = ty*fac.mapWidth + tx+i;
+		if ( draw_belts && layer_belts[offset] >= 0 )
 		{
-			vdp_adv_select_bitmap( layer_belts[ty*fac.mapWidth + tx+i]*4 + BMOFF_BELT16 + belt_layer_frame);
+			vdp_adv_select_bitmap( layer_belts[offset]*4 + BMOFF_BELT16 + belt_layer_frame);
 			vdp_draw_bitmap( px + i*gTileSize, py );
 		}
-		if ( draw_machines && layer_machines[ty*fac.mapWidth + tx+i] >= 0 )
+		if ( draw_machines && isMachineValid(layer_machines[offset]) )
 		{
-			vdp_adv_select_bitmap( itemtypes[layer_machines[ty*fac.mapWidth + tx+i]].bmID );
+			int bmid = getMachineBMID( layer_machines[offset] );
+			vdp_adv_select_bitmap( bmid );
 			vdp_draw_bitmap( px + i*gTileSize, py );
 		}
 	}
@@ -1098,10 +1175,22 @@ void do_place()
 		}
 	}
 	if ( isMachine(item_selected) ) {
-		int ret = remove_item( inventory, item_selected, 1 );
-		if ( ret >= 0 )
+		// miners can only be placed where there is an overlay resource
+		if ( item_selected == IT_MINER )
 		{
-			layer_machines[fac.mapWidth * cursor_ty + cursor_tx] = item_selected;
+			if ( getOverlayAtCursor() > 0 )
+			{
+				if (remove_item( inventory, item_selected, 1 ))
+				{
+					layer_machines[fac.mapWidth * cursor_ty + cursor_tx] = 
+						(item_selected - IT_TYPES_MACHINE) + (place_belt_index << 5);
+				}
+			}
+		} else 
+		if ( remove_item( inventory, item_selected, 1 ) )
+		{
+			layer_machines[fac.mapWidth * cursor_ty + cursor_tx] =
+				item_selected - IT_TYPES_MACHINE;
 		}
 	}
 	
@@ -1441,20 +1530,21 @@ void show_info()
 	int info_item_bmid = -1;
 	int info_item_type = 0;
 
-	if ( layer_belts[ cursor_ty*fac.mapWidth + cursor_tx ] >=0 )
+	int offset = cursor_ty*fac.mapWidth + cursor_tx;
+	if ( layer_belts[ offset ] >=0 )
 	{
 		// belt
 		info_item_type = IT_BELT;
 		info_item_bmid = itemtypes[ IT_BELT ].bmID;
-	} else if ( layer_machines[  cursor_ty*fac.mapWidth + cursor_tx ] >=0 )
+	} else if ( isMachineValid(layer_machines[offset]) )
 	{
 		// machine
-		info_item_type = layer_machines[  cursor_ty*fac.mapWidth + cursor_tx ];
-		info_item_bmid = itemtypes[ info_item_type ].bmID;
-	} else if ( tilemap[ cursor_ty*fac.mapWidth + cursor_tx ] > 15 )
+		info_item_type = getMachineItemType(layer_machines[offset]);
+		info_item_bmid = getMachineBMID(layer_machines[offset]);
+	} else if ( tilemap[ offset ] > 15 )
 	{
 		// feature
-		info_item_bmid = ( ( tilemap[ cursor_ty*fac.mapWidth + cursor_tx ] & 0xF0 ) >> 4 ) - 1 + BMOFF_FEAT16;
+		info_item_bmid = getOverlayAtOffset(offset) - 1 + BMOFF_FEAT16;
 		info_item_type = ((info_item_bmid - BMOFF_FEAT16 -1) % 5) + IT_FEAT_STONE;
 	}
 	if ( info_item_bmid >= 0 )
@@ -1504,7 +1594,7 @@ bool check_can_mine()
 			break;
 	}
 
-	int overlay = (tilemap[ cursor_ty*fac.mapWidth +  cursor_tx] >> 4);
+	int overlay = getOverlayAtCursor();
 	if ( bNext && overlay > 0 ) return true;
 	return false;
 }
@@ -1520,7 +1610,7 @@ void do_mining()
 	if (bIsMining) return;
 	if ( ! check_can_mine() ) return;
 
-	int feature = (tilemap[ cursor_ty*fac.mapWidth +  cursor_tx] >> 4) -1;
+	int feature = getOverlayAtCursor() -1;
 	
 	// resource count not implemented yet
 
@@ -1536,19 +1626,20 @@ void do_mining()
 	}
 }
 
-// remove Belt or Machine at cursor (eith delete key)
+// remove Belt or Machine at cursor (with delete key)
 void removeAtCursor()
 {
-	if ( layer_belts[ cursor_tx + cursor_ty * fac.mapWidth ] >= 0 )
+	int offset = cursor_tx + cursor_ty * fac.mapWidth;
+	if ( layer_belts[ offset ] >= 0 )
 	{
 		add_item( inventory, IT_BELT, 1 );
-		layer_belts[ cursor_tx + cursor_ty * fac.mapWidth ] = -1;
+		layer_belts[ offset ] = -1;
 	}
-	if ( layer_machines[ cursor_tx + cursor_ty * fac.mapWidth ] >= 0 )
+	if ( isMachineValid(layer_machines[offset]) )
 	{
-		int machine = layer_machines[ cursor_tx + cursor_ty * fac.mapWidth ];
+		int machine = getMachineItemType(layer_machines[offset]);
 		add_item( inventory, machine, 1 );
-		layer_machines[ cursor_tx + cursor_ty * fac.mapWidth ] = -1;
+		layer_machines[offset] = 0x80;
 	}
 	draw_tile( cursor_tx, cursor_ty, cursorx, cursory );
 }

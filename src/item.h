@@ -77,6 +77,7 @@ typedef struct {
 	int fuel_value;		
 } ItemType; 
 
+// FIXME: this needs to be an enum
 #define IT_BELT 0
 
 #define IT_TYPES_RAW 1
@@ -95,15 +96,16 @@ typedef struct {
 #define IT_FURNACE 9
 #define IT_MINER 10
 #define IT_ASSEMBLER 11
+#define IT_INSERTER 12
 
-#define IT_TYPES_FEATURES 12
-#define IT_FEAT_STONE 12
-#define IT_FEAT_IRON 13
-#define IT_FEAT_COPPER 14
-#define IT_FEAT_COAL 15
-#define IT_FEAT_WOOD 16
+#define IT_TYPES_FEATURES 13
+#define IT_FEAT_STONE 13
+#define IT_FEAT_IRON 14
+#define IT_FEAT_COPPER 15
+#define IT_FEAT_COAL 16
+#define IT_FEAT_WOOD 17
 
-#define NUM_ITEMTYPES 17
+#define NUM_ITEMTYPES 18
 
 static ItemType itemtypes[] = {
 //                                     Belt  Machine Resouce Overlay
@@ -122,7 +124,8 @@ static ItemType itemtypes[] = {
 // Machines
     {IT_FURNACE,		"Furnace",		false, true, false, false, BMOFF_MACH16+0, BM_SIZE16, 0 },
     {IT_MINER,			"Miner",		false, true, false, false, BMOFF_MACH16+1, BM_SIZE16, 0 },
-    {IT_ASSEMBLER,		"Assembler",	false, true, false, false, BMOFF_MACH16+3, BM_SIZE16, 0 },
+    {IT_ASSEMBLER,		"Assembler",	false, true, false, false, BMOFF_MACH16+2, BM_SIZE16, 0 },
+    {IT_INSERTER,		"Inserter", 	false, true, false, false, BMOFF_MACH16+3, BM_SIZE16, 0 },
 // Overlays
 	{IT_FEAT_STONE,		"Stone",		false, false, false, true, BMOFF_FEAT16+0, BM_SIZE16, 0 },
 	{IT_FEAT_IRON,		"Iron Ore", 	false, false, false, true, BMOFF_FEAT16+1, BM_SIZE16, 0 },
@@ -136,12 +139,6 @@ typedef struct {
 	int bmID;
 	uint8_t feature_type;
 } ItemBMFeatureMap;
-
-typedef struct {
-	uint8_t feature_type;
-	uint8_t raw_type;
-	uint8_t processed_type;
-} ProcessMap;
 
 	//			stone    0:5:10 
 	//			iron ore 1:6:11
@@ -165,6 +162,14 @@ static ItemBMFeatureMap item_feature_map[] = {
 	{ BMOFF_FEAT16 + 14, IT_FEAT_WOOD },
 };
 
+typedef struct {
+	uint8_t feature_type;
+	uint8_t raw_type;
+	uint8_t processed_type;
+} ProcessMap;
+
+/* Process item map: 
+ * From feature, to raw, then to processed */
 static ProcessMap process_map[] = {
 	{ IT_FEAT_STONE, IT_STONE, IT_STONE_BRICK },
 	{ IT_FEAT_IRON, IT_IRON_ORE, IT_IRON_PLATE },

@@ -35,7 +35,11 @@
 #define BMOFF_CURSORS BMOFF_NUMS + NUM_BM_NUMS 
 #define NUM_BM_CURSORS 2
 
-#define TOTAL_BM BMOFF_CURSORS + NUM_BM_CURSORS
+#define FN_MINERS "img/tm16/miner%s%02d.rgb2"
+#define BMOFF_MINERS BMOFF_CURSORS + NUM_BM_CURSORS 
+#define NUM_BM_MINERS 12
+
+#define TOTAL_BM BMOFF_MINERS + NUM_BM_MINERS
 
 #define BOB_SPRITE_DOWN 0
 #define BOB_SPRITE_UP 1
@@ -113,8 +117,20 @@ void load_images()
 		sprintf(fname, FN_CURSORS, fn);
 		load_bitmap_file(fname, 16, 16, BMOFF_CURSORS + fn-1);
 	}
+
+	// 12 miners each with 3 images for animation
+	char *dir[] = {"U","R","D","L"};
+	for (int d=0;d<4;d++)
+	{
+		for (int fn=1; fn<=NUM_BM_MINERS/4; fn++)
+		{
+			sprintf(fname, FN_MINERS, dir[d], fn);
+			//printf("Load %s to BMID %d\n",fname, BMOFF_MINERS + fn-1 + d*3);
+			load_bitmap_file(fname, 16, 16, BMOFF_MINERS + fn-1 + d*3 );
+		}
+	}
 	
-	/*
+#if 0
 	printf("TILES start %d count %d\n",BMOFF_TERR16,NUM_BM_TERR16);
 	printf("FEATS start %d count %d\n",BMOFF_FEAT16,NUM_BM_FEAT16);
 	printf("BOB   start %d count %d\n",BMOFF_BOB16,NUM_BM_BOB16);
@@ -123,8 +139,10 @@ void load_images()
 	printf("MACHS start %d count %d\n",BMOFF_MACH16,NUM_BM_MACH16);
 	printf("NUMS  start %d count %d\n",BMOFF_NUMS,NUM_BM_NUMS);
 	printf("CURS  start %d count %d\n",BMOFF_CURSORS,NUM_BM_CURSORS);
+	printf("MINER start %d count %d\n",BMOFF_MINERS,NUM_BM_MINERS);
 	printf("Total %d\n",TOTAL_BM);
-	*/
+	wait_for_any_key();
+#endif
 }
 
 // Create sprites for Bob moving in each direction with 4 frames each
