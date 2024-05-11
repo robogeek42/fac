@@ -1,6 +1,8 @@
 #ifndef _IMAGE_H
 #define _IMAGE_H
 
+#include "progbar.h"
+
 #define FN_TERR16 "img/terr16/tr%02d.rgb2"
 #define BMOFF_TERR16 0
 #define NUM_BM_TERR16 13
@@ -55,7 +57,7 @@
 
 #define CURSOR_SPRITE 8
 
-void load_images();
+bool load_images(bool progress);
 void create_sprites();
 int get_current_sprite();
 void select_bob_sprite( int sprite );
@@ -67,55 +69,85 @@ static int current_bob_sprite = -1;
 #endif
 
 #ifdef _IMAGE_IMPLEMENTATION
-void load_images() 
+bool load_images(bool progress) 
 {
+	PROGBAR *progbar;
+	int cnt=1;
+	int prog_max = TOTAL_BM;
+
+	if (progress)
+	{
+		progbar = init_horiz_bar(10,100,300,32,0,prog_max,1,3);
+		
+		update_bar(progbar, 0);
+		TAB(10,5);printf("Loading Images");
+	}
+
 	//TAB(0,0);
 	char fname[40];
 	for (int fn=1; fn<=NUM_BM_TERR16; fn++)
 	{
 		sprintf(fname, FN_TERR16, fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_TERR16 + fn-1);
+		int ret = load_bitmap_file(fname, 16, 16, BMOFF_TERR16 + fn-1);
+		if ( ret < 0 ) return false;
+		if (progress) update_bar(progbar, cnt++);
 	}
 	for (int fn=1; fn<=NUM_BM_FEAT16; fn++)
 	{
 		sprintf(fname, FN_FEAT16, fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_FEAT16 + fn-1);
+		int ret = load_bitmap_file(fname, 16, 16, BMOFF_FEAT16 + fn-1);
+		if ( ret < 0 ) return false;
+		if (progress) update_bar(progbar, cnt++);
 	}
 	for (int fn=1; fn<=NUM_BM_BOB16; fn++)
 	{
 		sprintf(fname, FN_BOB16, fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_BOB16 + fn-1);
+		int ret = load_bitmap_file(fname, 16, 16, BMOFF_BOB16 + fn-1);
+		if ( ret < 0 ) return false;
+		if (progress) update_bar(progbar, cnt++);
 	}
 	for (int fn=1; fn<=NUM_BM_BELT16; fn++)
 	{
 		sprintf(fname, FN_BELT16, fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_BELT16 + fn-1);
+		int ret = load_bitmap_file(fname, 16, 16, BMOFF_BELT16 + fn-1);
+		if ( ret < 0 ) return false;
+		if (progress) update_bar(progbar, cnt++);
 	}
 	for (int fn=1; fn<=NUM_BM_BBELT16; fn++)
 	{
 		sprintf(fname, FN_BBELT16, fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_BELT16 + NUM_BM_BELT16 + fn-1);
+		int ret = load_bitmap_file(fname, 16, 16, BMOFF_BELT16 + NUM_BM_BELT16 + fn-1);
+		if ( ret < 0 ) return false;
+		if (progress) update_bar(progbar, cnt++);
 	}
 	for (int fn=1; fn<=NUM_BM_ITEM8; fn++)
 	{
 		sprintf(fname, FN_ITEM8, fn);
-		load_bitmap_file(fname, 8, 8, BMOFF_ITEM8 + fn-1);
+		int ret = load_bitmap_file(fname, 8, 8, BMOFF_ITEM8 + fn-1);
+		if ( ret < 0 ) return false;
+		if (progress) update_bar(progbar, cnt++);
 	}
 	for (int fn=1; fn<=NUM_BM_MACH16; fn++)
 	{
 		sprintf(fname, FN_MACH16, fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_MACH16 + fn-1);
+		int ret = load_bitmap_file(fname, 16, 16, BMOFF_MACH16 + fn-1);
+		if ( ret < 0 ) return false;
+		if (progress) update_bar(progbar, cnt++);
 	}
 	for (int fn=0; fn<=NUM_BM_NUMS-1; fn++)
 	{
 		sprintf(fname, FN_NUMS, fn);
-		load_bitmap_file(fname, 4, 5, BMOFF_NUMS + fn);
+		int ret = load_bitmap_file(fname, 4, 5, BMOFF_NUMS + fn);
+		if ( ret < 0 ) return false;
+		if (progress) update_bar(progbar, cnt++);
 	}
 	
 	for (int fn=1; fn<=NUM_BM_CURSORS; fn++)
 	{
 		sprintf(fname, FN_CURSORS, fn);
-		load_bitmap_file(fname, 16, 16, BMOFF_CURSORS + fn-1);
+		int ret = load_bitmap_file(fname, 16, 16, BMOFF_CURSORS + fn-1);
+		if ( ret < 0 ) return false;
+		if (progress) update_bar(progbar, cnt++);
 	}
 
 	// 12 miners each with 3 images for animation
@@ -126,7 +158,9 @@ void load_images()
 		{
 			sprintf(fname, FN_MINERS, dir[d], fn);
 			//printf("Load %s to BMID %d\n",fname, BMOFF_MINERS + fn-1 + d*3);
-			load_bitmap_file(fname, 16, 16, BMOFF_MINERS + fn-1 + d*3 );
+			int ret = load_bitmap_file(fname, 16, 16, BMOFF_MINERS + fn-1 + d*3 );
+			if ( ret < 0 ) return false;
+			if (progress) update_bar(progbar, cnt++);
 		}
 	}
 	
@@ -143,11 +177,15 @@ void load_images()
 	printf("Total %d\n",TOTAL_BM);
 	wait_for_any_key();
 #endif
+
+	return true;
 }
 
 // Create sprites for Bob moving in each direction with 4 frames each
 void create_sprites() 
 {
+	vdp_cls();
+	TAB(10,5);printf("Creating Sprites");
 	vdp_adv_create_sprite( BOB_SPRITE_DOWN, BMOFF_BOB16 + BOB_SPRITE_DOWN*4, 4 );
 	vdp_adv_create_sprite( BOB_SPRITE_UP, BMOFF_BOB16 + BOB_SPRITE_UP*4, 4 );
 	vdp_adv_create_sprite( BOB_SPRITE_LEFT, BMOFF_BOB16 + BOB_SPRITE_LEFT*4, 4 );

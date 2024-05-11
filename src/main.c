@@ -129,6 +129,10 @@ int bob_mining_anim_time = 40;
 clock_t bob_mining_anim_ticks;
 int bob_mining_anim_frame = 0;
 
+// miner
+clock_t miner_anim_timeout_ticks;
+int miner_anim_speed = 30;
+
 //------------------------------------------------------------
 
 //------------------------------------------------------------
@@ -159,6 +163,9 @@ clock_t display_fps_ticks;
 clock_t func_start;
 int func_time[4] = { 0 };
 
+void wait();
+void change_mode(int mode);
+
 void game_loop();
 
 int getWorldCoordX(int sx) { return (fac.xpos + sx); }
@@ -175,6 +182,7 @@ bool can_scroll_screen(int dir, int step);
 void draw_horizontal(int tx, int ty, int len);
 void draw_vertical(int tx, int ty, int len);
 
+bool check_dir_exists(char *path);
 int load_map(char *mapname);
 void place_feature_overlay(uint8_t *data, int sx, int sy, int tile, int tx, int ty);
 
@@ -219,11 +227,21 @@ int getMachineItemType(uint8_t machine_byte);
 int getOverlayAtOffset( int offset );
 int getOverlayAtCursor();
 
+static volatile SYSVAR *sys_vars = NULL;
+
 void wait()
 {
 	char k=getchar();
 	if (k=='q') exit(0);
 }
+
+void change_mode(int mode)
+{
+	sys_vars->vpd_pflags = 0;
+	vdp_mode(mode);
+	while ( !(sys_vars->vpd_pflags & vdp_pflag_mode) );
+}
+
 
 bool alloc_map()
 {
@@ -255,6 +273,8 @@ bool alloc_map()
 int main(/*int argc, char *argv[]*/)
 {
 	vdp_vdu_init();
+	sys_vars = (SYSVAR *)mos_sysvars();
+
 	if ( vdp_key_init() == -1 ) return 1;
 	vdp_set_key_event_handler( key_event_handler );
 
@@ -266,10 +286,15 @@ int main(/*int argc, char *argv[]*/)
 
 	if ( !alloc_map() ) return -1;
 
+	if ( ! check_dir_exists("maps") )
+	{
+		printf("No maps directory\n");
+		goto my_exit2;
+	}
 	if (load_map("maps/fmap.data") != 0)
 	{
 		printf("Failed to load map\n");
-		goto my_exit;
+		goto my_exit2;
 	}
 
 	/* start bob and screen centred in map */
@@ -288,12 +313,16 @@ int main(/*int argc, char *argv[]*/)
 	oldcursor_ty = cursor_ty;
 
 	// setup complete
-	vdp_mode(gMode);
+	change_mode(gMode);
 	vdp_cursor_enable( false );
 	vdp_logical_scr_dims( false );
 	//vdu_set_graphics_viewport()
 
-	load_images();
+	if ( ! load_images(true) )
+	{
+		printf("Failed to load images\n");
+		goto my_exit2;
+	}
 	create_sprites();
 
 	init_inventory(inventory);
@@ -312,9 +341,9 @@ int main(/*int argc, char *argv[]*/)
 
 	game_loop();
 
-my_exit:
+	change_mode(0);
+my_exit2:
 	free(tilemap);
-	vdp_mode(0);
 	vdp_logical_scr_dims( true );
 	vdp_cursor_enable( true );
 	return 0;
@@ -332,6 +361,7 @@ void game_loop()
 	key_wait_ticks = clock();
 	display_fps_ticks = clock();
 	frame_time_in_ticks = 0;
+	miner_anim_timeout_ticks = clock() + miner_anim_speed;
 
 	select_bob_sprite( bob_facing );
 	vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
@@ -555,6 +585,12 @@ void game_loop()
 			draw_horizontal_layer( tx, ty, message_len+1, true, true, true );
 			draw_horizontal( tx, ty+1, message_len+1 );
 			draw_horizontal_layer( tx, ty+1, message_len+1, true, true, true );
+		}
+
+		if ( miner_anim_timeout_ticks < clock() )
+		{
+			miner_anim_timeout_ticks = clock() + miner_anim_speed;
+			miner_frame = (miner_frame +1) % 3;
 		}
 
 		if ( vdp_check_key_press( KEY_f ) ) // file dialog
@@ -801,9 +837,24 @@ uint8_t rnd1_block4x4[4*4] = {
 };
 
 
+bool check_dir_exists(char *path)
+{
+    FRESULT        fr = FR_OK;
+    DIR            dir;
+    fr = ffs_dopen(&dir, path);
+	if ( fr == FR_OK )
+	{
+		return true;
+	}
+	return false;
+}
 int load_map(char *mapname)
 {
 	uint8_t ret = mos_load( mapname, (uint24_t) tilemap,  fac.mapWidth * fac.mapHeight );
+	if ( ret != 0 )
+	{
+		return ret;
+	}
 	place_feature_overlay(oval1_block6x6,6,6,0,30,10); // stone    0:5:10
 	place_feature_overlay(oval2_block6x6,6,6,1,10,23); // iron ore 1:6:11
 	place_feature_overlay(oval1_block6x6,6,6,2,22,29); // copp ore 2:7:12
@@ -1093,7 +1144,7 @@ void draw_layer(bool draw_items)
 
 	vdp_update_key_state();
 	belt_layer_frame = (belt_layer_frame +1) % 4;
-	miner_frame = (miner_frame +1) % 3;
+	//miner_frame = (miner_frame +1) % 3;
 }
 
 // draws the a single row of the additional layers: belts, machines and items
@@ -1112,9 +1163,10 @@ void draw_horizontal_layer(int tx, int ty, int len, bool draw_belts, bool draw_m
 		}
 		if ( draw_machines && isMachineValid(layer_machines[offset]) )
 		{
-			int bmid = getMachineBMID( layer_machines[offset] );
-			vdp_adv_select_bitmap( bmid );
-			vdp_draw_bitmap( px + i*gTileSize, py );
+			draw_tile(tx + i, ty, px + i*gTileSize, py); 
+			//int bmid = getMachineBMID( layer_machines[offset] );
+			//vdp_adv_select_bitmap( bmid );
+			//vdp_draw_bitmap( px + i*gTileSize, py );
 		}
 	}
 
@@ -1921,10 +1973,9 @@ void show_filedialog()
 	char filename[80];
 	bool isload = false;
 
-	vdp_mode(3);
+	change_mode(3);
 	vdp_logical_scr_dims( false );
 	vdp_cursor_enable( false );
-	wait_clock(10);
 
 	int fd_return = file_dialog("./saves", filename, 80, &isload);
 
@@ -1946,7 +1997,7 @@ void show_filedialog()
 		wait();
 	}
 
-	vdp_mode(gMode);
+	change_mode(gMode);
 	vdp_cursor_enable( false );
 	vdp_logical_scr_dims( false );
 

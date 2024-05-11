@@ -9,12 +9,14 @@
 #define MENU_TEXT_COL 2
 #define MENU_HILI_COL 5
 
-#define MAX_FILENAME_LENGTH 80
+#define MAX_FILENAME_LENGTH 160
 #define MAX_OUTFILE_LENGTH 120
 
 static SmallFilInfo *sfinfos = NULL;
 int fno_num = 0;
 char curr_file[MAX_FILENAME_LENGTH+2];
+char linestr[MAX_FILENAME_LENGTH+2];
+char spaces[MAX_FILENAME_LENGTH]; 
 bool curr_file_set;
 int scrwidth_text=0;
 int scrheight_text=0;
@@ -30,6 +32,7 @@ int file_line = 0;
 int selected_line = 0;
 int selected_fno = 0;
 int selected_fno_start = 0;
+int max_linestr = 0;
 
 int key_wait_time = 15;
 int key_scroll_wait_time = 10;
@@ -68,10 +71,6 @@ void show_files(int *line, int select_offset, int fno_start )
 		}
 		return;
 	}
-
-	char linestr[MAX_FILENAME_LENGTH];
-	int max_linestr = files_width_chars;
-	char spaces[MAX_FILENAME_LENGTH]; for(int i=0;i<MAX_FILENAME_LENGTH;i++) spaces[i]=' '; 
 
 	curr_file_set = false;
 
@@ -137,6 +136,10 @@ bool file_dialog( char *dir, char *filenamestr, int maxstr, bool *isload )
 	selected_line = 0; // selected screen line in directory list
 	selected_fno = 0;
 	selected_fno_start = 0;
+
+	for(int i=0;i<MAX_FILENAME_LENGTH;i++) spaces[i]=' '; 
+	spaces[MAX_FILENAME_LENGTH-1]=0;
+	max_linestr = files_width_chars;
 
 	snprintf(curr_directory, 254, "%s", dir);
 

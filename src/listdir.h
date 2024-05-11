@@ -26,9 +26,7 @@ typedef struct SmallFilInfo {
     char*   fname;   /* malloc'ed */
 } SmallFilInfo;
 
-void list_files(const char* path/*, uint16_t from_n, uint8_t for_n*/);
 SmallFilInfo *get_files(const char* path, int *num_files);
-uint24_t get_num_dirents(const char* path, int* cnt);
 void free_fnos( SmallFilInfo **fnos, int num_fnos );
 
 #endif

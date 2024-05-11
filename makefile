@@ -28,6 +28,7 @@ install: bin/$(NAME).bin
 	srec_cat bin/$(NAME).bin -binary -offset 0x40000 -o bin/$(NAME).hex -intel
 	cp bin/$(NAME).bin $(NAME)
 	cp bin/$(NAME).bin ~/agon/fab/sdcard/bin/
+	cp bin/$(NAME).bin ~/agon/sdcard_sync/bin/
 	rsync -rvu ./ ~/agon/sdcard_sync/fac
 
 
