@@ -22,6 +22,8 @@
 
 #define _IMAGE_IMPLEMENTATION
 #include "images.h"
+#define _MINER_IMPLEMENTATION
+#include "miner.h"
 
 int gMode = 8; 
 int gScreenWidth = 320;
@@ -43,6 +45,11 @@ int gTileSize = 16;
 #define BITS_RIGHT 2
 #define BITS_DOWN 4
 #define BITS_LEFT 8
+
+#define DIR_UP 0
+#define DIR_RIGHT 1
+#define DIR_DOWN 2
+#define DIR_LEFT 3
 
 bool debug = false;
 
@@ -81,6 +88,8 @@ ItemNodePtr itemlist = NULL;
 
 // inventory
 INV_ITEM inventory[MAX_INVENTORY_ITEMS];
+
+MINER* miners = NULL;
 
 //------------------------------------------------------------
 
@@ -132,6 +141,8 @@ int bob_mining_anim_frame = 0;
 // miner
 clock_t miner_anim_timeout_ticks;
 int miner_anim_speed = 30;
+clock_t miner_update_ticks;
+int miner_update_rate = 10;
 
 //------------------------------------------------------------
 
@@ -205,6 +216,7 @@ void draw_horizontal_layer(int tx, int ty, int len, bool draw_belts, bool draw_m
 void drop_item(int item);
 
 void move_items_on_belts();
+void move_items_on_machines();
 void print_item_pos();
 void draw_items();
 void draw_items_at_tile(int tx, int ty);
@@ -267,6 +279,12 @@ bool alloc_map()
 		return false;
 	}
 	memset(layer_machines, (uint8_t) 1<<7, fac.mapWidth * fac.mapHeight);
+
+	if ( !allocMiners(&miners) )
+	{
+		printf("Failed to alloc miners\n");
+	}
+
 	return true;
 }
 
@@ -362,6 +380,7 @@ void game_loop()
 	display_fps_ticks = clock();
 	frame_time_in_ticks = 0;
 	miner_anim_timeout_ticks = clock() + miner_anim_speed;
+	miner_update_ticks = clock() +miner_update_rate;
 
 	select_bob_sprite( bob_facing );
 	vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
@@ -433,8 +452,8 @@ void game_loop()
 		{
 			layer_wait_ticks = clock() + belt_speed; // belt anim speed
 			//draw_cursor(false);
-			draw_layer(true);
 			move_items_on_belts();
+			draw_layer(true);
 			draw_cursor(true);
 		}
 		if (debug)
@@ -463,7 +482,7 @@ void game_loop()
 				stop_place(); 
 			}
 		}
-		if ( key_pressed_code == KEY_r ) { // "r" rotate belt. Check actual key code - distinguishes lower/upper case
+		if ( key_wait_ticks<clock() && key_pressed_code == KEY_r ) { // "r" rotate belt. Check actual key code - distinguishes lower/upper case
 			if (bPlace && key_wait_ticks < clock() ) {
 				key_wait_ticks = clock() + key_wait;
 				if ( bInfoDisplayed ) clear_info();
@@ -472,7 +491,7 @@ void game_loop()
 				draw_tile( cursor_tx, cursor_ty, cursorx, cursory );
 			}
 		}
-		if ( key_pressed_code == KEY_R ) { // "R" rotate belt. Check actual key code - distinguishes lower/upper case
+		if ( key_wait_ticks<clock() && key_pressed_code == KEY_R ) { // "R" rotate belt. Check actual key code - distinguishes lower/upper case
 			if (bPlace && key_wait_ticks < clock() ) {
 				key_wait_ticks = clock() + key_wait;
 				if ( bInfoDisplayed ) clear_info();
@@ -480,13 +499,13 @@ void game_loop()
 				if (place_belt_index < 0) place_belt_index += 4;
 			}
 		}
-		if ( vdp_check_key_press( KEY_enter ) ) // ENTER - start placement state
+		if (  key_wait_ticks<clock() &&vdp_check_key_press( KEY_enter ) ) // ENTER - start placement state
 		{
 			if ( bInfoDisplayed ) clear_info();
 			do_place();
 		}
 
-		if ( vdp_check_key_press( KEY_delete ) ) // DELETE - delete item at cursor
+		if ( key_wait_ticks<clock() && vdp_check_key_press( KEY_delete ) ) // DELETE - delete item at cursor
 		{
 			key_wait_ticks = clock() + key_wait;
 			removeAtCursor();
@@ -591,6 +610,7 @@ void game_loop()
 		{
 			miner_anim_timeout_ticks = clock() + miner_anim_speed;
 			miner_frame = (miner_frame +1) % 3;
+			move_items_on_machines();
 		}
 
 		if ( vdp_check_key_press( KEY_f ) ) // file dialog
@@ -604,6 +624,14 @@ void game_loop()
 			
 		}
 
+		if ( miner_update_ticks < clock() )
+		{
+			miner_update_ticks = clock() + miner_update_rate;
+			for (int m=0; m<minersAllocated; m++)
+			{
+				minerProduce( miners, m, &itemlist);
+			}
+		}
 		vdp_update_key_state();
 
 		frame_time_in_ticks = clock() - ticks_start;
@@ -1230,12 +1258,17 @@ void do_place()
 		// miners can only be placed where there is an overlay resource
 		if ( item_selected == IT_MINER )
 		{
-			if ( getOverlayAtCursor() > 0 )
+			uint8_t overlay = getOverlayAtCursor();
+			if ( overlay > 0 )
 			{
 				if (remove_item( inventory, item_selected, 1 ))
 				{
 					layer_machines[fac.mapWidth * cursor_ty + cursor_tx] = 
 						(item_selected - IT_TYPES_MACHINE) + (place_belt_index << 5);
+
+					int feat_type = item_feature_map[overlay-1].feature_type;
+					uint8_t raw_item = process_map[feat_type - IT_FEAT_STONE].raw_type;
+					addMiner( &miners, cursor_tx, cursor_ty, raw_item, place_belt_index );
 				}
 			}
 		} else 
@@ -1254,9 +1287,78 @@ void drop_item(int item)
 	insertAtFrontItemList(&itemlist, item, cursor_tx*gTileSize+4, cursor_ty*gTileSize+4);
 }
 
+void move_items_on_machines()
+{
+	ItemNodePtr currPtr = itemlist;
+	while (currPtr != NULL) 
+	{
+		bool moved = false;
+		int tx = (currPtr->x +4) >> 4;
+		int ty = (currPtr->y +4) >> 4;
+
+		int miner = getMinerAtTileXY( miners, tx, ty );
+
+		if ( miner >= 0 ) 
+		{
+			int nextx = currPtr->x;
+			int nexty = currPtr->y;
+			int nnx = nextx;
+			int nny = nexty;
+			switch( miners[miner].direction )
+			{
+				case DIR_UP:	// exit to top, reduce Y
+					if ( !moved ) { nexty--; nny-=2; moved=true; }
+					break;
+				case DIR_RIGHT:
+					if ( !moved ) { nextx++; nnx+=2; moved=true; }
+					break;
+				case DIR_DOWN:
+					if ( !moved ) { nexty++; nny+=2; moved=true; }
+					break;
+				case DIR_LEFT:
+					if ( !moved ) { nextx--; nnx-=2; moved=true; }
+					break;
+				default:
+					break;
+			}
+			if (moved)
+			{
+				// check next pixel and the one after in the same direction
+				bool found = isAnythingAtXY(&itemlist, nextx, nexty);
+				found |= isAnythingAtXY(&itemlist, nnx, nny);
+				if (!found) 
+				{
+					currPtr->x = nextx;
+					currPtr->y = nexty;
+				}
+			}
+		}
+		if ( moved )
+		{
+			// get new tx/ty, if there is a miner there fine, otherwise, draw it
+			tx = currPtr->x >> 4;
+			ty = currPtr->y >> 4;
+			int miner = getMinerAtTileXY( miners, tx, ty );
+
+			// draw tiles where there is no belt that the item has moved into
+			if (itemIsOnScreen(currPtr)  && miner<0)
+			{
+				int px=getTilePosInScreenX(tx);
+				int py=getTilePosInScreenY(ty);
+				draw_tile(tx, ty, px, py);
+				draw_items_at_tile(tx, ty);
+			}
+		}
+		
+		currPtr = currPtr->next;
+	}
+}
+
 void move_items_on_belts()
 {
+	// function timer
 	func_start = clock();
+
 	ItemNodePtr currPtr = itemlist;
 	int offset = 4;
 	while (currPtr != NULL) {
@@ -1266,6 +1368,7 @@ void move_items_on_belts()
 
 		int tx = centrex >> 4; //getTileX(centrex);
 		int ty = centrey >> 4; //getTileY(centrey);
+
 		int beltID = layer_belts[ tx + ty*fac.mapWidth ];
 
 		if (beltID >= 0)
@@ -1280,16 +1383,16 @@ void move_items_on_belts()
 			int nny = nexty;
 			switch (in)
 			{
-				case 0:  // in from top - move down
+				case DIR_UP:  // in from top - move down
 					if ( !moved && dy < (offset+4) ) { nexty++; nny+=2; moved=true; }
 					break;
-				case 1: // in from right - move left
+				case DIR_RIGHT: // in from right - move left
 					if ( !moved && (8-dx) < ((8-offset)-4) ) { nextx--; nnx-=2;  moved=true; }
 					break;
-				case 2: // in from bottom - move up
+				case DIR_DOWN: // in from bottom - move up
 					if ( !moved && (8-dy) < ((8-offset)-4) ) { nexty--; nny-=2; moved=true; }
 					break;
-				case 3: // in from left - move right
+				case DIR_LEFT: // in from left - move right
 					if ( !moved && dx < (offset+4) ) { nextx++; nnx+=2; moved=true; }
 					break;
 				default:
@@ -1297,16 +1400,16 @@ void move_items_on_belts()
 			}
 			if (!moved) switch (out)
 			{
-				case 0: // out to top - move up
+				case DIR_UP: // out to top - move up
 					if ( !moved ) { nexty--; nny-=2; moved=true; }
 					break;
-				case 1: // out to right - move right
+				case DIR_RIGHT: // out to right - move right
 					if ( !moved ) { nextx++; nnx+=2; moved=true; }
 					break;
-				case 2: // out to bottom - move down
+				case DIR_DOWN: // out to bottom - move down
 					if ( !moved ) { nexty++; nny+=2; moved=true; }
 					break;
-				case 3: // out to left - move left
+				case DIR_LEFT: // out to left - move left
 					if ( !moved ) { nextx--; nnx-=2; moved=true; }
 					break;
 				default:
@@ -1325,20 +1428,28 @@ void move_items_on_belts()
 				}
 			}
 		}
-		tx = currPtr->x >> 4; // getTileX(currPtr->x);
-		ty = currPtr->y >> 4; // getTileY(currPtr->y);
-		beltID = layer_belts[ tx + ty*fac.mapWidth ];
-		if (itemIsOnScreen(currPtr) && moved && beltID<0)
+		if ( moved )
 		{
-			int px=getTilePosInScreenX(tx);
-			int py=getTilePosInScreenY(ty);
-			draw_tile(tx, ty, px, py);
-			draw_items_at_tile(tx, ty);
-		}	
+			// get new tx/ty, if there is a belt there fine, otherwise, draw it
+			tx = currPtr->x >> 4; // getTileX(currPtr->x);
+			ty = currPtr->y >> 4; // getTileY(currPtr->y);
+			beltID = layer_belts[ tx + ty*fac.mapWidth ];
+
+			// draw tiles where there is no belt that the item has moved into
+			if (itemIsOnScreen(currPtr)  && beltID<0)
+			{
+				int px=getTilePosInScreenX(tx);
+				int py=getTilePosInScreenY(ty);
+				draw_tile(tx, ty, px, py);
+				draw_items_at_tile(tx, ty);
+			}
+		}
+		// next
 		currPtr = currPtr->next;
 	}
-	func_time[0]=clock()-func_start;
 
+	// function timer
+	func_time[0]=clock()-func_start;
 }
 
 void print_item_pos()
@@ -1690,8 +1801,19 @@ void removeAtCursor()
 	if ( isMachineValid(layer_machines[offset]) )
 	{
 		int machine = getMachineItemType(layer_machines[offset]);
-		add_item( inventory, machine, 1 );
-		layer_machines[offset] = 0x80;
+		if ( machine == IT_MINER )
+		{
+			int mnum = getMinerAtTileXY( miners, cursor_tx, cursor_ty );
+			if ( mnum >=0 )
+			{
+				deleteMiner( miners, mnum );
+				add_item( inventory, machine, 1 );
+				layer_machines[offset] = 0x80;
+			}
+		} else {
+			add_item( inventory, machine, 1 );
+			layer_machines[offset] = 0x80;
+		}
 	}
 	draw_tile( cursor_tx, cursor_ty, cursorx, cursory );
 }
@@ -1757,6 +1879,8 @@ bool save_game( char *filepath )
 	FILE *fp;
 	int objs_written = 0;
 	char *msg;
+
+	COL(15);
 
 	// Open the file for writing
 	if ( !(fp = fopen( filepath, "wb" ) ) ) {
@@ -1833,13 +1957,27 @@ bool save_game( char *filepath )
 		msg = "Fail: inventory\n"; goto save_game_errexit;
 	}
 
+	// write miner data
+	printf("Save: miners\n");
+	int num_miner_objects = minersAllocated;
+	objs_written = fwrite( (const void*) &num_miner_objects, sizeof(int), 1, fp);
+	if (objs_written!=1) {
+		msg = "Fail: miner count\n"; goto save_game_errexit;
+	}
+	objs_written = fwrite( (const void*) miners, sizeof(MINER), num_miner_objects, fp);
+	if (objs_written!=num_miner_objects) {
+		msg = "Fail: miners\n"; goto save_game_errexit;
+	}
+	
+
 	printf("done.\n");
 	fclose(fp);
 	return ret;
 
 save_game_errexit:
-	printf("%s",msg);
+	COL(9);printf("%s",msg);
 	fclose(fp);
+	COL(15);
 	return false;
 
 }
@@ -1849,6 +1987,8 @@ bool load_game( char *filepath )
 	FILE *fp;
 	int objs_read = 0;
 	char *msg;
+
+	COL(15);
 
 	// open file for reading
 	if ( !(fp = fopen( filepath, "rb" ) ) ) {
@@ -1951,13 +2091,38 @@ bool load_game( char *filepath )
 		}
 	}
 
+	// read the miners
+	printf("Load: miners ");
+	int num_miner_objects=0;
+	objs_read = fread( &num_miner_objects, sizeof(int), 1, fp );
+	if ( objs_read != 1 ) {
+		msg = "Fail read num miners\n"; goto load_game_errexit;
+	}
+	printf("%d\n",num_miner_objects);
+	if ( miners )
+	{
+		free(miners);
+	}
+	miners = malloc(sizeof(MINER) * num_miner_objects);
+	if ( !miners ) { 
+		msg="Alloc Error\n"; goto load_game_errexit;
+	}
+	minersAllocated = num_miner_objects;
+	objs_read = fread( miners, sizeof(MINER), minersAllocated, fp );
+	if ( objs_read != minersAllocated ) { 
+		msg="Fail read miners\n"; goto load_game_errexit;
+	}
+	// calculate number of miners active
+	minersNum=0; for(int m=0;m<minersAllocated;m++) if (miners[m].valid) minersNum++;
+
 	printf("\nDone.\n");
 	fclose(fp);
 	return ret;
 
 load_game_errexit:
-	printf("%s",msg);
+	COL(9);printf("%s",msg);
 	fclose(fp);
+	COL(15);
 	return false;
 }
 
