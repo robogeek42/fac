@@ -62,6 +62,8 @@ bool isAnythingAtXY(ItemNodePtr *listptr, int keyx, int keyy);
 // return list of items at a tile and remove them from the itemlist
 ItemNodePtr popItemsAtTile(ItemNodePtr *listptr,  int tx, int ty );
 
+void deleteItem(ItemNodePtr *listptr, ItemNodePtr ptr);
+
 #define BM_SIZE16 0
 #define BM_SIZE8 1
 
@@ -78,34 +80,38 @@ typedef struct {
 } ItemType; 
 
 // FIXME: this needs to be an enum
-#define IT_BELT 0
 
-#define IT_TYPES_RAW 1
-#define IT_STONE 1
-#define IT_IRON_ORE 2
-#define IT_COPPER_ORE 3
-#define IT_COAL 4
-#define IT_WOOD 5
+enum ItemTypesEnum {
+	IT_BELT,
 
-#define IT_TYPES_PROCESSED 6
-#define IT_IRON_PLATE 6
-#define IT_COPPER_PLATE 7
-#define IT_STONE_BRICK 8
+	IT_TYPES_RAW,
+	IT_STONE = IT_TYPES_RAW,
+	IT_IRON_ORE,
+	IT_COPPER_ORE,
+	IT_COAL,
+	IT_WOOD,
 
-#define IT_TYPES_MACHINE 9
-#define IT_FURNACE 9
-#define IT_MINER 10
-#define IT_ASSEMBLER 11
-#define IT_INSERTER 12
+	IT_TYPES_PROCESSED,
+	IT_IRON_PLATE = IT_TYPES_PROCESSED,
+	IT_COPPER_PLATE,
+	IT_STONE_BRICK,
 
-#define IT_TYPES_FEATURES 13
-#define IT_FEAT_STONE 13
-#define IT_FEAT_IRON 14
-#define IT_FEAT_COPPER 15
-#define IT_FEAT_COAL 16
-#define IT_FEAT_WOOD 17
+	IT_TYPES_MACHINE,
+	IT_FURNACE = IT_TYPES_MACHINE,
+	IT_MINER,
+	IT_ASSEMBLER,
+	IT_INSERTER,
+	IT_BOX,
 
-#define NUM_ITEMTYPES 18
+	IT_TYPES_FEATURES,
+	IT_FEAT_STONE = IT_TYPES_FEATURES,
+	IT_FEAT_IRON,
+	IT_FEAT_COPPER,
+	IT_FEAT_COAL,
+	IT_FEAT_WOOD,
+
+	NUM_ITEMTYPES
+};
 
 static ItemType itemtypes[] = {
 //                                     Belt  Machine Resouce Overlay
@@ -126,6 +132,7 @@ static ItemType itemtypes[] = {
     {IT_MINER,			"Miner",		false, true, false, false, BMOFF_MACH16+1, BM_SIZE16, 0 },
     {IT_ASSEMBLER,		"Assembler",	false, true, false, false, BMOFF_MACH16+2, BM_SIZE16, 0 },
     {IT_INSERTER,		"Inserter", 	false, true, false, false, BMOFF_MACH16+3, BM_SIZE16, 0 },
+    {IT_BOX,			"Box",		 	false, true, false, false, BMOFF_MACH16+4, BM_SIZE16, 0 },
 // Overlays
 	{IT_FEAT_STONE,		"Stone",		false, false, false, true, BMOFF_FEAT16+0, BM_SIZE16, 0 },
 	{IT_FEAT_IRON,		"Iron Ore", 	false, false, false, true, BMOFF_FEAT16+1, BM_SIZE16, 0 },

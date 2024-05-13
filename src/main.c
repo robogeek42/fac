@@ -216,7 +216,6 @@ void draw_horizontal_layer(int tx, int ty, int len, bool draw_belts, bool draw_m
 void drop_item(int item);
 
 void move_items_on_belts();
-void move_items_on_machines();
 void print_item_pos();
 void draw_items();
 void draw_items_at_tile(int tx, int ty);
@@ -353,6 +352,7 @@ int main(/*int argc, char *argv[]*/)
 	add_item(inventory, IT_MINER, 6);
 	add_item(inventory, IT_ASSEMBLER, 1);
 	add_item(inventory, IT_INSERTER, 1);
+	add_item(inventory, IT_BOX, 4);
 
 	inv_selected = 0; // belts
 	item_selected = 0; // belts
@@ -610,7 +610,6 @@ void game_loop()
 		{
 			miner_anim_timeout_ticks = clock() + miner_anim_speed;
 			miner_frame = (miner_frame +1) % 3;
-			move_items_on_machines();
 		}
 
 		if ( vdp_check_key_press( KEY_f ) ) // file dialog
@@ -1287,14 +1286,20 @@ void drop_item(int item)
 	insertAtFrontItemList(&itemlist, item, cursor_tx*gTileSize+4, cursor_ty*gTileSize+4);
 }
 
-void move_items_on_machines()
+void move_items_on_belts()
 {
+	// function timer
+	func_start = clock();
+
 	ItemNodePtr currPtr = itemlist;
-	while (currPtr != NULL) 
-	{
+	int tileoffset = 4;
+	while (currPtr != NULL) {
 		bool moved = false;
-		int tx = (currPtr->x +4) >> 4;
-		int ty = (currPtr->y +4) >> 4;
+		int centrex = currPtr->x + tileoffset;
+		int centrey = currPtr->y + tileoffset;
+
+		int tx = centrex >> 4; //getTileX(centrex);
+		int ty = centrey >> 4; //getTileY(centrey);
 
 		int miner = getMinerAtTileXY( miners, tx, ty );
 
@@ -1333,41 +1338,6 @@ void move_items_on_machines()
 				}
 			}
 		}
-		if ( moved )
-		{
-			// get new tx/ty, if there is a miner there fine, otherwise, draw it
-			tx = currPtr->x >> 4;
-			ty = currPtr->y >> 4;
-			int miner = getMinerAtTileXY( miners, tx, ty );
-
-			// draw tiles where there is no belt that the item has moved into
-			if (itemIsOnScreen(currPtr)  && miner<0)
-			{
-				int px=getTilePosInScreenX(tx);
-				int py=getTilePosInScreenY(ty);
-				draw_tile(tx, ty, px, py);
-				draw_items_at_tile(tx, ty);
-			}
-		}
-		
-		currPtr = currPtr->next;
-	}
-}
-
-void move_items_on_belts()
-{
-	// function timer
-	func_start = clock();
-
-	ItemNodePtr currPtr = itemlist;
-	int offset = 4;
-	while (currPtr != NULL) {
-		bool moved = false;
-		int centrex = currPtr->x + offset;
-		int centrey = currPtr->y + offset;
-
-		int tx = centrex >> 4; //getTileX(centrex);
-		int ty = centrey >> 4; //getTileY(centrey);
 
 		int beltID = layer_belts[ tx + ty*fac.mapWidth ];
 
@@ -1384,16 +1354,16 @@ void move_items_on_belts()
 			switch (in)
 			{
 				case DIR_UP:  // in from top - move down
-					if ( !moved && dy < (offset+4) ) { nexty++; nny+=2; moved=true; }
+					if ( !moved && dy < (tileoffset+4) ) { nexty++; nny+=2; moved=true; }
 					break;
 				case DIR_RIGHT: // in from right - move left
-					if ( !moved && (8-dx) < ((8-offset)-4) ) { nextx--; nnx-=2;  moved=true; }
+					if ( !moved && (8-dx) < ((8-tileoffset)-4) ) { nextx--; nnx-=2;  moved=true; }
 					break;
 				case DIR_DOWN: // in from bottom - move up
-					if ( !moved && (8-dy) < ((8-offset)-4) ) { nexty--; nny-=2; moved=true; }
+					if ( !moved && (8-dy) < ((8-tileoffset)-4) ) { nexty--; nny-=2; moved=true; }
 					break;
 				case DIR_LEFT: // in from left - move right
-					if ( !moved && dx < (offset+4) ) { nextx++; nnx+=2; moved=true; }
+					if ( !moved && dx < (tileoffset+4) ) { nextx++; nnx+=2; moved=true; }
 					break;
 				default:
 					break;
@@ -1419,22 +1389,33 @@ void move_items_on_belts()
 			if (moved)
 			{
 				// check next pixel and the one after in the same direction
-				bool found = isAnythingAtXY(&itemlist, nextx-offset, nexty-offset );
-				found |= isAnythingAtXY(&itemlist, nnx-offset, nny-offset );
+				bool found = isAnythingAtXY(&itemlist, nextx-tileoffset, nexty-tileoffset );
+				found |= isAnythingAtXY(&itemlist, nnx-tileoffset, nny-tileoffset );
 				if (!found) 
 				{
-					currPtr->x = nextx - offset;
-					currPtr->y = nexty - offset;
+					currPtr->x = nextx - tileoffset;
+					currPtr->y = nexty - tileoffset;
 				}
 			}
 		}
+
+
 		if ( moved )
 		{
 			// get new tx/ty, if there is a belt there fine, otherwise, draw it
 			tx = currPtr->x >> 4; // getTileX(currPtr->x);
 			ty = currPtr->y >> 4; // getTileY(currPtr->y);
-			beltID = layer_belts[ tx + ty*fac.mapWidth ];
+			int offset = tx + ty*fac.mapWidth;
+			beltID = layer_belts[ offset ];
 
+			if ( isMachineValid(layer_machines[offset]) )
+			{
+				int machine = getMachineItemType(layer_machines[offset]);
+				if ( machine == IT_BOX )
+				{
+					deleteItem(&itemlist, currPtr);
+				}
+			} else 
 			// draw tiles where there is no belt that the item has moved into
 			if (itemIsOnScreen(currPtr)  && beltID<0)
 			{

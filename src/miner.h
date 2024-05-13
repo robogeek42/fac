@@ -14,7 +14,7 @@ typedef struct {
 	int y;
 	int tx;
 	int ty;
-	bool speed;
+	int speed;
 	int type;
 	int direction;
 	clock_t ticksTillProduce;
@@ -93,7 +93,7 @@ int addMiner( MINER **miners, int tx, int ty, int type, int direction )
 	(*miners)[mnum].x = tx*gTileSize; 
 	(*miners)[mnum].y = ty*gTileSize;
 	(*miners)[mnum].type = type;
-	(*miners)[mnum].speed = 400;
+	(*miners)[mnum].speed = 300;
 	(*miners)[mnum].direction = direction;
 	(*miners)[mnum].ticksTillProduce = clock() + (*miners)[mnum].speed;
 	minersNum++;
@@ -116,7 +116,6 @@ void minerProduce( MINER *miners, int m, ItemNodePtr *itemlist )
 	if ( !miners[m].valid ) return;
 	if ( miners[m].ticksTillProduce < clock() )
 	{
-		//TAB(0,5);printf("Miner%d: prod\n",m);
 		miners[m].ticksTillProduce = clock() + miners[m].speed;
 		if ( ! isAnythingAtXY(itemlist, miners[m].x+4, miners[m].y+4) )
 		{

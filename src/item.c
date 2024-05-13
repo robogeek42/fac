@@ -226,6 +226,39 @@ ItemNodePtr popItemsAtTile(ItemNodePtr *listptr, int tx, int ty )
 	return tilelist;
 }
 
+void deleteItem(ItemNodePtr *listptr, ItemNodePtr ptr)
+{
+	if (isEmptyItemList(listptr)) {
+		return;
+	}
+	
+	ItemNodePtr prevPtr = NULL;
+	ItemNodePtr currPtr = (*listptr);
+	ItemNodePtr currNext = NULL;
+	while (currPtr != NULL ) {
+		currNext = currPtr->next;
+
+		if ( currPtr == ptr )
+		{
+			// cut the current item from the main list
+			if (prevPtr)
+			{
+				// case where we are at middle or end (currNext==NUL)
+				prevPtr->next = currNext;
+			} else {
+				// case where we were at begining or only item 
+				(*listptr) = currNext;
+				prevPtr = NULL;
+			}
+			break;
+		} else {
+			prevPtr = currPtr;
+		}
+		currPtr = currNext;
+	}
+	free(ptr);
+}
+
 bool isBelt(int item) {
 	return itemtypes[item].isBelt;
 }

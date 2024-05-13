@@ -27,7 +27,7 @@
 
 #define FN_MACH16 "img/tm16/tm%02d.rgb2"
 #define BMOFF_MACH16 BMOFF_ITEM8 + NUM_BM_ITEM8 
-#define NUM_BM_MACH16 4
+#define NUM_BM_MACH16 5
 
 #define FN_NUMS "img/nums4x5/num%01d.rgb2"
 #define BMOFF_NUMS BMOFF_MACH16 + NUM_BM_MACH16 
