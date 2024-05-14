@@ -31,6 +31,8 @@ int gScreenHeight = 240;
 
 int gTileSize = 16;
 
+extern int numItems;
+
 #define SCROLL_RIGHT 0
 #define SCROLL_LEFT 1
 #define SCROLL_UP 2
@@ -459,7 +461,8 @@ void game_loop()
 		if (debug)
 		{
 			COL(15);COL(128);
-			TAB(0,29); printf("%d %d  ",frame_time_in_ticks,func_time[0]);
+			//TAB(0,29); printf("%d %d  ",frame_time_in_ticks,func_time[0]);
+			TAB(0,29); printf("%d %d i:%d   ",frame_time_in_ticks,func_time[0], numItems);
 		}
 			
 		if ( vdp_check_key_press( KEY_p ) ) { // do place - get ready to place an item from inventory
@@ -1283,7 +1286,8 @@ void do_place()
 
 void drop_item(int item)
 {
-	insertAtFrontItemList(&itemlist, item, cursor_tx*gTileSize+4, cursor_ty*gTileSize+4);
+	// place the 8x8 resource item in the centre of the square
+	insertAtFrontItemList(&itemlist, item, cursor_tx*gTileSize + 4, cursor_ty*gTileSize + 4);
 }
 
 void move_items_on_belts()
@@ -1292,12 +1296,13 @@ void move_items_on_belts()
 	func_start = clock();
 
 	ItemNodePtr currPtr = itemlist;
-	int tileoffset = 4;
+	int item_centre_offset = 4;
 	while (currPtr != NULL) {
 		bool moved = false;
-		int centrex = currPtr->x + tileoffset;
-		int centrey = currPtr->y + tileoffset;
+		int centrex = currPtr->x + item_centre_offset;
+		int centrey = currPtr->y + item_centre_offset;
 
+		// (tx,ty) is the tile the centre of the item is in
 		int tx = centrex >> 4; //getTileX(centrex);
 		int ty = centrey >> 4; //getTileY(centrey);
 
@@ -1305,8 +1310,8 @@ void move_items_on_belts()
 
 		if ( miner >= 0 ) 
 		{
-			int nextx = currPtr->x;
-			int nexty = currPtr->y;
+			int nextx = centrex;
+			int nexty = centrey;
 			int nnx = nextx;
 			int nny = nexty;
 			switch( miners[miner].direction )
@@ -1333,8 +1338,8 @@ void move_items_on_belts()
 				found |= isAnythingAtXY(&itemlist, nnx, nny);
 				if (!found) 
 				{
-					currPtr->x = nextx;
-					currPtr->y = nexty;
+					currPtr->x = nextx - item_centre_offset;
+					currPtr->y = nexty - item_centre_offset;
 				}
 			}
 		}
@@ -1343,27 +1348,32 @@ void move_items_on_belts()
 
 		if (beltID >= 0)
 		{
+			// (dx,dy) offset of centre of item in relation to tile
 			int dx = centrex % gTileSize;
 			int dy = centrey % gTileSize;
+
 			int in = belts[beltID].in;
 			int out = belts[beltID].out;
+
+			// calculate next x,y and next-next x,y
 			int nextx = centrex;
 			int nexty = centrey;
 			int nnx = nextx;
 			int nny = nexty;
+			// check movement on belt towards the centre
 			switch (in)
 			{
 				case DIR_UP:  // in from top - move down
-					if ( !moved && dy < (tileoffset+4) ) { nexty++; nny+=2; moved=true; }
+					if ( !moved && dy < 8 ) { nexty++; nny+=2; moved=true; }
 					break;
 				case DIR_RIGHT: // in from right - move left
-					if ( !moved && (8-dx) < ((8-tileoffset)-4) ) { nextx--; nnx-=2;  moved=true; }
+					if ( !moved && dx >= 8 ) { nextx--; nnx-=2;  moved=true; }
 					break;
 				case DIR_DOWN: // in from bottom - move up
-					if ( !moved && (8-dy) < ((8-tileoffset)-4) ) { nexty--; nny-=2; moved=true; }
+					if ( !moved && dy >= 8 ) { nexty--; nny-=2; moved=true; }
 					break;
 				case DIR_LEFT: // in from left - move right
-					if ( !moved && dx < (tileoffset+4) ) { nextx++; nnx+=2; moved=true; }
+					if ( !moved && dx < 8 ) { nextx++; nnx+=2; moved=true; }
 					break;
 				default:
 					break;
@@ -1389,12 +1399,12 @@ void move_items_on_belts()
 			if (moved)
 			{
 				// check next pixel and the one after in the same direction
-				bool found = isAnythingAtXY(&itemlist, nextx-tileoffset, nexty-tileoffset );
-				found |= isAnythingAtXY(&itemlist, nnx-tileoffset, nny-tileoffset );
+				bool found = isAnythingAtXY(&itemlist, nextx-item_centre_offset, nexty-item_centre_offset );
+				found |= isAnythingAtXY(&itemlist, nnx-item_centre_offset, nny-item_centre_offset );
 				if (!found) 
 				{
-					currPtr->x = nextx - tileoffset;
-					currPtr->y = nexty - tileoffset;
+					currPtr->x = nextx - item_centre_offset;
+					currPtr->y = nexty - item_centre_offset;
 				}
 			}
 		}
@@ -1403,11 +1413,26 @@ void move_items_on_belts()
 		if ( moved )
 		{
 			// get new tx/ty, if there is a belt there fine, otherwise, draw it
-			tx = currPtr->x >> 4; // getTileX(currPtr->x);
-			ty = currPtr->y >> 4; // getTileY(currPtr->y);
-			int offset = tx + ty*fac.mapWidth;
-			beltID = layer_belts[ offset ];
+			tx = (currPtr->x + item_centre_offset) >> 4;
+			ty = (currPtr->y + item_centre_offset) >> 4;
 
+			int offset = tx + ty*fac.mapWidth;
+			int newbeltID = layer_belts[ offset ];
+
+			// handle two belts joining each other
+			if (newbeltID>=0 && beltID>=0 && newbeltID!=beltID &&
+					belts[beltID].out != DIR_OPP(belts[newbeltID].in))
+			{
+				if ( ! isAnythingAtXY(&itemlist, tx*gTileSize+4,ty*gTileSize+4) )
+				{
+					currPtr->x = tx*gTileSize+4;
+					currPtr->y = ty*gTileSize+4;
+					int px=getTilePosInScreenX(tx);
+					int py=getTilePosInScreenY(ty);
+					draw_tile(tx, ty, px, py);
+					draw_items_at_tile(tx, ty);
+				}
+			} else	
 			if ( isMachineValid(layer_machines[offset]) )
 			{
 				int machine = getMachineItemType(layer_machines[offset]);
@@ -1417,7 +1442,7 @@ void move_items_on_belts()
 				}
 			} else 
 			// draw tiles where there is no belt that the item has moved into
-			if (itemIsOnScreen(currPtr)  && beltID<0)
+			if (itemIsOnScreen(currPtr) && beltID<0)
 			{
 				int px=getTilePosInScreenX(tx);
 				int py=getTilePosInScreenY(ty);
@@ -1803,31 +1828,21 @@ void pickupItemsAtTile(int tx, int ty)
 {
 	if ( !isEmptyItemList(&itemlist) ) 
 	{
-		//TAB(0,0);
-		//printItemList(&itemlist);
-
 		ItemNodePtr itptr = popItemsAtTile(&itemlist, tx, ty);
-
-		//printf("after\n");
-		//printItemList(&itemlist);
-		//printf("in new list\n");
-		//printItemList(&itptr);
-		//wait();
 
 		if ( itptr != NULL )
 		{
 			ItemNodePtr ip = popFrontItem(&itptr);
-			//printf("pop %p ip->next %p \n",ip, ip->next);
+			numItems++; // already reduced
 			while (ip)
 			{
-				//printf("remove %p %d %d,%d\n", ip, ip->item, ip->x, ip->y);
 				add_item( inventory, ip->item, 1 );
 				free(ip);
 				ip=NULL;
 				
 				ip = popFrontItem(&itptr);
+				numItems++; // already reduced
 			}
-			//wait();
 		}	
 	}
 }

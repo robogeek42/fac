@@ -15,6 +15,9 @@
 // data -> the actual value
 // next -> address of the next node
 
+// (x, y) is absolute pixel position in map
+// (x - fax.xpos, y - fac.ypos) gives sceen pixel position
+// 
 struct ItemNode {
 	uint8_t item;
 	int x;
