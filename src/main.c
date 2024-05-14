@@ -1438,7 +1438,12 @@ void move_items_on_belts()
 				int machine = getMachineItemType(layer_machines[offset]);
 				if ( machine == IT_BOX )
 				{
-					deleteItem(&itemlist, currPtr);
+					int item = currPtr->item;
+					if ( popItem(&itemlist, currPtr) )
+					{
+						add_item(inventory, item, 1);
+						free(currPtr);
+					}
 				}
 			} else 
 			// draw tiles where there is no belt that the item has moved into

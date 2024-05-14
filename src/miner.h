@@ -79,13 +79,16 @@ int addMiner( MINER **miners, int tx, int ty, int type, int direction )
 	// find the next allocated miner that isn't being used (valid==false)
 	int mnum = 0;
 	while( (*miners)[mnum++].valid && mnum < minersAllocated );
+	for (mnum=0;mnum<minersAllocated;mnum++)
+	{
+		if ( !(*miners)[mnum].valid ) break;
+	}
 	// did we find one?
-	if ( (*miners)[mnum].valid )
+	if ( mnum == minersAllocated )
 	{
 		printf("Error\n");
 		return -1;
 	}
-
 	// set-up the miner
 	(*miners)[mnum].valid = true;
 	(*miners)[mnum].tx = tx; 

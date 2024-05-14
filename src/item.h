@@ -66,6 +66,7 @@ bool isAnythingAtXY(ItemNodePtr *listptr, int keyx, int keyy);
 ItemNodePtr popItemsAtTile(ItemNodePtr *listptr,  int tx, int ty );
 
 void deleteItem(ItemNodePtr *listptr, ItemNodePtr ptr);
+ItemNodePtr popItem(ItemNodePtr *listptr, ItemNodePtr ptr);
 
 #define BM_SIZE16 0
 #define BM_SIZE8 1
