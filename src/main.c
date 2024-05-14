@@ -17,13 +17,17 @@
 #include <stdbool.h>
 #include "../../agon_ccode/common/util.h"
 #include "item.h"
-#include "inventory.h"
-#include "filedialog.h"
 
+#define _INVENTORY_IMPLEMENTATION
+#include "inventory.h"
+#define _FILEDIALOG_IMPLEMENTATION
+#include "filedialog.h"
 #define _IMAGE_IMPLEMENTATION
 #include "images.h"
 #define _MINER_IMPLEMENTATION
 #include "miner.h"
+#define _MACHINE_IMPLEMENTATION
+#include "machine.h"
 
 int gMode = 8; 
 int gScreenWidth = 320;

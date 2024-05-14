@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "images.h"
 
 #define MACHINE_FURNACE 0
 
@@ -27,4 +26,8 @@ Furnace furnace[] = {
 		4
 	},
 };
+#endif
+
+#ifdef _MACHINE_IMPLEMENTATION
+
 #endif
