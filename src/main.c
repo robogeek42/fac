@@ -24,8 +24,6 @@
 #include "filedialog.h"
 #define _IMAGE_IMPLEMENTATION
 #include "images.h"
-#define _MINER_IMPLEMENTATION
-#include "miner.h"
 #define _MACHINE_IMPLEMENTATION
 #include "machine.h"
 
@@ -95,7 +93,7 @@ ItemNodePtr itemlist = NULL;
 // inventory
 INV_ITEM inventory[MAX_INVENTORY_ITEMS];
 
-MINER* miners = NULL;
+Machine* machines = NULL;
 
 //------------------------------------------------------------
 
@@ -243,6 +241,7 @@ int getMachineBMID(uint8_t machine_byte);
 int getMachineItemType(uint8_t machine_byte);
 int getOverlayAtOffset( int offset );
 int getOverlayAtCursor();
+void insertItemIntoMachine(int machine, ItemNodePtr *pitemptr );
 
 static volatile SYSVAR *sys_vars = NULL;
 
@@ -285,9 +284,9 @@ bool alloc_map()
 	}
 	memset(layer_machines, (uint8_t) 1<<7, fac.mapWidth * fac.mapHeight);
 
-	if ( !allocMiners(&miners) )
+	if ( !allocMachines(&machines) )
 	{
-		printf("Failed to alloc miners\n");
+		printf("Failed to alloc machines\n");
 	}
 
 	return true;
@@ -320,6 +319,8 @@ int main(/*int argc, char *argv[]*/)
 		goto my_exit2;
 	}
 
+	printf("sizeof(ItemTypesEnum) %d\n",sizeof(IT_BELT));
+	wait();
 	/* start bob and screen centred in map */
 	fac.bobx = (fac.mapWidth * gTileSize / 2) & 0xFFFFF0;
 	fac.boby = (fac.mapHeight * gTileSize / 2) & 0xFFFFF0;
@@ -633,9 +634,9 @@ void game_loop()
 		if ( miner_update_ticks < clock() )
 		{
 			miner_update_ticks = clock() + miner_update_rate;
-			for (int m=0; m<minersAllocated; m++)
+			for (int m=0; m<machinesAllocated; m++)
 			{
-				minerProduce( miners, m, &itemlist);
+				minerProduce( machines, m, &itemlist);
 			}
 		}
 		vdp_update_key_state();
@@ -645,12 +646,12 @@ void game_loop()
 
 }
 
-bool isMachineValid( int machine_byte )
+inline bool isMachineValid( int machine_byte )
 {
 	return ( machine_byte & 0x80 ) == 0;
 }
 
-int getMachineItemType(uint8_t machine_byte)
+inline int getMachineItemType(uint8_t machine_byte)
 {
 	// machine byte is
 	// bit     7    6 5   4 3   2 1 0
@@ -1274,7 +1275,7 @@ void do_place()
 
 					int feat_type = item_feature_map[overlay-1].feature_type;
 					uint8_t raw_item = process_map[feat_type - IT_FEAT_STONE].raw_type;
-					addMiner( &miners, cursor_tx, cursor_ty, raw_item, place_belt_index );
+					addMiner( &machines, cursor_tx, cursor_ty, raw_item, place_belt_index );
 				}
 			}
 		} else 
@@ -1310,15 +1311,15 @@ void move_items_on_belts()
 		int tx = centrex >> 4; //getTileX(centrex);
 		int ty = centrey >> 4; //getTileY(centrey);
 
-		int miner = getMinerAtTileXY( miners, tx, ty );
+		int machine = getMachineAtTileXY( machines, tx, ty );
 
-		if ( miner >= 0 ) 
+		if ( machine >= 0 ) 
 		{
 			int nextx = centrex;
 			int nexty = centrey;
 			int nnx = nextx;
 			int nny = nexty;
-			switch( miners[miner].direction )
+			switch( machines[machine].outdir )
 			{
 				case DIR_UP:	// exit to top, reduce Y
 					if ( !moved ) { nexty--; nny-=2; moved=true; }
@@ -1440,15 +1441,8 @@ void move_items_on_belts()
 			if ( isMachineValid(layer_machines[offset]) )
 			{
 				int machine = getMachineItemType(layer_machines[offset]);
-				if ( machine == IT_BOX )
-				{
-					int item = currPtr->item;
-					if ( popItem(&itemlist, currPtr) )
-					{
-						add_item(inventory, item, 1);
-						free(currPtr);
-					}
-				}
+				insertItemIntoMachine( machine, &currPtr );
+
 			} else 
 			// draw tiles where there is no belt that the item has moved into
 			if (itemIsOnScreen(currPtr) && beltID<0)
@@ -1818,10 +1812,10 @@ void removeAtCursor()
 		int machine = getMachineItemType(layer_machines[offset]);
 		if ( machine == IT_MINER )
 		{
-			int mnum = getMinerAtTileXY( miners, cursor_tx, cursor_ty );
+			int mnum = getMachineAtTileXY( machines, cursor_tx, cursor_ty );
 			if ( mnum >=0 )
 			{
-				deleteMiner( miners, mnum );
+				deleteMachine( machines, mnum );
 				add_item( inventory, machine, 1 );
 				layer_machines[offset] = 0x80;
 			}
@@ -1962,16 +1956,16 @@ bool save_game( char *filepath )
 		msg = "Fail: inventory\n"; goto save_game_errexit;
 	}
 
-	// write miner data
-	printf("Save: miners\n");
-	int num_miner_objects = minersAllocated;
-	objs_written = fwrite( (const void*) &num_miner_objects, sizeof(int), 1, fp);
+	// write machine data
+	printf("Save: machines\n");
+	int num_machine_objects = machinesAllocated;
+	objs_written = fwrite( (const void*) &num_machine_objects, sizeof(int), 1, fp);
 	if (objs_written!=1) {
-		msg = "Fail: miner count\n"; goto save_game_errexit;
+		msg = "Fail: machine count\n"; goto save_game_errexit;
 	}
-	objs_written = fwrite( (const void*) miners, sizeof(MINER), num_miner_objects, fp);
-	if (objs_written!=num_miner_objects) {
-		msg = "Fail: miners\n"; goto save_game_errexit;
+	objs_written = fwrite( (const void*) machines, sizeof(Machine), num_machine_objects, fp);
+	if (objs_written!=num_machine_objects) {
+		msg = "Fail: machines\n"; goto save_game_errexit;
 	}
 	
 
@@ -2096,29 +2090,29 @@ bool load_game( char *filepath )
 		}
 	}
 
-	// read the miners
-	printf("Load: miners ");
-	int num_miner_objects=0;
-	objs_read = fread( &num_miner_objects, sizeof(int), 1, fp );
+	// read the machines
+	printf("Load: machines ");
+	int num_machine_objects=0;
+	objs_read = fread( &num_machine_objects, sizeof(int), 1, fp );
 	if ( objs_read != 1 ) {
-		msg = "Fail read num miners\n"; goto load_game_errexit;
+		msg = "Fail read num machines\n"; goto load_game_errexit;
 	}
-	printf("%d\n",num_miner_objects);
-	if ( miners )
+	printf("%d\n",num_machine_objects);
+	if ( machines )
 	{
-		free(miners);
+		free(machines);
 	}
-	miners = malloc(sizeof(MINER) * num_miner_objects);
-	if ( !miners ) { 
+	machines = malloc(sizeof(Machine) * num_machine_objects);
+	if ( !machines ) { 
 		msg="Alloc Error\n"; goto load_game_errexit;
 	}
-	minersAllocated = num_miner_objects;
-	objs_read = fread( miners, sizeof(MINER), minersAllocated, fp );
-	if ( objs_read != minersAllocated ) { 
-		msg="Fail read miners\n"; goto load_game_errexit;
+	machinesAllocated = num_machine_objects;
+	objs_read = fread( machines, sizeof(Machine), machinesAllocated, fp );
+	if ( objs_read != machinesAllocated ) { 
+		msg="Fail read machines\n"; goto load_game_errexit;
 	}
-	// calculate number of miners active
-	minersNum=0; for(int m=0;m<minersAllocated;m++) if (miners[m].valid) minersNum++;
+	// calculate number of machines active
+	machineCount=0; for(int m=0;m<machinesAllocated;m++) if (machines[m].machine_type != 0) machineCount++;
 
 	printf("\nDone.\n");
 	fclose(fp);
@@ -2181,3 +2175,16 @@ void show_filedialog()
 	vdp_refresh_sprites();
 }
 
+void insertItemIntoMachine(int machine, ItemNodePtr *pitemptr )
+{
+	if ( machine == IT_BOX )
+	{
+		int item = (*pitemptr)->item;
+		if ( popItem(&itemlist, (*pitemptr)) )
+		{
+			add_item(inventory, item, 1);
+			free(pitemptr);
+		}
+	}
+	
+}
