@@ -16,6 +16,12 @@
 #include <time.h>
 #include <stdbool.h>
 #include "../../agon_ccode/common/util.h"
+
+#define DIR_UP 0
+#define DIR_RIGHT 1
+#define DIR_DOWN 2
+#define DIR_LEFT 3
+
 #include "item.h"
 
 #define _INVENTORY_IMPLEMENTATION
@@ -49,11 +55,6 @@ extern int numItems;
 #define BITS_RIGHT 2
 #define BITS_DOWN 4
 #define BITS_LEFT 8
-
-#define DIR_UP 0
-#define DIR_RIGHT 1
-#define DIR_DOWN 2
-#define DIR_LEFT 3
 
 bool debug = false;
 
@@ -122,6 +123,7 @@ int bob_frame = 0;
 int belt_layer_frame = 0;
 // miners have a 3 frame animation
 int miner_frame = 0;
+int furnace_frame = 0;
 
 // Inventory position
 int inv_items_wide = 5;
@@ -145,8 +147,10 @@ int bob_mining_anim_frame = 0;
 // miner
 clock_t miner_anim_timeout_ticks;
 int miner_anim_speed = 30;
-clock_t miner_update_ticks;
-int miner_update_rate = 10;
+clock_t furnace_anim_timeout_ticks;
+int furnace_anim_speed = 30;
+clock_t machine_update_ticks;
+int machine_update_rate = 10;
 
 //------------------------------------------------------------
 
@@ -241,7 +245,9 @@ int getMachineBMID(uint8_t machine_byte);
 int getMachineItemType(uint8_t machine_byte);
 int getOverlayAtOffset( int offset );
 int getOverlayAtCursor();
-void insertItemIntoMachine(int machine, ItemNodePtr *pitemptr );
+void insertItemIntoMachine(int machine_type, int tx, int ty, int item );
+void insertItemPtrIntoMachine(int machine_type, int tx, int ty, ItemNodePtr *pitemptr );
+void check_items_on_machines();
 
 static volatile SYSVAR *sys_vars = NULL;
 
@@ -319,8 +325,6 @@ int main(/*int argc, char *argv[]*/)
 		goto my_exit2;
 	}
 
-	printf("sizeof(ItemTypesEnum) %d\n",sizeof(IT_BELT));
-	wait();
 	/* start bob and screen centred in map */
 	fac.bobx = (fac.mapWidth * gTileSize / 2) & 0xFFFFF0;
 	fac.boby = (fac.mapHeight * gTileSize / 2) & 0xFFFFF0;
@@ -387,7 +391,8 @@ void game_loop()
 	display_fps_ticks = clock();
 	frame_time_in_ticks = 0;
 	miner_anim_timeout_ticks = clock() + miner_anim_speed;
-	miner_update_ticks = clock() +miner_update_rate;
+	furnace_anim_timeout_ticks = clock() + furnace_anim_speed;
+	machine_update_ticks = clock() + machine_update_rate;
 
 	select_bob_sprite( bob_facing );
 	vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
@@ -460,6 +465,7 @@ void game_loop()
 			layer_wait_ticks = clock() + belt_speed; // belt anim speed
 			//draw_cursor(false);
 			move_items_on_belts();
+			check_items_on_machines();
 			draw_layer(true);
 			draw_cursor(true);
 		}
@@ -468,6 +474,7 @@ void game_loop()
 			COL(15);COL(128);
 			//TAB(0,29); printf("%d %d  ",frame_time_in_ticks,func_time[0]);
 			TAB(0,29); printf("%d %d i:%d   ",frame_time_in_ticks,func_time[0], numItems);
+			TAB(20,29); printf("mcnt %d ma %d  ",machineCount, machinesAllocated);
 		}
 			
 		if ( vdp_check_key_press( KEY_p ) ) { // do place - get ready to place an item from inventory
@@ -619,6 +626,11 @@ void game_loop()
 			miner_anim_timeout_ticks = clock() + miner_anim_speed;
 			miner_frame = (miner_frame +1) % 3;
 		}
+		if ( furnace_anim_timeout_ticks < clock() )
+		{
+			furnace_anim_timeout_ticks = clock() + furnace_anim_speed;
+			furnace_frame = (furnace_frame +1) % 3;
+		}
 
 		if ( vdp_check_key_press( KEY_f ) ) // file dialog
 		{
@@ -631,12 +643,20 @@ void game_loop()
 			
 		}
 
-		if ( miner_update_ticks < clock() )
+		if ( machine_update_ticks < clock() )
 		{
-			miner_update_ticks = clock() + miner_update_rate;
+			machine_update_ticks = clock() + machine_update_rate;
 			for (int m=0; m<machinesAllocated; m++)
 			{
-				minerProduce( machines, m, &itemlist);
+				if ( machines[m].machine_type == IT_MINER )
+				{
+					minerProduce( machines, m, &itemlist);
+				}
+
+				if ( machines[m].machine_type == IT_FURNACE )
+				{
+					furnaceProduce( machines, m, &itemlist);
+				}
 			}
 		}
 		vdp_update_key_state();
@@ -646,7 +666,7 @@ void game_loop()
 
 }
 
-inline bool isMachineValid( int machine_byte )
+bool isMachineValid( int machine_byte )
 {
 	return ( machine_byte & 0x80 ) == 0;
 }
@@ -672,6 +692,13 @@ int getMachineBMID(uint8_t machine_byte)
 		int machine_outdir = (machine_byte & 0x60) >> 5;
 		int bmid = BMOFF_MINERS + 3*machine_outdir;
 		bmid += miner_frame;
+		return bmid;
+	} else 
+	if ( machine_itemtype == IT_FURNACE)
+	{
+		int machine_outdir = (machine_byte & 0x60) >> 5;
+		int bmid = BMOFF_FURNACES + 3*machine_outdir;
+		bmid += furnace_frame;
 		return bmid;
 	} else {
 		return itemtypes[machine_itemtype].bmID;
@@ -1080,6 +1107,12 @@ void draw_place_machine()
 		vdp_adv_select_bitmap( BMOFF_MINERS + place_belt_index*3 );
 		vdp_draw_bitmap( cursorx, cursory);
 		
+	} else
+	if ( item_selected == IT_FURNACE )
+	{
+		vdp_adv_select_bitmap( BMOFF_FURNACES + place_belt_index*3 );
+		vdp_draw_bitmap( cursorx, cursory);
+		
 	} else {
 		vdp_adv_select_bitmap( itemtypes[item_selected].bmID );
 		vdp_draw_bitmap( cursorx, cursory);
@@ -1279,6 +1312,16 @@ void do_place()
 				}
 			}
 		} else 
+		if ( item_selected == IT_FURNACE )
+		{
+			if (remove_item( inventory, item_selected, 1 ))
+			{
+				layer_machines[fac.mapWidth * cursor_ty + cursor_tx] = 
+					(item_selected - IT_TYPES_MACHINE) + (place_belt_index << 5);
+
+				addFurnace( &machines, cursor_tx, cursor_ty, place_belt_index );
+			}
+		} else 
 		if ( remove_item( inventory, item_selected, 1 ) )
 		{
 			layer_machines[fac.mapWidth * cursor_ty + cursor_tx] =
@@ -1291,6 +1334,16 @@ void do_place()
 
 void drop_item(int item)
 {
+	int offset = cursor_tx + cursor_ty*fac.mapWidth;
+	if ( isMachineValid( layer_machines[ offset ] ) )
+	{
+		int machine_itemtype = getMachineItemType(layer_machines[offset]);
+		if ( machine_itemtype == IT_FURNACE || machine_itemtype == IT_BOX )
+		{
+			insertItemIntoMachine( machine_itemtype, cursor_tx, cursor_ty, item );
+			return;
+		}
+	}
 	// place the 8x8 resource item in the centre of the square
 	insertAtFrontItemList(&itemlist, item, cursor_tx*gTileSize + 4, cursor_ty*gTileSize + 4);
 }
@@ -1424,28 +1477,8 @@ void move_items_on_belts()
 			int offset = tx + ty*fac.mapWidth;
 			int newbeltID = layer_belts[ offset ];
 
-			// handle two belts joining each other
-			if (newbeltID>=0 && beltID>=0 && newbeltID!=beltID &&
-					belts[beltID].out != DIR_OPP(belts[newbeltID].in))
-			{
-				if ( ! isAnythingAtXY(&itemlist, tx*gTileSize+4,ty*gTileSize+4) )
-				{
-					currPtr->x = tx*gTileSize+4;
-					currPtr->y = ty*gTileSize+4;
-					int px=getTilePosInScreenX(tx);
-					int py=getTilePosInScreenY(ty);
-					draw_tile(tx, ty, px, py);
-					draw_items_at_tile(tx, ty);
-				}
-			} else	
-			if ( isMachineValid(layer_machines[offset]) )
-			{
-				int machine = getMachineItemType(layer_machines[offset]);
-				insertItemIntoMachine( machine, &currPtr );
-
-			} else 
 			// draw tiles where there is no belt that the item has moved into
-			if (itemIsOnScreen(currPtr) && beltID<0)
+			if (itemIsOnScreen(currPtr) && newbeltID<0 && !isMachineValid(layer_machines[offset]) )
 			{
 				int px=getTilePosInScreenX(tx);
 				int py=getTilePosInScreenY(ty);
@@ -1701,7 +1734,7 @@ void show_info()
 {
 	int info_item_bmid = -1;
 	int info_item_type = 0;
-
+	
 	int offset = cursor_ty*fac.mapWidth + cursor_tx;
 	if ( layer_belts[ offset ] >=0 )
 	{
@@ -1728,10 +1761,36 @@ void show_info()
 		vdp_adv_select_bitmap( info_item_bmid );
 		vdp_draw_bitmap( cursorx+4, cursory - 28 );
 		putch(0x05); // print at graphics cursor
+		if ( info_item_type == IT_FURNACE || info_item_type == IT_ASSEMBLER )
+		{
+			int m = getMachineAtTileXY(machines, cursor_tx, cursor_ty);
+			for (int it = 0; it<2; it++)
+			{
+				if ( info_item_type == IT_FURNACE && it>0 ) continue;
+				if ( machines[m].process_type.in[it] > 0 )
+				{
+					int itemBMID = itemtypes[ machines[m].process_type.in[it] ].bmID;
+					vdp_adv_select_bitmap( itemBMID );
+					vdp_draw_bitmap( cursorx+4+20, cursory - 28 +8*it );
+				} else {
+					vdp_move_to( cursorx+4+20, cursory - 28 +8*it );
+					printf("?");
+				}
+				vdp_move_to( cursorx+4+32, cursory - 28 +8*it );
+				printf("%d",machines[m].countIn[it]);
+			}
+			if ( machines[m].process_type.out > 0 )
+			{
+				int itemBMID = itemtypes[ machines[m].process_type.out ].bmID;
+				vdp_adv_select_bitmap( itemBMID );
+				vdp_draw_bitmap( cursorx+4+44, cursory - 28 + 4 );
+			}
+		}
 		vdp_move_to( cursorx+3, cursory-10 );
 		vdp_gcol(0, 15);
 		printf("%s",itemtypes[ info_item_type ].desc);
 		putch(0x04); // print at text cursor
+
 	}
 }
 
@@ -1810,7 +1869,7 @@ void removeAtCursor()
 	if ( isMachineValid(layer_machines[offset]) )
 	{
 		int machine = getMachineItemType(layer_machines[offset]);
-		if ( machine == IT_MINER )
+		if ( machine == IT_MINER || machine == IT_FURNACE )
 		{
 			int mnum = getMachineAtTileXY( machines, cursor_tx, cursor_ty );
 			if ( mnum >=0 )
@@ -1827,6 +1886,7 @@ void removeAtCursor()
 	draw_tile( cursor_tx, cursor_ty, cursorx, cursory );
 }
 
+// z will pick up items at a tile and put them into the inventory
 void pickupItemsAtTile(int tx, int ty)
 {
 	if ( !isEmptyItemList(&itemlist) ) 
@@ -2175,9 +2235,32 @@ void show_filedialog()
 	vdp_refresh_sprites();
 }
 
-void insertItemIntoMachine(int machine, ItemNodePtr *pitemptr )
+void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 {
-	if ( machine == IT_BOX )
+	// Box is a kind of machine which transfers all items entering it
+	// to the inventory
+	if ( machine_type == IT_BOX )
+	{
+		add_item(inventory, item, 1);
+	}
+	if ( machine_type == IT_FURNACE )
+	{
+		int m = getMachineAtTileXY(machines, tx, ty);
+		// if the furnace recipe is not set, set it based on the item inserted
+		if ( machines[m].process_type.in[0] == 0 )
+		{
+			machines[m].process_type.in[0] = item;
+			machines[m].process_type.out = furnaceProcessTypes[ item - IT_TYPES_RAW ].out;
+			machines[m].countIn[0] = 0;
+		}
+		machines[m].countIn[0] += 1;
+	}
+}
+void insertItemPtrIntoMachine(int machine_type, int tx, int ty, ItemNodePtr *pitemptr )
+{
+	// Box is a kind of machine which transfers all items entering it
+	// to the inventory
+	if ( machine_type == IT_BOX )
 	{
 		int item = (*pitemptr)->item;
 		if ( popItem(&itemlist, (*pitemptr)) )
@@ -2186,5 +2269,50 @@ void insertItemIntoMachine(int machine, ItemNodePtr *pitemptr )
 			free(pitemptr);
 		}
 	}
-	
+	if ( machine_type == IT_FURNACE )
+	{
+		int item = (*pitemptr)->item;
+		int m = getMachineAtTileXY(machines, tx, ty);
+		// if the furnace recipe is not set, set it based on the item inserted
+		if ( machines[m].process_type.in[0] == 0 )
+		{
+			machines[m].process_type.in[0] = item;
+			machines[m].process_type.out = furnaceProcessTypes[ item - IT_TYPES_RAW ].out;
+			machines[m].countIn[0] = 0;
+		}
+		if ( popItem(&itemlist, (*pitemptr)) )
+		{
+			machines[m].countIn[0] += 1;
+			free(pitemptr);
+		}
+	}
+}
+
+void check_items_on_machines()
+{
+	ItemNodePtr currPtr = itemlist;
+	int item_centre_offset = 4;
+	while (currPtr != NULL) {
+		ItemNodePtr nextPtr = currPtr->next;
+		int centrex = currPtr->x + item_centre_offset;
+		int centrey = currPtr->y + item_centre_offset;
+
+		// (tx,ty) is the tile the centre of the item is in
+		int tx = centrex >> 4;
+		int ty = centrey >> 4;
+
+		int machine_byte = layer_machines[ tx + ty*fac.mapWidth ];
+		if ( isMachineValid( machine_byte ) )
+		{
+			int machine_itemtype = getMachineItemType(machine_byte);
+			if ( machine_itemtype == IT_FURNACE || machine_itemtype == IT_BOX )
+			{
+				int item = currPtr->item;
+				insertItemIntoMachine( machine_itemtype, tx, ty, item );
+				ItemNodePtr popped = popItem( &itemlist, currPtr );
+				free(popped);
+			}
+		}
+		currPtr = nextPtr;
+	}
 }

@@ -41,7 +41,11 @@
 #define BMOFF_MINERS BMOFF_CURSORS + NUM_BM_CURSORS 
 #define NUM_BM_MINERS 12
 
-#define TOTAL_BM BMOFF_MINERS + NUM_BM_MINERS
+#define FN_FURNACES "img/tm16/fur%02d.rgb2"
+#define BMOFF_FURNACES BMOFF_MINERS + NUM_BM_MINERS 
+#define NUM_BM_FURNACES 12
+
+#define TOTAL_BM BMOFF_FURNACES + NUM_BM_FURNACES
 
 #define BOB_SPRITE_DOWN 0
 #define BOB_SPRITE_UP 1
@@ -163,6 +167,14 @@ bool load_images(bool progress)
 			if (progress) update_bar(progbar, cnt++);
 		}
 	}
+	// 12 furnaces each with 3 images for animation
+	for (int fn=1; fn<=NUM_BM_FURNACES; fn++)
+	{
+		sprintf(fname, FN_FURNACES, fn);
+		int ret = load_bitmap_file(fname, 16, 16, BMOFF_FURNACES + fn-1 );
+		if ( ret < 0 ) return false;
+		if (progress) update_bar(progbar, cnt++);
+	}
 	
 #if 0
 	printf("TILES start %d count %d\n",BMOFF_TERR16,NUM_BM_TERR16);
@@ -174,6 +186,7 @@ bool load_images(bool progress)
 	printf("NUMS  start %d count %d\n",BMOFF_NUMS,NUM_BM_NUMS);
 	printf("CURS  start %d count %d\n",BMOFF_CURSORS,NUM_BM_CURSORS);
 	printf("MINER start %d count %d\n",BMOFF_MINERS,NUM_BM_MINERS);
+	printf("FURNA start %d count %d\n",BMOFF_FURNACES,NUM_BM_FURNACES);
 	printf("Total %d\n",TOTAL_BM);
 	wait_for_any_key();
 #endif

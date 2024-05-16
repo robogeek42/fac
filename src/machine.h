@@ -24,6 +24,7 @@ typedef struct {
 	int processtime;
 	ProcessType process_type;
 	clock_t ticksTillProduce;
+	int countIn[2];
 } Machine;
 
 // use furnaceProcessTypes[ rawtype - IT_TYPES_RAW ]
@@ -55,6 +56,7 @@ bool allocMachines(Machine **machines)
 			}
 		}
 	} else {
+		printf("realloc %d\n", machinesAllocated+machinesBlockSize);
 		(*machines) = (Machine*) realloc( (void*) (*machines), machinesAllocated+machinesBlockSize);
 		if (*machines) 
 		{
@@ -67,6 +69,25 @@ bool allocMachines(Machine **machines)
 	}
 	if (*machines) return true;
 	return false;
+}
+
+void deleteMachine( Machine *machines, int mnum )
+{
+	if ( mnum < machinesAllocated )
+	{
+		machines[mnum].machine_type = 0;
+		--machineCount;
+	}
+}
+
+int getMachineAtTileXY( Machine *machines, int tx, int ty )
+{
+	for (int m=0;m<machinesAllocated;m++)
+	{
+		if ( machines[m].machine_type == 0 ) continue;
+		if ( machines[m].tx == tx && machines[m].ty == ty ) return m;
+	}
+	return -1;
 }
 
 int addMiner( Machine **machines, int tx, int ty, uint8_t rawtype, uint8_t direction )
@@ -101,19 +122,12 @@ int addMiner( Machine **machines, int tx, int ty, uint8_t rawtype, uint8_t direc
 	(*machines)[mnum].processtime = 300;
 	(*machines)[mnum].outdir = direction;
 	(*machines)[mnum].ticksTillProduce = clock() + (*machines)[mnum].processtime;
+	(*machines)[mnum].countIn[0] = 0;
+	(*machines)[mnum].countIn[1] = 0;
 	machineCount++;
 	//TAB(0,4);printf("added miner %d %d,%d\n",mnum,tx,ty);
 	
 	return mnum;
-}
-
-void deleteMachine( Machine *machines, int mnum )
-{
-	if ( mnum < machinesAllocated )
-	{
-		machines[mnum].machine_type = 0;
-		--machineCount;
-	}
 }
 
 // special case for machine producer for 0 raw materials
@@ -135,14 +149,79 @@ void minerProduce( Machine *machines, int m, ItemNodePtr *itemlist )
 	}
 }
 
-int getMachineAtTileXY( Machine *machines, int tx, int ty )
+int addFurnace( Machine **machines, int tx, int ty, uint8_t direction )
 {
-	for (int m=0;m<machinesAllocated;m++)
+	if (machineCount >= machinesAllocated)
 	{
-		if ( machines[m].machine_type == 0 ) continue;
-		if ( machines[m].tx == tx && machines[m].ty == ty ) return m;
+		if ( !allocMachines( machines ) ) {
+			printf("Memory\n");
+			return -1;
+		}
 	}
-	return -1;
+
+	// find the next allocated machine that isn't being used (valid==false)
+	int mnum = 0;
+	for (mnum=0;mnum<machinesAllocated;mnum++)
+	{
+		if ( (*machines)[mnum].machine_type == 0 ) break;
+	}
+	// did we find one?
+	if ( mnum == machinesAllocated )
+	{
+		printf("Error\n");
+		return -1;
+	}
+	// set-up the machine as a miner
+	(*machines)[mnum].machine_type = IT_FURNACE; 
+	(*machines)[mnum].tx = tx; 
+	(*machines)[mnum].ty = ty;
+	(*machines)[mnum].process_type.in[0] = 0;
+	(*machines)[mnum].process_type.in[1] = 0;
+	(*machines)[mnum].process_type.out = 0;
+	(*machines)[mnum].processtime = 200;
+	(*machines)[mnum].outdir = direction;
+	(*machines)[mnum].ticksTillProduce = 0;
+	(*machines)[mnum].countIn[0] = 0;
+	(*machines)[mnum].countIn[1] = 0;
+	machineCount++;
+	//TAB(0,4);printf("added furnace %d %d,%d\n",mnum,tx,ty);
+	
+	return mnum;
+}
+
+// special case for machine producer for 0 raw materials
+// make generic later?
+void furnaceProduce( Machine *machines, int m, ItemNodePtr *itemlist )
+{
+	if ( machines[m].machine_type == 0 ) return;
+	if ( machines[m].ticksTillProduce == 0 && 
+			machines[m].countIn[0] > 0 )
+	{
+		machines[m].ticksTillProduce = clock() + machines[m].processtime;
+		machines[m].countIn[0]--;
+	}
+	if ( machines[m].ticksTillProduce != 0 &&
+		 machines[m].ticksTillProduce < clock() )
+	{
+		machines[m].ticksTillProduce = 0;
+		if ( ! isAnythingAtXY(itemlist, 
+					machines[m].tx*gTileSize+4, machines[m].ty*gTileSize+4) )
+		{
+			int  outx = machines[m].tx*gTileSize+4;
+			int  outy = machines[m].ty*gTileSize+4;
+			switch ( machines[m].outdir )
+			{
+				case DIR_UP: outy-=8; break;
+				case DIR_RIGHT: outx+=4; break;
+				case DIR_DOWN: outy+=4; break;
+				case DIR_LEFT: outx-=8; break;
+				default: break;
+			}
+
+			insertAtFrontItemList(itemlist, 
+					machines[m].process_type.out, outx, outy);
+		}
+	}
 }
 
 #endif
