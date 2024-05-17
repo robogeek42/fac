@@ -189,7 +189,7 @@ int addFurnace( Machine **machines, int tx, int ty, uint8_t direction )
 	return mnum;
 }
 
-// special case for machine producer for 0 raw materials
+// machine producer for 1 raw materials
 // make generic later?
 void furnaceProduce( Machine *machines, int m, ItemNodePtr *itemlist )
 {
@@ -212,8 +212,8 @@ void furnaceProduce( Machine *machines, int m, ItemNodePtr *itemlist )
 			switch ( machines[m].outdir )
 			{
 				case DIR_UP: outy-=8; break;
-				case DIR_RIGHT: outx+=4; break;
-				case DIR_DOWN: outy+=4; break;
+				case DIR_RIGHT: outx+=8; break;
+				case DIR_DOWN: outy+=8; break;
 				case DIR_LEFT: outx-=8; break;
 				default: break;
 			}

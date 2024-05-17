@@ -241,7 +241,7 @@ void pickupItemsAtTile(int tx, int ty);
 void message_with_bm8(char *message, int bmID, int timeout);
 void show_filedialog();
 bool isMachineValid( int machine_byte );
-int getMachineBMID(uint8_t machine_byte);
+int getMachineBMID(int tx, int ty);
 int getMachineItemType(uint8_t machine_byte);
 int getOverlayAtOffset( int offset );
 int getOverlayAtCursor();
@@ -679,8 +679,10 @@ inline int getMachineItemType(uint8_t machine_byte)
 
 	return (machine_byte & 0x7) + IT_TYPES_MACHINE;
 }
-int getMachineBMID(uint8_t machine_byte)
+int getMachineBMID(int tx, int ty)
 {
+	int offset = ty*fac.mapWidth + tx;
+	uint8_t machine_byte = layer_machines[offset];
 	// machine byte is
 	// bit     7    6 5   4 3   2 1 0
 	//     valid outdir indir      ID   
@@ -698,7 +700,12 @@ int getMachineBMID(uint8_t machine_byte)
 	{
 		int machine_outdir = (machine_byte & 0x60) >> 5;
 		int bmid = BMOFF_FURNACES + 3*machine_outdir;
-		bmid += furnace_frame;
+
+		int mid = getMachineAtTileXY(machines, tx, ty); // this could be slow with a lot of machines
+		if ( machines[mid].ticksTillProduce>0)
+		{
+			bmid += furnace_frame;
+		}
 		return bmid;
 	} else {
 		return itemtypes[machine_itemtype].bmID;
@@ -732,7 +739,7 @@ void draw_tile(int tx, int ty, int tposx, int tposy)
 	}
 	if ( isMachineValid(machine_byte) )
 	{
-		int bmid = getMachineBMID(machine_byte);
+		int bmid = getMachineBMID(tx, ty);
 		vdp_adv_select_bitmap( bmid );
 		vdp_draw_bitmap( tposx, tposy );
 	}
@@ -1745,7 +1752,7 @@ void show_info()
 	{
 		// machine
 		info_item_type = getMachineItemType(layer_machines[offset]);
-		info_item_bmid = getMachineBMID(layer_machines[offset]);
+		info_item_bmid = getMachineBMID(cursor_tx, cursor_ty);
 	} else if ( tilemap[ offset ] > 15 )
 	{
 		// feature
