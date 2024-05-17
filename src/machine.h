@@ -132,7 +132,7 @@ int addMiner( Machine **machines, int tx, int ty, uint8_t rawtype, uint8_t direc
 
 // special case for machine producer for 0 raw materials
 // make generic later?
-void minerProduce( Machine *machines, int m, ItemNodePtr *itemlist )
+void minerProduce( Machine *machines, int m, ItemNodePtr *itemlist, int *numItems )
 {
 	if ( machines[m].machine_type == 0 ) return;
 	if ( machines[m].ticksTillProduce < clock() )
@@ -145,6 +145,7 @@ void minerProduce( Machine *machines, int m, ItemNodePtr *itemlist )
 					machines[m].process_type.out, 
 					machines[m].tx*gTileSize+4, 
 					machines[m].ty*gTileSize+4);
+			(*numItems)++;
 		}
 	}
 }
@@ -191,7 +192,7 @@ int addFurnace( Machine **machines, int tx, int ty, uint8_t direction )
 
 // machine producer for 1 raw materials
 // make generic later?
-void furnaceProduce( Machine *machines, int m, ItemNodePtr *itemlist )
+void furnaceProduce( Machine *machines, int m, ItemNodePtr *itemlist, int *numItems )
 {
 	if ( machines[m].machine_type == 0 ) return;
 	if ( machines[m].ticksTillProduce == 0 && 
@@ -220,6 +221,7 @@ void furnaceProduce( Machine *machines, int m, ItemNodePtr *itemlist )
 
 			insertAtFrontItemList(itemlist, 
 					machines[m].process_type.out, outx, outy);
+			(*numItems)++;
 		}
 	}
 }

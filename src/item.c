@@ -6,8 +6,6 @@
 
 extern int gTileSize;
 
-int numItems=0;
-
 // check if the list is empty
 bool isEmptyItemList(ItemNodePtr* listptr) {
 	return (*listptr) == NULL;
@@ -34,7 +32,6 @@ void insertAtFrontItemList(ItemNodePtr *listptr, uint8_t item, int x, int y)
 		(*listptr) = node;
 		//printf("next %p\n",node->next);
 	}
-	numItems++;
 }
 	
 // insert data at the back of the linked list
@@ -62,7 +59,6 @@ void insertAtBackItemList(ItemNodePtr *listptr, uint8_t item, int x, int y)
 		// insert it 
 		currPtr->next = node;
 	}
-	numItems++;
 }
 	
 // returns the data at first node 
@@ -106,7 +102,6 @@ ItemNodePtr popFrontItem(ItemNodePtr *listptr)
 		
 		// make nextptr head 
 		(*listptr) = nextPtr;
-		numItems--;
 	}
 	
 	return itemPtr;
@@ -121,7 +116,6 @@ ItemNodePtr popBackItem(ItemNodePtr *listptr)
 		return NULL;
 	} else if ((*listptr)->next == NULL) {
 	   itemPtr = (*listptr);
-		numItems--;
 	} else {
 		ItemNodePtr currPtr = (*listptr);
 		ItemNodePtr prevPtr = NULL;
@@ -131,7 +125,6 @@ ItemNodePtr popBackItem(ItemNodePtr *listptr)
 		}
 		itemPtr = currPtr;
 		prevPtr->next = NULL;
-		numItems--;
 	} 
 	
 	return itemPtr;
@@ -219,7 +212,6 @@ ItemNodePtr popItemsAtTile(ItemNodePtr *listptr, int tx, int ty )
 				(*listptr) = currNext;
 				prevPtr = NULL;
 			}
-			numItems--;
 
 			// insert at front of the new list
 			currPtr->next = tilelist;
@@ -263,7 +255,6 @@ void deleteItem(ItemNodePtr *listptr, ItemNodePtr ptr)
 		}
 		currPtr = currNext;
 	}
-	numItems--;
 	free(ptr);
 }
 ItemNodePtr popItem(ItemNodePtr *listptr, ItemNodePtr ptr)
@@ -298,7 +289,6 @@ ItemNodePtr popItem(ItemNodePtr *listptr, ItemNodePtr ptr)
 	}
 	if ( currPtr != NULL)
 	{
-		numItems--;
 		return currPtr;
 	}
 	return NULL;

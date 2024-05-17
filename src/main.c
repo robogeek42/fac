@@ -39,7 +39,7 @@ int gScreenHeight = 240;
 
 int gTileSize = 16;
 
-extern int numItems;
+int numItems;
 
 #define SCROLL_RIGHT 0
 #define SCROLL_LEFT 1
@@ -633,12 +633,12 @@ void game_loop()
 			{
 				if ( machines[m].machine_type == IT_MINER )
 				{
-					minerProduce( machines, m, &itemlist);
+					minerProduce( machines, m, &itemlist, &numItems);
 				}
 
 				if ( machines[m].machine_type == IT_FURNACE )
 				{
-					furnaceProduce( machines, m, &itemlist);
+					furnaceProduce( machines, m, &itemlist, &numItems);
 				}
 			}
 		}
@@ -1336,6 +1336,7 @@ void drop_item(int item)
 	}
 	// place the 8x8 resource item in the centre of the square
 	insertAtFrontItemList(&itemlist, item, cursor_tx*gTileSize + 4, cursor_ty*gTileSize + 4);
+	numItems++;
 }
 
 void move_items_on_belts()
@@ -1887,10 +1888,17 @@ void pickupItemsAtTile(int tx, int ty)
 	{
 		ItemNodePtr itptr = popItemsAtTile(&itemlist, tx, ty);
 
+		int cnt = 0;
+		ItemNodePtr ip = itptr;
+		while ( ip != NULL ) {
+			cnt++;
+			ip = ip->next;
+		}
+		numItems -= cnt;
+
 		if ( itptr != NULL )
 		{
 			ItemNodePtr ip = popFrontItem(&itptr);
-			numItems++; // already reduced
 			while (ip)
 			{
 				add_item( inventory, ip->item, 1 );
@@ -1898,7 +1906,6 @@ void pickupItemsAtTile(int tx, int ty)
 				ip=NULL;
 				
 				ip = popFrontItem(&itptr);
-				numItems++; // already reduced
 			}
 		}	
 	}
@@ -2276,6 +2283,7 @@ void insertItemPtrIntoMachine(int machine_type, int tx, int ty, ItemNodePtr *pit
 		}
 		if ( popItem(&itemlist, (*pitemptr)) )
 		{
+			numItems--;
 			machines[m].countIn[0] += 1;
 			free(pitemptr);
 		}
@@ -2304,6 +2312,7 @@ void check_items_on_machines()
 				int item = currPtr->item;
 				insertItemIntoMachine( machine_itemtype, tx, ty, item );
 				ItemNodePtr popped = popItem( &itemlist, currPtr );
+				numItems--;
 				free(popped);
 			}
 		}
