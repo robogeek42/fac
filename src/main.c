@@ -133,9 +133,6 @@ int inv_selected = 0;
 // item selected
 uint8_t item_selected = 0;
 
-// info
-bool bInfoDisplayed = false;
-
 // Mining state
 bool bIsMining = false;
 int mining_time = 200;
@@ -233,7 +230,6 @@ void draw_digit(int i, int px, int py);
 void draw_number(int n, int px, int py);
 void draw_number_lj(int n, int px, int py);
 void show_info();
-void clear_info();
 void do_mining();
 bool check_can_mine();
 void removeAtCursor();
@@ -411,7 +407,6 @@ void game_loop()
 
 		// scroll the screen AND/OR move Bob
 		if (dir>=0 && ( move_wait_ticks < clock() ) ) {
-			if ( bInfoDisplayed ) clear_info();
 			move_wait_ticks = clock()+1;
 			// screen can scroll, move Bob AND screen
 			if (can_scroll_screen(dir, 1) && move_bob(bob_dir, 1) )
@@ -449,7 +444,6 @@ void game_loop()
 		// move the cursor OR place rectangle
 		if (place_dir>0 && ( key_wait_ticks < clock() ) ) {
 			key_wait_ticks = clock() + key_wait;
-			if ( bInfoDisplayed ) clear_info();
 			if ( bPlace) draw_cursor(false);
 
 			if ( place_dir & BITS_UP ) cursor_ty--;
@@ -481,7 +475,6 @@ void game_loop()
 			if (key_wait_ticks < clock()) 
 			{
 				key_wait_ticks = clock() + key_wait;
-				if ( bInfoDisplayed ) clear_info();
 				if ( !bPlace ) {
 					start_place();
 				} else {
@@ -493,14 +486,12 @@ void game_loop()
 			if (key_wait_ticks < clock()) 
 			{
 				key_wait_ticks = clock() + key_wait;
-				if ( bInfoDisplayed ) clear_info();
 				stop_place(); 
 			}
 		}
 		if ( key_wait_ticks<clock() && key_pressed_code == KEY_r ) { // "r" rotate belt. Check actual key code - distinguishes lower/upper case
 			if (bPlace && key_wait_ticks < clock() ) {
 				key_wait_ticks = clock() + key_wait;
-				if ( bInfoDisplayed ) clear_info();
 				place_belt_index++;  
 				place_belt_index = place_belt_index % 4;
 				draw_tile( cursor_tx, cursor_ty, cursorx, cursory );
@@ -509,14 +500,12 @@ void game_loop()
 		if ( key_wait_ticks<clock() && key_pressed_code == KEY_R ) { // "R" rotate belt. Check actual key code - distinguishes lower/upper case
 			if (bPlace && key_wait_ticks < clock() ) {
 				key_wait_ticks = clock() + key_wait;
-				if ( bInfoDisplayed ) clear_info();
 				place_belt_index--;  
 				if (place_belt_index < 0) place_belt_index += 4;
 			}
 		}
 		if (  key_wait_ticks<clock() &&vdp_check_key_press( KEY_enter ) ) // ENTER - start placement state
 		{
-			if ( bInfoDisplayed ) clear_info();
 			do_place();
 		}
 
@@ -546,7 +535,6 @@ void game_loop()
 			if (key_wait_ticks < clock()) 
 			{
 				key_wait_ticks = clock() + key_wait;
-				if ( bInfoDisplayed ) clear_info();
 				show_inventory(20,20);
 			}
 		}
@@ -554,13 +542,8 @@ void game_loop()
 		{
 			if (key_wait_ticks < clock()) 
 			{
+				show_info();
 				key_wait_ticks = clock() + key_wait;
-				if ( bInfoDisplayed ) 
-				{
-					clear_info();
-				} else {
-					show_info();
-				}
 			}
 		}
 		if ( vdp_check_key_press( KEY_m ) )  // m for MINE
@@ -1739,6 +1722,15 @@ void draw_number_lj(int n, int px, int py)
 
 void show_info()
 {
+	int infox = cursorx;
+	int infoy = cursory;
+
+	if ( cursory < 120 ) {
+		infoy -= 32;
+	} else {
+		infoy+=16;
+	}
+
 	int info_item_bmid = -1;
 	int info_item_type = 0;
 	
@@ -1759,14 +1751,14 @@ void show_info()
 		info_item_bmid = getOverlayAtOffset(offset) - 1 + BMOFF_FEAT16;
 		info_item_type = ((info_item_bmid - BMOFF_FEAT16 -1) % 5) + IT_FEAT_STONE;
 	}
+
 	if ( info_item_bmid >= 0 )
 	{
-		bInfoDisplayed = true;
 		char * text = itemtypes[ info_item_type ].desc;
 		int textlen = strlen(text) * 8;
-		draw_filled_box( cursorx, cursory - 32, textlen+4, 31, 11, 8);
+		draw_filled_box( infox, infoy, textlen+4, 31, 11, 8);
 		vdp_adv_select_bitmap( info_item_bmid );
-		vdp_draw_bitmap( cursorx+4, cursory - 28 );
+		vdp_draw_bitmap( infox+4, infoy+4 );
 		putch(0x05); // print at graphics cursor
 		if ( info_item_type == IT_FURNACE || info_item_type == IT_ASSEMBLER )
 		{
@@ -1778,35 +1770,30 @@ void show_info()
 				{
 					int itemBMID = itemtypes[ machines[m].process_type.in[it] ].bmID;
 					vdp_adv_select_bitmap( itemBMID );
-					vdp_draw_bitmap( cursorx+4+20, cursory - 28 +8*it );
+					vdp_draw_bitmap( infox+4+20, infoy+4 + 8*it );
 				} else {
-					vdp_move_to( cursorx+4+20, cursory - 28 +8*it );
+					vdp_move_to( infox+4+20, infoy+4 + 8*it );
 					printf("?");
 				}
-				vdp_move_to( cursorx+4+32, cursory - 28 +8*it );
+				vdp_move_to( infox+4+32, infoy+4 + 8*it );
 				printf("%d",machines[m].countIn[it]);
 			}
 			if ( machines[m].process_type.out > 0 )
 			{
 				int itemBMID = itemtypes[ machines[m].process_type.out ].bmID;
 				vdp_adv_select_bitmap( itemBMID );
-				vdp_draw_bitmap( cursorx+4+44, cursory - 28 + 4 );
+				vdp_draw_bitmap( infox+4+44, infoy+4 + 4 );
 			}
 		}
-		vdp_move_to( cursorx+3, cursory-10 );
+		vdp_move_to( infox+3, infoy+4+18 );
 		vdp_gcol(0, 15);
 		printf("%s",itemtypes[ info_item_type ].desc);
 		putch(0x04); // print at text cursor
 
+		while( vdp_check_key_press( KEY_i ) ) { vdp_update_key_state(); }; 
+		wait_for_any_key();
+		draw_screen();
 	}
-}
-
-void clear_info()
-{
-	if ( !bInfoDisplayed ) return;
-	draw_screen();
-	bInfoDisplayed = false;
-	return;
 }
 
 bool check_can_mine()
