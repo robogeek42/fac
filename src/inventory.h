@@ -17,16 +17,16 @@ typedef struct {
 	int count;
 } INV_ITEM;
 
-void init_inventory(INV_ITEM *);
-int find_item(INV_ITEM *inv, uint8_t item);
-int add_item(INV_ITEM *inv, uint8_t item, int count);
-int remove_item(INV_ITEM *inv, uint8_t item, int count);
+void inventory_init(INV_ITEM *);
+int inventory_find_item(INV_ITEM *inv, uint8_t item);
+int inventory_add_item(INV_ITEM *inv, uint8_t item, int count);
+int inventory_remove_item(INV_ITEM *inv, uint8_t item, int count);
 
 #endif
 
 #ifdef _INVENTORY_IMPLEMENTATION
 
-void init_inventory(INV_ITEM *inv)
+void inventory_init(INV_ITEM *inv)
 {
 	for (int i=0; i<MAX_INVENTORY_ITEMS; i++)
 	{
@@ -35,7 +35,7 @@ void init_inventory(INV_ITEM *inv)
 	}
 }
 
-int find_item(INV_ITEM *inv, uint8_t item)
+int inventory_find_item(INV_ITEM *inv, uint8_t item)
 {
 	int index = 0;
 	while (inv[index].item != item && index<MAX_INVENTORY_ITEMS)
@@ -55,9 +55,9 @@ int find_item(INV_ITEM *inv, uint8_t item)
 // add count items to inventory in slot containing that item
 // if not found find a slot and add
 // return -1 if inventory is full
-int add_item(INV_ITEM *inv, uint8_t item, int count)
+int inventory_add_item(INV_ITEM *inv, uint8_t item, int count)
 {
-	int index = find_item(inv, item);
+	int index = inventory_find_item(inv, item);
 
 	if (index < 0)
 	{
@@ -92,9 +92,9 @@ int add_item(INV_ITEM *inv, uint8_t item, int count)
 
 // reduce item count by count
 // if not found return -1, or index of item in inventory
-int remove_item(INV_ITEM *inv, uint8_t item, int count)
+int inventory_remove_item(INV_ITEM *inv, uint8_t item, int count)
 {
-	int index = find_item(inv, item);
+	int index = inventory_find_item(inv, item);
 	if ( index < 0 )
 	{
 		return index;

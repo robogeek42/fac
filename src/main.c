@@ -96,6 +96,8 @@ INV_ITEM inventory[MAX_INVENTORY_ITEMS];
 
 Machine* machines = NULL;
 
+ItemNodePtr resourcelist = NULL;
+
 //------------------------------------------------------------
 
 
@@ -148,6 +150,8 @@ clock_t furnace_anim_timeout_ticks;
 int furnace_anim_speed = 30;
 clock_t machine_update_ticks;
 int machine_update_rate = 10;
+
+int resourceMultiplier = 16;
 
 //------------------------------------------------------------
 
@@ -244,6 +248,9 @@ int getOverlayAtCursor();
 void insertItemIntoMachine(int machine_type, int tx, int ty, int item );
 void insertItemPtrIntoMachine(int machine_type, int tx, int ty, ItemNodePtr *pitemptr );
 void check_items_on_machines();
+int getResourceCount(int tx, int ty);
+ItemNodePtr getResource(int tx, int ty);
+bool reduceResourceCount(int tx, int ty);
 
 static volatile SYSVAR *sys_vars = NULL;
 
@@ -349,17 +356,17 @@ int main(/*int argc, char *argv[]*/)
 	}
 	create_sprites();
 
-	init_inventory(inventory);
+	inventory_init(inventory);
 	// for test add some items
-	add_item(inventory, IT_BELT, 112); // belt
-	add_item(inventory, IT_IRON_ORE, 12);
-	add_item(inventory, IT_COAL, 7);
-	add_item(inventory, IT_COPPER_PLATE, 255);
-	add_item(inventory, IT_FURNACE, 8);
-	add_item(inventory, IT_MINER, 6);
-	add_item(inventory, IT_ASSEMBLER, 1);
-	add_item(inventory, IT_INSERTER, 1);
-	add_item(inventory, IT_BOX, 4);
+	inventory_add_item(inventory, IT_BELT, 112); // belt
+	inventory_add_item(inventory, IT_IRON_ORE, 12);
+	inventory_add_item(inventory, IT_COAL, 7);
+	inventory_add_item(inventory, IT_COPPER_PLATE, 255);
+	inventory_add_item(inventory, IT_FURNACE, 8);
+	inventory_add_item(inventory, IT_MINER, 6);
+	inventory_add_item(inventory, IT_ASSEMBLER, 1);
+	inventory_add_item(inventory, IT_INSERTER, 1);
+	inventory_add_item(inventory, IT_BOX, 4);
 
 	inv_selected = 0; // belts
 	item_selected = 0; // belts
@@ -633,7 +640,13 @@ void game_loop()
 			{
 				if ( machines[m].machine_type == IT_MINER )
 				{
-					minerProduce( machines, m, &itemlist, &numItems);
+					if ( getResourceCount( machines[m].tx, machines[m].ty ) > 0 )
+					{
+						if ( minerProduce( machines, m, &itemlist, &numItems) )
+						{
+							reduceResourceCount( machines[m].tx, machines[m].ty );
+						}
+					}
 				}
 
 				if ( machines[m].machine_type == IT_FURNACE )
@@ -907,6 +920,8 @@ int load_map(char *mapname)
 	{
 		return ret;
 	}
+
+	// hackedy mchackface
 	place_feature_overlay(oval1_block6x6,6,6,0,30,10); // stone    0:5:10
 	place_feature_overlay(oval2_block6x6,6,6,1,10,23); // iron ore 1:6:11
 	place_feature_overlay(oval1_block6x6,6,6,2,22,29); // copp ore 2:7:12
@@ -932,6 +947,13 @@ void place_feature_overlay(uint8_t *data, int sx, int sy, int tile, int tx, int 
 			{
 				tilemap[(tx+x) + (ty+y)*fac.mapWidth] &= 0x0F;
 				tilemap[(tx+x) + (ty+y)*fac.mapWidth] |= (tile+(data[x+(y*sx)]-1)*5+1)<<4;
+
+				uint8_t d = data[x+(y*sx)];
+				if ( d > 0 )
+				{
+					// insert into the resource list. Currently can hold max 255
+					insertAtFrontItemList(&resourcelist, (4-d) * resourceMultiplier, tx+x, ty+y);
+				}
 			}
 		}
 	}
@@ -1271,14 +1293,14 @@ void do_place()
    	if ( isBelt(item_selected) ) {
 		if ( place_belt_selected<0 ) return;
 
-		int ret = remove_item( inventory, IT_BELT, 1 );
+		int ret = inventory_remove_item( inventory, IT_BELT, 1 );
 		if ( ret >= 0 )
 		{
 			layer_belts[fac.mapWidth * cursor_ty + cursor_tx] = place_belt_selected;
 		}
 	}
 	if ( isResource(item_selected) ) {
-		int ret = remove_item( inventory, item_selected, 1 );
+		int ret = inventory_remove_item( inventory, item_selected, 1 );
 		if ( ret >= 0 )
 		{
 			drop_item(item_selected);
@@ -1291,7 +1313,7 @@ void do_place()
 			uint8_t overlay = getOverlayAtCursor();
 			if ( overlay > 0 )
 			{
-				if (remove_item( inventory, item_selected, 1 ))
+				if (inventory_remove_item( inventory, item_selected, 1 ))
 				{
 					layer_machines[fac.mapWidth * cursor_ty + cursor_tx] = 
 						(item_selected - IT_TYPES_MACHINE) + (place_belt_index << 5);
@@ -1304,7 +1326,7 @@ void do_place()
 		} else 
 		if ( item_selected == IT_FURNACE )
 		{
-			if (remove_item( inventory, item_selected, 1 ))
+			if (inventory_remove_item( inventory, item_selected, 1 ))
 			{
 				layer_machines[fac.mapWidth * cursor_ty + cursor_tx] = 
 					(item_selected - IT_TYPES_MACHINE) + (place_belt_index << 5);
@@ -1312,7 +1334,7 @@ void do_place()
 				addFurnace( &machines, cursor_tx, cursor_ty, place_belt_index );
 			}
 		} else 
-		if ( remove_item( inventory, item_selected, 1 ) )
+		if ( inventory_remove_item( inventory, item_selected, 1 ) )
 		{
 			layer_machines[fac.mapWidth * cursor_ty + cursor_tx] =
 				item_selected - IT_TYPES_MACHINE;
@@ -1734,6 +1756,7 @@ void show_info()
 
 	int info_item_bmid = -1;
 	int info_item_type = 0;
+	int resource_count = -1;
 	
 	int offset = cursor_ty*fac.mapWidth + cursor_tx;
 	if ( layer_belts[ offset ] >=0 )
@@ -1753,10 +1776,12 @@ void show_info()
 		info_item_type = ((info_item_bmid - BMOFF_FEAT16 -1) % 5) + IT_FEAT_STONE;
 	}
 
+	resource_count = getResourceCount(cursor_tx, cursor_ty);
+
 	if ( info_item_bmid >= 0 )
 	{
 		char * text = itemtypes[ info_item_type ].desc;
-		int textlen = strlen(text) * 8;
+		int textlen = MAX(strlen(text) * 8, 64);
 		draw_filled_box( infox, infoy, textlen+4, 31, 11, 8);
 		vdp_adv_select_bitmap( info_item_bmid );
 		vdp_draw_bitmap( infox+4, infoy+4 );
@@ -1785,6 +1810,11 @@ void show_info()
 				vdp_adv_select_bitmap( itemBMID );
 				vdp_draw_bitmap( infox+4+44, infoy+4 + 4 );
 			}
+		}
+		if ( resource_count > 0 )
+		{
+			vdp_move_to( infox+4+20, infoy+4 );
+			printf("%d",resource_count);
 		}
 		vdp_move_to( infox+3, infoy+4+18 );
 		vdp_gcol(0, 15);
@@ -1825,9 +1855,66 @@ bool check_can_mine()
 	return false;
 }
 
+int getResourceCount(int tx, int ty)
+{
+	// resource count
+	ItemNodePtr rp = resourcelist;
+	int resource_count = 0;
+	while (rp != NULL)
+	{
+		if ( rp->x == tx && rp->y == ty)
+		{
+			resource_count = rp->item;
+			break;
+		}
+		rp = rp->next;
+	}
+	return resource_count;
+}
+ItemNodePtr getResource(int tx, int ty)
+{
+	ItemNodePtr rp = resourcelist;
+	while (rp != NULL)
+	{
+		if ( rp->x == tx && rp->y == ty)
+		{
+			break;
+		}
+		rp = rp->next;
+	}
+	return rp;
+}
+
+bool reduceResourceCount(int tx, int ty)
+{
+	ItemNodePtr rp = getResource( tx, ty );
+	if ( rp->item > 0 )
+	{
+		rp->item--;
+		if ( (rp->item % resourceMultiplier) == 0 )
+		{
+			uint8_t bmid = (tilemap[tx + ty*fac.mapWidth] & 0xF0)>>4;
+			bmid += 5;
+			tilemap[tx + ty*fac.mapWidth] &= 0x0F;
+			tilemap[tx + ty*fac.mapWidth] |= (bmid << 4);
+			int px=getTilePosInScreenX(tx);
+			int py=getTilePosInScreenY(ty);
+			draw_tile(tx, ty, px, py);
+		} 
+		if ( rp->item == 0 )
+		{
+			tilemap[tx + ty*fac.mapWidth] &= 0x0F;
+			int px=getTilePosInScreenX(tx);
+			int py=getTilePosInScreenY(ty);
+			draw_tile(tx, ty, px, py);
+		}
+		return true;
+	}
+	return false;
+}
 void do_mining()
 {
-	// Mining/Tree-cutting
+	// Manual Mining/Tree-cutting
 	// 1) cursor must be next to bob in direction they are facing
 	// 2) cursor must be on an ore or tree (currently all FEATURES)
 	// 3) reduce feature count by 1 every n ticks and add to inventory
@@ -1838,17 +1925,18 @@ void do_mining()
 
 	int feature = getOverlayAtCursor() -1;
 	
-	// resource count not implemented yet
-
 	int feat_type = item_feature_map[feature].feature_type;
 	uint8_t raw_item = process_map[feat_type - IT_FEAT_STONE].raw_type;
 
 	if ( raw_item > 0)
 	{
-		// add to inventory
-		/* int ret = */add_item(inventory, raw_item, 1);
-		// not doing anything if inventory is full ...
-		message_with_bm8("+1",itemtypes[raw_item].bmID, 100);
+		if ( reduceResourceCount(cursor_tx, cursor_ty) )
+		{
+			// add to inventory
+			/* int ret = */inventory_add_item(inventory, raw_item, 1);
+			// not doing anything if inventory is full ...
+			message_with_bm8("+1",itemtypes[raw_item].bmID, 100);
+		}
 	}
 }
 
@@ -1858,7 +1946,7 @@ void removeAtCursor()
 	int offset = cursor_tx + cursor_ty * fac.mapWidth;
 	if ( layer_belts[ offset ] >= 0 )
 	{
-		add_item( inventory, IT_BELT, 1 );
+		inventory_add_item( inventory, IT_BELT, 1 );
 		layer_belts[ offset ] = -1;
 	}
 	if ( isMachineValid(layer_machines[offset]) )
@@ -1870,11 +1958,11 @@ void removeAtCursor()
 			if ( mnum >=0 )
 			{
 				deleteMachine( machines, mnum );
-				add_item( inventory, machine, 1 );
+				inventory_add_item( inventory, machine, 1 );
 				layer_machines[offset] = 0x80;
 			}
 		} else {
-			add_item( inventory, machine, 1 );
+			inventory_add_item( inventory, machine, 1 );
 			layer_machines[offset] = 0x80;
 		}
 	}
@@ -1901,7 +1989,7 @@ void pickupItemsAtTile(int tx, int ty)
 			ItemNodePtr ip = popFrontItem(&itptr);
 			while (ip)
 			{
-				add_item( inventory, ip->item, 1 );
+				inventory_add_item( inventory, ip->item, 1 );
 				free(ip);
 				ip=NULL;
 				
@@ -2242,7 +2330,7 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 	// to the inventory
 	if ( machine_type == IT_BOX )
 	{
-		add_item(inventory, item, 1);
+		inventory_add_item(inventory, item, 1);
 	}
 	if ( machine_type == IT_FURNACE )
 	{
@@ -2266,7 +2354,7 @@ void insertItemPtrIntoMachine(int machine_type, int tx, int ty, ItemNodePtr *pit
 		int item = (*pitemptr)->item;
 		if ( popItem(&itemlist, (*pitemptr)) )
 		{
-			add_item(inventory, item, 1);
+			inventory_add_item(inventory, item, 1);
 			free(pitemptr);
 		}
 	}
