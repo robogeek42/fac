@@ -384,7 +384,7 @@ my_exit2:
 void game_loop()
 {
 	int exit=0;
-	
+
 	draw_screen();
 	draw_layer(true);
 
@@ -767,7 +767,7 @@ void draw_horizontal(int tx, int ty, int len)
 		draw_tile(tx + i, ty, px + i*gTileSize, py); 
 		vdp_update_key_state();
 	}
-	
+
 }
 void draw_vertical(int tx, int ty, int len)
 {
@@ -1340,7 +1340,7 @@ void do_place()
 				item_selected - IT_TYPES_MACHINE;
 		}
 	}
-	
+
 	stop_place();
 }
 
@@ -1757,7 +1757,7 @@ void show_info()
 	int info_item_bmid = -1;
 	int info_item_type = 0;
 	int resource_count = -1;
-	
+
 	int offset = cursor_ty*fac.mapWidth + cursor_tx;
 	if ( layer_belts[ offset ] >=0 )
 	{
@@ -1924,7 +1924,7 @@ void do_mining()
 	if ( ! check_can_mine() ) return;
 
 	int feature = getOverlayAtCursor() -1;
-	
+
 	int feat_type = item_feature_map[feature].feature_type;
 	uint8_t raw_item = process_map[feat_type - IT_FEAT_STONE].raw_type;
 
@@ -2049,7 +2049,7 @@ bool save_game( char *filepath )
 	if (objs_written!=1) {
 		msg = "Fail: fac state\n"; goto save_game_errexit;
 	}
-	
+
 	// write the tile map and layers
 	printf("Save: tilemap\n");
 	objs_written = fwrite( (const void*) tilemap, sizeof(uint8_t) * fac.mapWidth * fac.mapHeight, 1, fp);
@@ -2068,7 +2068,7 @@ bool save_game( char *filepath )
 	}
 
 	// save the item list
-	
+
 	// get and write number of items
 	ItemNodePtr currPtr = itemlist;
 	int cnt=0;
@@ -2090,14 +2090,14 @@ bool save_game( char *filepath )
 	printf("Save: items\n");
 	while (currPtr != NULL) {
 		nextPtr = currPtr->next;
-	
+
 		objs_written = fwrite( (const void*) currPtr, sizeof(ItemNodeSave), 1, fp);
 		if (objs_written!=1) {
 			msg = "Fail: item\n"; goto save_game_errexit;
 		}
 		currPtr = nextPtr;
 	}
-	
+
 	// write the inventory
 	printf("Save: inventory\n");
 	objs_written = fwrite( (const void*) inventory, sizeof(INV_ITEM), MAX_INVENTORY_ITEMS, fp);
@@ -2116,7 +2116,37 @@ bool save_game( char *filepath )
 	if (objs_written!=num_machine_objects) {
 		msg = "Fail: machines\n"; goto save_game_errexit;
 	}
-	
+
+	// write the resource data
+	currPtr = resourcelist;
+	cnt=0;
+	while (currPtr != NULL) {
+		currPtr = currPtr->next;
+		cnt++;
+	}
+	printf("Save: num resources count %d\n",cnt);
+	objs_written = fwrite( (const void*) &cnt, sizeof(int), 1, fp);
+	if (objs_written!=1) {
+		msg = "Fail: resource count\n"; goto save_game_errexit;
+	}
+
+	// back to begining
+	currPtr = resourcelist;
+	nextPtr = NULL;
+
+	// must write data and no ll pointers
+	printf("Save: resources\n");
+	while (currPtr != NULL) {
+		nextPtr = currPtr->next;
+
+		objs_written = fwrite( (const void*) currPtr, sizeof(ItemNodeSave), 1, fp);
+		if (objs_written!=1) {
+			msg = "Fail: item\n"; goto save_game_errexit;
+		}
+		currPtr = nextPtr;
+	}
+
+
 
 	printf("done.\n");
 	fclose(fp);
@@ -2205,7 +2235,7 @@ bool load_game( char *filepath )
 		currPtr = nextPtr;
 	}
 	itemlist = NULL;
-	
+
 	// read number of items in list
 	int num_items = 0;
 
@@ -2262,6 +2292,41 @@ bool load_game( char *filepath )
 	}
 	// calculate number of machines active
 	machineCount=0; for(int m=0;m<machinesAllocated;m++) if (machines[m].machine_type != 0) machineCount++;
+
+	// clear out resources list
+	currPtr = resourcelist;
+	nextPtr = NULL;
+	while ( currPtr != NULL )
+	{
+		nextPtr = currPtr->next;
+		ItemNodePtr pitem = popFrontItem(&resourcelist);
+		free(pitem);
+		currPtr = nextPtr;
+	}
+	resourcelist = NULL;
+
+	// read number of resources in list
+	num_items = 0;
+
+	printf("Load: resources ");
+	objs_read = fread( &num_items, sizeof(int), 1, fp );
+	if ( objs_read != 1 ) {
+		msg = "Fail read num resources\n"; goto load_game_errexit;
+	}
+	printf("%d\n",num_items);
+
+	// add items in one by one
+	while (num_items > 0 && !feof( fp ) )
+	{
+		ItemNodeSave newitem;
+
+		objs_read = fread( &newitem, sizeof(ItemNodeSave), 1, fp );
+		if ( objs_read != 1 ) {
+			msg = "Fail read resource\n"; goto load_game_errexit;
+		}
+		insertAtBackItemList( &resourcelist, newitem.item, newitem.x, newitem.y );
+		num_items--;
+	}
 
 	printf("\nDone.\n");
 	fclose(fp);
