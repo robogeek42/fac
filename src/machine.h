@@ -90,7 +90,7 @@ int getMachineAtTileXY( Machine *machines, int tx, int ty )
 	return -1;
 }
 
-int addMiner( Machine **machines, int tx, int ty, uint8_t rawtype, uint8_t direction )
+int addMachine( Machine **machines, uint8_t machine_type, int tx, int ty, uint8_t direction, int speed, uint8_t intype0, uint8_t intype1, uint8_t outtype )
 {
 	if (machineCount >= machinesAllocated)
 	{
@@ -113,15 +113,15 @@ int addMiner( Machine **machines, int tx, int ty, uint8_t rawtype, uint8_t direc
 		return -1;
 	}
 	// set-up the machine as a miner
-	(*machines)[mnum].machine_type = IT_MINER; 
+	(*machines)[mnum].machine_type = machine_type; 
 	(*machines)[mnum].tx = tx; 
 	(*machines)[mnum].ty = ty;
-	(*machines)[mnum].process_type.in[0] = 0;
-	(*machines)[mnum].process_type.in[1] = 0;
-	(*machines)[mnum].process_type.out = rawtype;
-	(*machines)[mnum].processtime = 300;
+	(*machines)[mnum].process_type.in[0] = intype0;
+	(*machines)[mnum].process_type.in[1] = intype1;
+	(*machines)[mnum].process_type.out = outtype;
+	(*machines)[mnum].processtime = speed;
 	(*machines)[mnum].outdir = direction;
-	(*machines)[mnum].ticksTillProduce = clock() + (*machines)[mnum].processtime;
+	(*machines)[mnum].ticksTillProduce = 0;
 	(*machines)[mnum].countIn[0] = 0;
 	(*machines)[mnum].countIn[1] = 0;
 	machineCount++;
@@ -130,8 +130,24 @@ int addMiner( Machine **machines, int tx, int ty, uint8_t rawtype, uint8_t direc
 	return mnum;
 }
 
+int addMiner( Machine **machines, int tx, int ty, uint8_t rawtype, uint8_t direction)
+{
+	int m = addMachine( machines, IT_MINER, tx, ty, direction, 300, 0, 0, rawtype);
+	(*machines)[m].ticksTillProduce = clock() + (*machines)[m].processtime;
+	return m;
+}
+
+int addFurnace( Machine **machines, int tx, int ty, uint8_t direction )
+{
+	return addMachine( machines, IT_FURNACE, tx, ty, direction, 200, 0, 0, 0);
+}
+
+int addAssembler( Machine **machines, int tx, int ty, uint8_t direction )
+{
+	return addMachine( machines, IT_ASSEMBLER, tx, ty, direction, 400, 0, 0, 0);
+}
+
 // special case for machine producer for 0 raw materials
-// make generic later?
 bool minerProduce( Machine *machines, int m, ItemNodePtr *itemlist, int *numItems )
 {
 	if ( machines[m].machine_type == 0 ) return false;
@@ -152,48 +168,7 @@ bool minerProduce( Machine *machines, int m, ItemNodePtr *itemlist, int *numItem
 	return false;
 }
 
-int addFurnace( Machine **machines, int tx, int ty, uint8_t direction )
-{
-	if (machineCount >= machinesAllocated)
-	{
-		if ( !allocMachines( machines ) ) {
-			printf("Memory\n");
-			return -1;
-		}
-	}
-
-	// find the next allocated machine that isn't being used (valid==false)
-	int mnum = 0;
-	for (mnum=0;mnum<machinesAllocated;mnum++)
-	{
-		if ( (*machines)[mnum].machine_type == 0 ) break;
-	}
-	// did we find one?
-	if ( mnum == machinesAllocated )
-	{
-		printf("Error\n");
-		return -1;
-	}
-	// set-up the machine as a miner
-	(*machines)[mnum].machine_type = IT_FURNACE; 
-	(*machines)[mnum].tx = tx; 
-	(*machines)[mnum].ty = ty;
-	(*machines)[mnum].process_type.in[0] = 0;
-	(*machines)[mnum].process_type.in[1] = 0;
-	(*machines)[mnum].process_type.out = 0;
-	(*machines)[mnum].processtime = 200;
-	(*machines)[mnum].outdir = direction;
-	(*machines)[mnum].ticksTillProduce = 0;
-	(*machines)[mnum].countIn[0] = 0;
-	(*machines)[mnum].countIn[1] = 0;
-	machineCount++;
-	//TAB(0,4);printf("added furnace %d %d,%d\n",mnum,tx,ty);
-	
-	return mnum;
-}
-
 // machine producer for 1 raw materials
-// make generic later?
 bool furnaceProduce( Machine *machines, int m, ItemNodePtr *itemlist, int *numItems )
 {
 	if ( machines[m].machine_type == 0 ) return true;
@@ -202,6 +177,45 @@ bool furnaceProduce( Machine *machines, int m, ItemNodePtr *itemlist, int *numIt
 	{
 		machines[m].ticksTillProduce = clock() + machines[m].processtime;
 		machines[m].countIn[0]--;
+	}
+	if ( machines[m].ticksTillProduce != 0 &&
+		 machines[m].ticksTillProduce < clock() )
+	{
+		machines[m].ticksTillProduce = 0;
+		if ( ! isAnythingAtXY(itemlist, 
+					machines[m].tx*gTileSize+4, machines[m].ty*gTileSize+4) )
+		{
+			int  outx = machines[m].tx*gTileSize+4;
+			int  outy = machines[m].ty*gTileSize+4;
+			switch ( machines[m].outdir )
+			{
+				case DIR_UP: outy-=8; break;
+				case DIR_RIGHT: outx+=8; break;
+				case DIR_DOWN: outy+=8; break;
+				case DIR_LEFT: outx-=8; break;
+				default: break;
+			}
+
+			insertAtFrontItemList(itemlist, 
+					machines[m].process_type.out, outx, outy);
+			(*numItems)++;
+			return true;
+		}
+	}
+	return false;
+}
+
+// machine producer for N raw materials
+bool assemblerProduce( Machine *machines, int m, ItemNodePtr *itemlist, int *numItems )
+{
+	if ( machines[m].machine_type == 0 ) return true;
+	if ( machines[m].ticksTillProduce == 0 && 
+			machines[m].countIn[0] > 0 &&
+			machines[m].countIn[1] > 0 )
+	{
+		machines[m].ticksTillProduce = clock() + machines[m].processtime;
+		machines[m].countIn[0]--;
+		machines[m].countIn[1]--;
 	}
 	if ( machines[m].ticksTillProduce != 0 &&
 		 machines[m].ticksTillProduce < clock() )
