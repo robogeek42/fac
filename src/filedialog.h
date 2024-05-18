@@ -140,7 +140,7 @@ bool file_dialog( char *dir, char *filenamestr, int maxstr, bool *isload )
 	scrwidth_pix = getsysvar_scrwidth();
 	scrheight_pix = getsysvar_scrheight();
 
-	menux = scrwidth_text - 21;
+	menux = scrwidth_text - 24;
 	files_start_row = dir_line + 2;
 	files_width_chars = scrwidth_text - 4;
 	files_height_chars = scrheight_text - 10;
@@ -162,9 +162,10 @@ bool file_dialog( char *dir, char *filenamestr, int maxstr, bool *isload )
 	COL(15);COL(128+16);
 	TAB(0,line);printf("FILE DIALOG");
 	print_key(menux, line, "ch","D","ir");
-	print_key(menux+6,line,"","L","oad");
-	print_key(menux+11,line,"","S","ave");
-	print_key(menux+16,line,"e","X","it");
+	print_key(menux+6, line, "","U","p");
+	print_key(menux+9,line,"","L","oad");
+	print_key(menux+14,line,"","S","ave");
+	print_key(menux+19,line,"e","X","it");
 
 	vdp_move_to(0,1*8+2);vdp_line_to(scrwidth_pix,1*8+2); // line under title/menu
 	draw_box(4,dir_line*8-2, scrwidth_pix-18, 12, 11); // box for dir
@@ -200,6 +201,7 @@ bool file_dialog( char *dir, char *filenamestr, int maxstr, bool *isload )
 			line = files_start_row;
 			selected_fno = 0;
 			selected_line = 0;
+			selected_fno_start = 0;
 			TAB(files_start_col, files_start_row);
 			show_files( &line, selected_fno, selected_fno_start );
 			
@@ -324,6 +326,31 @@ bool file_dialog( char *dir, char *filenamestr, int maxstr, bool *isload )
 			curr_directory[strlen(curr_directory)-1] = '\0';
 			dir_changed = true;
 			key_wait_ticks = clock() + key_wait_time;
+		}
+
+		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_u ) )
+		{
+			key_wait_ticks = clock() + key_wait_time;
+
+			//if ( strcmp("/",curr_directory) != 0 )
+			{
+				// shorten directory at last '/'
+				int len=strlen(curr_directory);
+			   	for (int i=len-1;i>=0;i--)
+				{
+					if ( curr_directory[i] == '/' )
+					{
+						if ( i==0 )
+						{
+							curr_directory[1] = '\0';
+						} else {
+							curr_directory[i] = '\0';
+						}
+						break;
+					}
+				}
+				dir_changed = true;
+			}
 		}
 
 		vdp_update_key_state();
