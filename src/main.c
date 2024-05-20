@@ -252,6 +252,7 @@ void check_items_on_machines();
 int getResourceCount(int tx, int ty);
 ItemNodePtr getResource(int tx, int ty);
 bool reduceResourceCount(int tx, int ty);
+int show_assembler_dialog();
 
 static volatile SYSVAR *sys_vars = NULL;
 
@@ -1349,13 +1350,12 @@ void do_place()
 		} else 
 		if ( item_selected == IT_ASSEMBLER )
 		{
+			int recipe = show_assembler_dialog();
 			if (inventory_remove_item( inventory, item_selected, 1 ))
 			{
 				layer_machines[fac.mapWidth * cursor_ty + cursor_tx] = 
 					(item_selected - IT_TYPES_MACHINE) + (place_belt_index << 5);
 
-				int recipe = 0;
-				
 				addAssembler( &machines, cursor_tx, cursor_ty, place_belt_index, assemblerProcessTypes[recipe] );
 			}
 		} else 
@@ -2508,4 +2508,147 @@ void check_items_on_machines()
 		}
 		currPtr = nextPtr;
 	}
+}
+
+#define RECIPE_EXT_BORDER 5
+#define RECIPE_INT_BORDER 2
+#define RECIPE_NUM_SELECTIONS 4
+#define RECIPE_BOX_WIDTH 120
+#define RECIPE_SELECT_HEIGHT 24
+#define RECIPE_TITLE_HEIGHT 10
+int show_assembler_dialog()
+{
+	int offx = 10;
+	int offy = 20;
+	if ( cursorx > 160 ) offx = 170;
+
+	int box_offsetsY[20] = {0};
+	int cursor_border_on = 15; // white
+	int cursor_border_off = 0; // black
+
+	int recipe_selected = 0;
+	int old_recipe_selected = 0;
+ 
+	// UI sze
+	int boxw = RECIPE_EXT_BORDER + RECIPE_BOX_WIDTH + RECIPE_EXT_BORDER;
+	int boxh = RECIPE_EXT_BORDER + RECIPE_TITLE_HEIGHT + 
+		(RECIPE_SELECT_HEIGHT + RECIPE_INT_BORDER) * MIN(RECIPE_NUM_SELECTIONS,NUM_ASM_PROCESSES) 
+		- RECIPE_INT_BORDER + RECIPE_EXT_BORDER;
+
+	vdp_select_sprite( CURSOR_SPRITE );
+	vdp_hide_sprite();
+	vdp_refresh_sprites();
+
+	// dark-blue filled box with yellow line border
+	draw_filled_box( offx, offy, boxw, boxh, 11, 16 );
+	vdp_write_at_graphics_cursor();
+	vdp_move_to( offx + RECIPE_EXT_BORDER, offy + RECIPE_EXT_BORDER);
+	COL(2); printf("Select Recipe");
+	// game loop for interacting with inventory
+	clock_t key_wait_ticks = clock() + 20;
+	bool finish = false;
+	bool redisplay_cursor = true;
+	bool redisplay_recipes = true;
+	do {
+
+		if ( redisplay_recipes )
+		{
+			redisplay_recipes = false;
+			for (int j=0; j< MIN(RECIPE_NUM_SELECTIONS, NUM_ASM_PROCESSES); j++)
+			{
+				box_offsetsY[j] = offy + RECIPE_EXT_BORDER + RECIPE_TITLE_HEIGHT + 
+					j*(RECIPE_SELECT_HEIGHT+RECIPE_INT_BORDER);
+
+				// cells with dark grey fill with (cursor_border_off=black) border
+				draw_filled_box(
+						offx + RECIPE_EXT_BORDER,
+						box_offsetsY[j],
+						RECIPE_BOX_WIDTH, RECIPE_SELECT_HEIGHT, cursor_border_off, 8);
+
+				vdp_gcol(0, 11);
+				int xx = offx + RECIPE_EXT_BORDER + 2;
+				int yy = box_offsetsY[j] + 2;
+				for (int i=0; i < assemblerProcessTypes[j].innum; i++ )
+				{
+					int itemBMID = itemtypes[ assemblerProcessTypes[j].in[i] ].bmID;
+					for (int k=0; k<assemblerProcessTypes[j].incnt[i]; k++)
+					{
+						vdp_adv_select_bitmap( itemBMID );
+						vdp_draw_bitmap( xx, yy );
+						xx += 10;
+					}
+					if ( i <  assemblerProcessTypes[j].innum -1 )
+					{
+						vdp_move_to( xx, yy ); printf("+");
+						xx += 10;
+					}
+				}
+				vdp_move_to( xx, yy ); printf("%c",CHAR_RIGHTARROW);
+				xx += 10;
+				int itemBMID = itemtypes[ assemblerProcessTypes[j].out ].bmID;
+				for (int k=0; k<assemblerProcessTypes[j].outcnt; k++)
+				{
+					vdp_adv_select_bitmap( itemBMID );
+					vdp_draw_bitmap( xx, yy );
+					xx += 10;
+				}
+			}
+		}
+		if ( redisplay_cursor )
+		{
+			redisplay_cursor = false;
+			// clear old cursor
+			draw_box( 
+				offx + RECIPE_EXT_BORDER, 
+				box_offsetsY[old_recipe_selected], 
+				RECIPE_BOX_WIDTH, 
+				RECIPE_SELECT_HEIGHT,
+				cursor_border_off);
+			// cursor
+			draw_box( 
+				offx + RECIPE_EXT_BORDER, 
+				box_offsetsY[recipe_selected], 
+				RECIPE_BOX_WIDTH, 
+				RECIPE_SELECT_HEIGHT,
+				cursor_border_on);
+			old_recipe_selected = recipe_selected;
+		}
+
+		if ( key_wait_ticks < clock() && 
+				( vdp_check_key_press( KEY_x ) || vdp_check_key_press( KEY_enter ) ) )
+		{
+			finish=true;
+			// delay otherwise x will cause exit from program
+			while ( vdp_check_key_press( KEY_x ) || vdp_check_key_press( KEY_enter ) ) vdp_update_key_state();
+		}
+
+		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_UP ) )
+		{
+			key_wait_ticks = clock() + key_wait;
+			if ( recipe_selected > 0 ) {
+				recipe_selected--;
+				redisplay_cursor = true;
+			}
+		}
+		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_DOWN ) )
+		{
+			key_wait_ticks = clock() + key_wait;
+			if ( recipe_selected < MIN(RECIPE_NUM_SELECTIONS, NUM_ASM_PROCESSES)-1 ) {
+				recipe_selected++;
+				redisplay_cursor = true;
+			}
+		}
+
+		vdp_update_key_state();
+	} while (finish==false);
+
+	vdp_write_at_text_cursor();
+	draw_screen();
+	COL(15);
+
+	vdp_select_sprite( CURSOR_SPRITE );
+	vdp_show_sprite();
+	vdp_refresh_sprites();
+
+	return recipe_selected;
 }

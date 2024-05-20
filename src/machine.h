@@ -39,7 +39,8 @@ ProcessType furnaceProcessTypes[3] = {
 	{ {IT_COPPER_ORE,	0,	0}, IT_COPPER_PLATE,{1,0,0},1,1},
 };
 
-ProcessType assemblerProcessTypes[3] = {
+#define NUM_ASM_PROCESSES 2
+ProcessType assemblerProcessTypes[NUM_ASM_PROCESSES] = {
 	{ {IT_STONE_BRICK,		IT_COPPER_PLATE, 0}, IT_CIRCUIT, {1, 1, 0}, 1, 2 },
 	{ {IT_IRON_PLATE,		IT_WOOD, 0}, IT_GEARWHEEL, {1, 1, 0}, 1, 2 },
 };
