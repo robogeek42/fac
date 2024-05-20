@@ -27,7 +27,7 @@
 
 #define FN_MACH16 "img/tm16/tm%02d.rgb2"
 #define BMOFF_MACH16 BMOFF_ITEM8 + NUM_BM_ITEM8 
-#define NUM_BM_MACH16 5
+#define NUM_BM_MACH16 6
 
 #define FN_NUMS "img/nums4x5/num%01d.rgb2"
 #define BMOFF_NUMS BMOFF_MACH16 + NUM_BM_MACH16 
@@ -45,7 +45,11 @@
 #define BMOFF_FURNACES BMOFF_MINERS + NUM_BM_MINERS 
 #define NUM_BM_FURNACES 12
 
-#define TOTAL_BM BMOFF_FURNACES + NUM_BM_FURNACES
+#define FN_PROD8 "img/tp8/tp%02d.rgb2"
+#define BMOFF_PROD8 BMOFF_FURNACES + NUM_BM_FURNACES
+#define NUM_BM_PROD8 3
+
+#define TOTAL_BM BMOFF_PROD8 + NUM_BM_PROD8
 
 #define BOB_SPRITE_DOWN 0
 #define BOB_SPRITE_UP 1
@@ -176,6 +180,14 @@ bool load_images(bool progress)
 		if (progress) update_bar(progbar, cnt++);
 	}
 	
+	for (int fn=1; fn<=NUM_BM_PROD8; fn++)
+	{
+		sprintf(fname, FN_PROD8, fn);
+		int ret = load_bitmap_file(fname, 8, 8, BMOFF_PROD8 + fn-1 );
+		if ( ret < 0 ) return false;
+		if (progress) update_bar(progbar, cnt++);
+	}
+
 #if 0
 	printf("TILES start %d count %d\n",BMOFF_TERR16,NUM_BM_TERR16);
 	printf("FEATS start %d count %d\n",BMOFF_FEAT16,NUM_BM_FEAT16);
@@ -187,6 +199,7 @@ bool load_images(bool progress)
 	printf("CURS  start %d count %d\n",BMOFF_CURSORS,NUM_BM_CURSORS);
 	printf("MINER start %d count %d\n",BMOFF_MINERS,NUM_BM_MINERS);
 	printf("FURNA start %d count %d\n",BMOFF_FURNACES,NUM_BM_FURNACES);
+	printf("PROD  start %d count %d\n",BMOFF_PROD8,NUM_BM_PROD8);
 	printf("Total %d\n",TOTAL_BM);
 	wait_for_any_key();
 #endif

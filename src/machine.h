@@ -12,8 +12,11 @@
 
 // Machine can process up to 2 items to produce 1
 typedef struct {
-	uint8_t in[2];
+	uint8_t in[3];
 	uint8_t out;
+	uint8_t incnt[3];
+	uint8_t outcnt;
+	uint8_t innum;
 } ProcessType;
 
 typedef struct {
@@ -31,9 +34,14 @@ typedef struct {
 // to get the correct process type
 
 ProcessType furnaceProcessTypes[3] = {
-	{ {IT_STONE,		0}, IT_STONE_BRICK	},
-	{ {IT_IRON_ORE,		0}, IT_IRON_PLATE	},
-	{ {IT_COPPER_ORE,	0}, IT_COPPER_PLATE	},
+	{ {IT_STONE,		0,	0}, IT_STONE_BRICK,	{1,0,0},1,1},
+	{ {IT_IRON_ORE,		0,	0}, IT_IRON_PLATE,	{1,0,0},1,1},
+	{ {IT_COPPER_ORE,	0,	0}, IT_COPPER_PLATE,{1,0,0},1,1},
+};
+
+ProcessType assemblerProcessTypes[3] = {
+	{ {IT_STONE_BRICK,		IT_COPPER_PLATE, 0}, IT_CIRCUIT, {1, 1, 0}, 1, 2 },
+	{ {IT_IRON_PLATE,		IT_WOOD, 0}, IT_GEARWHEEL, {1, 1, 0}, 1, 2 },
 };
 
 #endif
@@ -90,7 +98,7 @@ int getMachineAtTileXY( Machine *machines, int tx, int ty )
 	return -1;
 }
 
-int addMachine( Machine **machines, uint8_t machine_type, int tx, int ty, uint8_t direction, int speed, uint8_t intype0, uint8_t intype1, uint8_t outtype )
+int addMachine( Machine **machines, uint8_t machine_type, int tx, int ty, uint8_t direction, int speed, uint8_t intype[3], uint8_t outtype, uint8_t incnt[3], uint8_t outcnt, uint8_t innum  )
 {
 	if (machineCount >= machinesAllocated)
 	{
@@ -116,9 +124,15 @@ int addMachine( Machine **machines, uint8_t machine_type, int tx, int ty, uint8_
 	(*machines)[mnum].machine_type = machine_type; 
 	(*machines)[mnum].tx = tx; 
 	(*machines)[mnum].ty = ty;
-	(*machines)[mnum].process_type.in[0] = intype0;
-	(*machines)[mnum].process_type.in[1] = intype1;
+	(*machines)[mnum].process_type.in[0] = intype[0];
+	(*machines)[mnum].process_type.in[1] = intype[1];
+	(*machines)[mnum].process_type.in[2] = intype[2];
 	(*machines)[mnum].process_type.out = outtype;
+	(*machines)[mnum].process_type.incnt[0] = incnt[0];
+	(*machines)[mnum].process_type.incnt[1] = incnt[1];
+	(*machines)[mnum].process_type.incnt[2] = incnt[2];
+	(*machines)[mnum].process_type.outcnt = outcnt;
+	(*machines)[mnum].process_type.innum = innum;
 	(*machines)[mnum].processtime = speed;
 	(*machines)[mnum].outdir = direction;
 	(*machines)[mnum].ticksTillProduce = 0;
@@ -132,19 +146,29 @@ int addMachine( Machine **machines, uint8_t machine_type, int tx, int ty, uint8_
 
 int addMiner( Machine **machines, int tx, int ty, uint8_t rawtype, uint8_t direction)
 {
-	int m = addMachine( machines, IT_MINER, tx, ty, direction, 300, 0, 0, rawtype);
+	uint8_t intype[3] = {0, 0, 0};
+	uint8_t incnt[3] = {1, 0, 0};
+	int m = addMachine( machines, IT_MINER, tx, ty, direction, 300, 
+			intype, rawtype, incnt, 1, 0);
 	(*machines)[m].ticksTillProduce = clock() + (*machines)[m].processtime;
 	return m;
 }
 
 int addFurnace( Machine **machines, int tx, int ty, uint8_t direction )
 {
-	return addMachine( machines, IT_FURNACE, tx, ty, direction, 200, 0, 0, 0);
+	uint8_t intype[3] = {0, 0, 0};
+	uint8_t incnt[3] = {1, 0, 0};
+	return addMachine( machines, IT_FURNACE, tx, ty, direction, 200, 
+			intype, 0, incnt, 1, 1);
 }
 
-int addAssembler( Machine **machines, int tx, int ty, uint8_t direction )
+int addAssembler( Machine **machines, int tx, int ty, uint8_t direction, ProcessType recipe )
 {
-	return addMachine( machines, IT_ASSEMBLER, tx, ty, direction, 400, 0, 0, 0);
+	return addMachine( machines, IT_ASSEMBLER, tx, ty, direction, 400, 
+			recipe.in, recipe.out, 
+			recipe.incnt,
+			recipe.outcnt,
+			recipe.innum );
 }
 
 // special case for machine producer for 0 raw materials

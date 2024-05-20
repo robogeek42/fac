@@ -188,6 +188,7 @@ void change_mode(int mode);
 
 void game_loop();
 
+void load_custom_chars();
 int getWorldCoordX(int sx) { return (fac.xpos + sx); }
 int getWorldCoordY(int sy) { return (fac.ypos + sy); }
 int getTileX(int sx) { return (sx/gTileSize); }
@@ -267,6 +268,12 @@ void change_mode(int mode)
 	while ( !(sys_vars->vpd_pflags & vdp_pflag_mode) );
 }
 
+#define CHAR_RIGHTARROW 128
+void load_custom_chars()
+{
+	// right arrow
+	vdp_redefine_character( CHAR_RIGHTARROW, 0x00, 0x04, 0x02, 0xFF, 0x02, 0x04, 0x00, 0x00); // right arrow
+}
 
 bool alloc_map()
 {
@@ -310,6 +317,8 @@ int main(/*int argc, char *argv[]*/)
 	vdp_set_key_event_handler( key_event_handler );
 
 	fac.version = SAVE_VERSION;
+
+	load_custom_chars();
 
 	// custom map which is 256x256 tiles
 	fac.mapWidth = 45;
@@ -364,9 +373,13 @@ int main(/*int argc, char *argv[]*/)
 	inventory_add_item(inventory, IT_COPPER_PLATE, 255);
 	inventory_add_item(inventory, IT_FURNACE, 8);
 	inventory_add_item(inventory, IT_MINER, 6);
-	inventory_add_item(inventory, IT_ASSEMBLER, 1);
+	inventory_add_item(inventory, IT_ASSEMBLER, 5);
 	inventory_add_item(inventory, IT_INSERTER, 1);
 	inventory_add_item(inventory, IT_BOX, 4);
+	inventory_add_item(inventory, IT_GENERATOR, 4);
+	inventory_add_item(inventory, IT_GEARWHEEL, 20);
+	inventory_add_item(inventory, IT_WIRE, 20);
+	inventory_add_item(inventory, IT_CIRCUIT, 20);
 
 	inv_selected = 0; // belts
 	item_selected = 0; // belts
@@ -1150,7 +1163,7 @@ void draw_cursor(bool draw)
 		{
 			draw_place_belt();
 		}
-		if ( isResource( item_selected ) )
+		if ( isResource( item_selected ) || isProduct( item_selected ) )
 		{
 			draw_place_resource();
 		}
@@ -1299,7 +1312,7 @@ void do_place()
 			layer_belts[fac.mapWidth * cursor_ty + cursor_tx] = place_belt_selected;
 		}
 	}
-	if ( isResource(item_selected) ) {
+	if ( isResource(item_selected) || isProduct(item_selected) ) {
 		int ret = inventory_remove_item( inventory, item_selected, 1 );
 		if ( ret >= 0 )
 		{
@@ -1332,6 +1345,18 @@ void do_place()
 					(item_selected - IT_TYPES_MACHINE) + (place_belt_index << 5);
 
 				addFurnace( &machines, cursor_tx, cursor_ty, place_belt_index );
+			}
+		} else 
+		if ( item_selected == IT_ASSEMBLER )
+		{
+			if (inventory_remove_item( inventory, item_selected, 1 ))
+			{
+				layer_machines[fac.mapWidth * cursor_ty + cursor_tx] = 
+					(item_selected - IT_TYPES_MACHINE) + (place_belt_index << 5);
+
+				int recipe = 0;
+				
+				addAssembler( &machines, cursor_tx, cursor_ty, place_belt_index, assemblerProcessTypes[recipe] );
 			}
 		} else 
 		if ( inventory_remove_item( inventory, item_selected, 1 ) )
@@ -1747,11 +1772,12 @@ void show_info()
 {
 	int infox = cursorx;
 	int infoy = cursory;
+	int boxh = 31; int yadj = 0;
 
 	if ( cursory < 120 ) {
 		infoy -= 32;
 	} else {
-		infoy+=16;
+		infoy += 16;
 	}
 
 	int info_item_bmid = -1;
@@ -1769,6 +1795,16 @@ void show_info()
 		// machine
 		info_item_type = getMachineItemType(layer_machines[offset]);
 		info_item_bmid = getMachineBMID(cursor_tx, cursor_ty);
+		if ( info_item_type == IT_ASSEMBLER )
+		{
+			boxh=39; yadj = 8;
+			if ( cursory < 120 ) {
+				infoy -= yadj;
+			} else {
+				infoy += yadj;
+			}
+		}
+		
 	} else if ( tilemap[ offset ] > 15 )
 	{
 		// feature
@@ -1782,16 +1818,16 @@ void show_info()
 	{
 		char * text = itemtypes[ info_item_type ].desc;
 		int textlen = MAX(strlen(text) * 8, 64);
-		draw_filled_box( infox, infoy, textlen+4, 31, 11, 8);
+		draw_filled_box( infox, infoy, textlen+4, boxh, 11, 8);
 		vdp_adv_select_bitmap( info_item_bmid );
 		vdp_draw_bitmap( infox+4, infoy+4 );
 		putch(0x05); // print at graphics cursor
 		if ( info_item_type == IT_FURNACE || info_item_type == IT_ASSEMBLER )
 		{
 			int m = getMachineAtTileXY(machines, cursor_tx, cursor_ty);
-			for (int it = 0; it<2; it++)
+
+			for (int it = 0; it < machines[m].process_type.innum; it++)
 			{
-				if ( info_item_type == IT_FURNACE && it>0 ) continue;
 				if ( machines[m].process_type.in[it] > 0 )
 				{
 					int itemBMID = itemtypes[ machines[m].process_type.in[it] ].bmID;
@@ -1806,9 +1842,10 @@ void show_info()
 			}
 			if ( machines[m].process_type.out > 0 )
 			{
+				vdp_move_to( infox+4+44, infoy+4 + 4 ); putch(CHAR_RIGHTARROW);
 				int itemBMID = itemtypes[ machines[m].process_type.out ].bmID;
 				vdp_adv_select_bitmap( itemBMID );
-				vdp_draw_bitmap( infox+4+44, infoy+4 + 4 );
+				vdp_draw_bitmap( infox+4+44+8, infoy+4 + 4 );
 			}
 		}
 		if ( resource_count > 0 )
@@ -1816,7 +1853,7 @@ void show_info()
 			vdp_move_to( infox+4+20, infoy+4 );
 			printf("%d",resource_count);
 		}
-		vdp_move_to( infox+3, infoy+4+18 );
+		vdp_move_to( infox+3, infoy+4+18 + yadj );
 		vdp_gcol(0, 15);
 		printf("%s",itemtypes[ info_item_type ].desc);
 		putch(0x04); // print at text cursor

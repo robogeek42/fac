@@ -306,6 +306,10 @@ bool isResource(int item) {
 bool isOverlay(int item) {
 	return itemtypes[item].isOverlay;
 }
+bool isProduct(int item) {
+	ItemType *p = &itemtypes[item];
+	return !p->isBelt && !p->isMachine && !p->isResource && ! p->isOverlay;
+}
 
 
 

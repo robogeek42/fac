@@ -106,6 +106,7 @@ enum ItemTypesEnum {
 	IT_ASSEMBLER,
 	IT_INSERTER,
 	IT_BOX,
+	IT_GENERATOR,
 
 	IT_TYPES_FEATURES,
 	IT_FEAT_STONE = IT_TYPES_FEATURES,
@@ -113,6 +114,11 @@ enum ItemTypesEnum {
 	IT_FEAT_COPPER,
 	IT_FEAT_COAL,
 	IT_FEAT_WOOD,
+
+	IT_TYPES_PRODUCT,
+	IT_GEARWHEEL = IT_TYPES_PRODUCT,
+	IT_WIRE,
+	IT_CIRCUIT,
 
 	NUM_ITEMTYPES
 };
@@ -137,12 +143,17 @@ static ItemType itemtypes[] = {
     {IT_ASSEMBLER,		"Assembler",	false, true, false, false, BMOFF_MACH16+2, BM_SIZE16, 0 },
     {IT_INSERTER,		"Inserter", 	false, true, false, false, BMOFF_MACH16+3, BM_SIZE16, 0 },
     {IT_BOX,			"Box",		 	false, true, false, false, BMOFF_MACH16+4, BM_SIZE16, 0 },
+    {IT_GENERATOR,		"Generator", 	false, true, false, false, BMOFF_MACH16+5, BM_SIZE16, 0 },
 // Overlays
 	{IT_FEAT_STONE,		"Stone",		false, false, false, true, BMOFF_FEAT16+0, BM_SIZE16, 0 },
 	{IT_FEAT_IRON,		"Iron Ore", 	false, false, false, true, BMOFF_FEAT16+1, BM_SIZE16, 0 },
 	{IT_FEAT_COPPER,	"Copper Ore",	false, false, false, true, BMOFF_FEAT16+2, BM_SIZE16, 0 },
 	{IT_FEAT_COAL,		"Coal",			false, false, false, true, BMOFF_FEAT16+3, BM_SIZE16, 0 },
 	{IT_FEAT_WOOD,		"Tree",			false, false, false, true, BMOFF_FEAT16+4, BM_SIZE16, 0 },
+// Products
+    {IT_GEARWHEEL,		"Gear Wheel",	false, false, false, false, BMOFF_PROD8+0, BM_SIZE8, 0 },
+    {IT_WIRE,			"Copper Wire",	false, false, false, false, BMOFF_PROD8+1, BM_SIZE8, 0 },
+    {IT_CIRCUIT,		"Circuit Board",false, false, false, false, BMOFF_PROD8+2, BM_SIZE8, 0 },
 
 };
 
@@ -194,6 +205,7 @@ bool isMachine(int item);
 bool isResource(int item);
 bool isOverlay(int item);
 bool isFuel(int item);
+bool isProduct(int item);
 
 #endif
 
