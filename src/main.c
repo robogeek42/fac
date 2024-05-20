@@ -381,6 +381,7 @@ int main(/*int argc, char *argv[]*/)
 	inventory_add_item(inventory, IT_GEARWHEEL, 20);
 	inventory_add_item(inventory, IT_WIRE, 20);
 	inventory_add_item(inventory, IT_CIRCUIT, 20);
+	inventory_add_item(inventory, IT_IRON_PLATE, 40);
 
 	inv_selected = 0; // belts
 	item_selected = 0; // belts
@@ -666,6 +667,10 @@ void game_loop()
 				if ( machines[m].machine_type == IT_FURNACE )
 				{
 					furnaceProduce( machines, m, &itemlist, &numItems);
+				}
+				if ( machines[m].machine_type == IT_ASSEMBLER )
+				{
+					assemblerProduce( machines, m, &itemlist, &numItems);
 				}
 			}
 		}
@@ -1375,7 +1380,7 @@ void drop_item(int item)
 	if ( isMachineValid( layer_machines[ offset ] ) )
 	{
 		int machine_itemtype = getMachineItemType(layer_machines[offset]);
-		if ( machine_itemtype == IT_FURNACE || machine_itemtype == IT_BOX )
+		if ( machine_itemtype == IT_FURNACE || machine_itemtype == IT_BOX || machine_itemtype == IT_ASSEMBLER )
 		{
 			insertItemIntoMachine( machine_itemtype, cursor_tx, cursor_ty, item );
 			return;
@@ -1838,7 +1843,7 @@ void show_info()
 					printf("?");
 				}
 				vdp_move_to( infox+4+32, infoy+4 + 8*it );
-				printf("%d",machines[m].countIn[it]);
+				printf("%d",machines[m].process_type.incnt[it]);
 			}
 			if ( machines[m].process_type.out > 0 )
 			{
@@ -2442,9 +2447,24 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 		{
 			machines[m].process_type.in[0] = item;
 			machines[m].process_type.out = furnaceProcessTypes[ item - IT_TYPES_RAW ].out;
-			machines[m].countIn[0] = 0;
+			machines[m].process_type.incnt[0] = 0;
 		}
-		machines[m].countIn[0] += 1;
+		machines[m].process_type.incnt[0] += 1;
+	}
+	if ( machine_type == IT_ASSEMBLER )
+	{
+		TAB(0,0);
+		int m = getMachineAtTileXY(machines, tx, ty);
+		printf("it=%d, mach=%d innum %d : ", item, m, machines[m].process_type.innum);
+		for (int k=0; k < machines[m].process_type.innum; k++)
+		{
+			printf("%d ",machines[m].process_type.in[k]);
+			if ( machines[m].process_type.in[k] == item )
+			{
+				machines[m].process_type.incnt[k]++;
+				break;
+			}
+		}
 	}
 }
 void insertItemPtrIntoMachine(int machine_type, int tx, int ty, ItemNodePtr *pitemptr )
@@ -2469,12 +2489,12 @@ void insertItemPtrIntoMachine(int machine_type, int tx, int ty, ItemNodePtr *pit
 		{
 			machines[m].process_type.in[0] = item;
 			machines[m].process_type.out = furnaceProcessTypes[ item - IT_TYPES_RAW ].out;
-			machines[m].countIn[0] = 0;
+			machines[m].process_type.incnt[0] = 0;
 		}
 		if ( popItem(&itemlist, (*pitemptr)) )
 		{
 			numItems--;
-			machines[m].countIn[0] += 1;
+			machines[m].process_type.incnt[0] += 1;
 			free(pitemptr);
 		}
 	}
@@ -2497,7 +2517,7 @@ void check_items_on_machines()
 		if ( isMachineValid( machine_byte ) )
 		{
 			int machine_itemtype = getMachineItemType(machine_byte);
-			if ( machine_itemtype == IT_FURNACE || machine_itemtype == IT_BOX )
+			if ( machine_itemtype == IT_FURNACE || machine_itemtype == IT_BOX ||  machine_itemtype == IT_ASSEMBLER )
 			{
 				int item = currPtr->item;
 				insertItemIntoMachine( machine_itemtype, tx, ty, item );
