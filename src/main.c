@@ -247,7 +247,6 @@ int getMachineItemType(uint8_t machine_byte);
 int getOverlayAtOffset( int offset );
 int getOverlayAtCursor();
 void insertItemIntoMachine(int machine_type, int tx, int ty, int item );
-void insertItemPtrIntoMachine(int machine_type, int tx, int ty, ItemNodePtr *pitemptr );
 void check_items_on_machines();
 int getResourceCount(int tx, int ty);
 ItemNodePtr getResource(int tx, int ty);
@@ -651,8 +650,10 @@ void game_loop()
 		if ( machine_update_ticks < clock() )
 		{
 			machine_update_ticks = clock() + machine_update_rate;
+			// update all the machines in turn
 			for (int m=0; m<machinesAllocated; m++)
 			{
+				// miners reduce the resource count that they are mining
 				if ( machines[m].machine_type == IT_MINER )
 				{
 					if ( getResourceCount( machines[m].tx, machines[m].ty ) > 0 )
@@ -664,6 +665,7 @@ void game_loop()
 					}
 				}
 
+				// call producer for each of these
 				if ( machines[m].machine_type == IT_FURNACE )
 				{
 					furnaceProduce( machines, m, &itemlist, &numItems);
@@ -1361,7 +1363,7 @@ void do_place()
 				layer_machines[fac.mapWidth * cursor_ty + cursor_tx] = 
 					(item_selected - IT_TYPES_MACHINE) + (place_belt_index << 5);
 
-				addAssembler( &machines, cursor_tx, cursor_ty, place_belt_index, assemblerProcessTypes[recipe] );
+				addAssembler( &machines, cursor_tx, cursor_ty, place_belt_index, recipe );
 			}
 		} else 
 		if ( inventory_remove_item( inventory, item_selected, 1 ) )
@@ -1415,7 +1417,7 @@ void move_items_on_belts()
 			int nexty = centrey;
 			int nnx = nextx;
 			int nny = nexty;
-			switch( machines[machine].outdir )
+			switch( machines[machine].outDir )
 			{
 				case DIR_UP:	// exit to top, reduce Y
 					if ( !moved ) { nexty--; nny-=2; moved=true; }
@@ -1830,27 +1832,39 @@ void show_info()
 		if ( info_item_type == IT_FURNACE || info_item_type == IT_ASSEMBLER )
 		{
 			int m = getMachineAtTileXY(machines, cursor_tx, cursor_ty);
-
-			for (int it = 0; it < machines[m].process_type.innum; it++)
+			int ptype = machines[m].ptype;
+			if ( ptype >= 0 )
 			{
-				if ( machines[m].process_type.in[it] > 0 )
+				ProcessType *pt;
+			   	if ( info_item_type == IT_FURNACE )
 				{
-					int itemBMID = itemtypes[ machines[m].process_type.in[it] ].bmID;
-					vdp_adv_select_bitmap( itemBMID );
-					vdp_draw_bitmap( infox+4+20, infoy+4 + 8*it );
-				} else {
-					vdp_move_to( infox+4+20, infoy+4 + 8*it );
-					printf("?");
+					pt = &furnaceProcessTypes[ptype];
 				}
-				vdp_move_to( infox+4+32, infoy+4 + 8*it );
-				printf("%d",machines[m].process_type.incnt[it]);
-			}
-			if ( machines[m].process_type.out > 0 )
-			{
-				vdp_move_to( infox+4+44, infoy+4 + 4 ); putch(CHAR_RIGHTARROW);
-				int itemBMID = itemtypes[ machines[m].process_type.out ].bmID;
-				vdp_adv_select_bitmap( itemBMID );
-				vdp_draw_bitmap( infox+4+44+8, infoy+4 + 4 );
+			   	if ( info_item_type == IT_ASSEMBLER )
+				{
+					pt = &assemblerProcessTypes[ptype];
+				}
+				for (int it = 0; it < pt->innum; it++)
+				{
+					if ( pt->in[it] > 0 )
+					{
+						int itemBMID = itemtypes[ pt->in[it] ].bmID;
+						vdp_adv_select_bitmap( itemBMID );
+						vdp_draw_bitmap( infox+4+20, infoy+4 + 8*it );
+					} else {
+						vdp_move_to( infox+4+20, infoy+4 + 8*it );
+						printf("?");
+					}
+					vdp_move_to( infox+4+32, infoy+4 + 8*it );
+					printf("%d",machines[m].countIn[it]);
+				}
+				if ( pt->out > 0 )
+				{
+					vdp_move_to( infox+4+44, infoy+4 + 4 ); putch(CHAR_RIGHTARROW);
+					int itemBMID = itemtypes[ pt->out ].bmID;
+					vdp_adv_select_bitmap( itemBMID );
+					vdp_draw_bitmap( infox+4+44+8, infoy+4 + 4 );
+				}
 			}
 		}
 		if ( resource_count > 0 )
@@ -2442,60 +2456,44 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 	if ( machine_type == IT_FURNACE )
 	{
 		int m = getMachineAtTileXY(machines, tx, ty);
+		int ptype = machines[m].ptype;
 		// if the furnace recipe is not set, set it based on the item inserted
-		if ( machines[m].process_type.in[0] == 0 )
+		if ( ptype < 0 )
 		{
-			machines[m].process_type.in[0] = item;
-			machines[m].process_type.out = furnaceProcessTypes[ item - IT_TYPES_RAW ].out;
-			machines[m].process_type.incnt[0] = 0;
+			// find the correct furnace recipe
+			for (int i=0; i<NUM_FURNACE_PROCESSES; i++)
+			{
+				if ( furnaceProcessTypes[i].in[0] == item )
+				{
+					machines[m].ptype = i;
+					ptype=i; break;
+				}
+			}
 		}
-		machines[m].process_type.incnt[0] += 1;
+		if ( ptype >= 0 )
+		{
+			machines[m].countIn[0] += 1;
+		}
 	}
 	if ( machine_type == IT_ASSEMBLER )
 	{
-		TAB(0,0);
+		//TAB(0,0);
 		int m = getMachineAtTileXY(machines, tx, ty);
-		printf("it=%d, mach=%d innum %d : ", item, m, machines[m].process_type.innum);
-		for (int k=0; k < machines[m].process_type.innum; k++)
+		int ptype = machines[m].ptype;
+		//printf("it=%d, mach=%d innum %d : ", item, m, machines[m].process_type.innum);
+
+		if ( ptype >= 0 )
 		{
-			printf("%d ",machines[m].process_type.in[k]);
-			if ( machines[m].process_type.in[k] == item )
+			// find which of the inputs matches this item
+			for (int k=0; k < assemblerProcessTypes[ptype].innum; k++)
 			{
-				machines[m].process_type.incnt[k]++;
-				break;
+				if ( assemblerProcessTypes[ptype].in[k] == item )
+				{
+					// increment count of that item in the assembler
+					machines[m].countIn[k]++;
+					break;
+				}
 			}
-		}
-	}
-}
-void insertItemPtrIntoMachine(int machine_type, int tx, int ty, ItemNodePtr *pitemptr )
-{
-	// Box is a kind of machine which transfers all items entering it
-	// to the inventory
-	if ( machine_type == IT_BOX )
-	{
-		int item = (*pitemptr)->item;
-		if ( popItem(&itemlist, (*pitemptr)) )
-		{
-			inventory_add_item(inventory, item, 1);
-			free(pitemptr);
-		}
-	}
-	if ( machine_type == IT_FURNACE )
-	{
-		int item = (*pitemptr)->item;
-		int m = getMachineAtTileXY(machines, tx, ty);
-		// if the furnace recipe is not set, set it based on the item inserted
-		if ( machines[m].process_type.in[0] == 0 )
-		{
-			machines[m].process_type.in[0] = item;
-			machines[m].process_type.out = furnaceProcessTypes[ item - IT_TYPES_RAW ].out;
-			machines[m].process_type.incnt[0] = 0;
-		}
-		if ( popItem(&itemlist, (*pitemptr)) )
-		{
-			numItems--;
-			machines[m].process_type.incnt[0] += 1;
-			free(pitemptr);
 		}
 	}
 }
