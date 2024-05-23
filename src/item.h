@@ -107,6 +107,8 @@ enum ItemTypesEnum {
 	IT_INSERTER,
 	IT_BOX,
 	IT_GENERATOR,
+	IT_INS_START,
+	IT_INS_END,
 
 	IT_TYPES_FEATURES,
 	IT_FEAT_STONE = IT_TYPES_FEATURES,
@@ -144,6 +146,8 @@ static ItemType itemtypes[] = {
     {IT_INSERTER,		"Inserter", 	false, true, false, false, BMOFF_MACH16+3, BM_SIZE16, 0 },
     {IT_BOX,			"Box",		 	false, true, false, false, BMOFF_MACH16+4, BM_SIZE16, 0 },
     {IT_GENERATOR,		"Generator", 	false, true, false, false, BMOFF_MACH16+5, BM_SIZE16, 0 },
+    {IT_INS_START,		"Inserter s", 	false, true, false, false, BMOFF_MACH16+3, BM_SIZE16, 0 },
+    {IT_INS_END,		"Inserter e", 	false, true, false, false, BMOFF_MACH16+3, BM_SIZE16, 0 },
 // Overlays
 	{IT_FEAT_STONE,		"Stone",		false, false, false, true, BMOFF_FEAT16+0, BM_SIZE16, 0 },
 	{IT_FEAT_IRON,		"Iron Ore", 	false, false, false, true, BMOFF_FEAT16+1, BM_SIZE16, 0 },

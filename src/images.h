@@ -45,9 +45,17 @@
 #define BMOFF_FURNACES BMOFF_MINERS + NUM_BM_MINERS 
 #define NUM_BM_FURNACES 12
 
+#define FN_ASSEMBLERS "img/tm16/asmb%02d.rgb2"
+#define BMOFF_ASSEMBLERS BMOFF_FURNACES + NUM_BM_FURNACES 
+#define NUM_BM_ASSEMBLERS 12
+
 #define FN_PROD8 "img/tp8/tp%02d.rgb2"
-#define BMOFF_PROD8 BMOFF_FURNACES + NUM_BM_FURNACES
+#define BMOFF_PROD8 BMOFF_ASSEMBLERS + NUM_BM_ASSEMBLERS
 #define NUM_BM_PROD8 3
+
+#define FN_INSERTERS "img/ins/ins%02d.rgb2"
+#define BMOFF_INSERTERS BMOFF_PROD8 + NUM_BM_PROD8 
+#define NUM_BM_INSERTERS 12
 
 #define TOTAL_BM BMOFF_PROD8 + NUM_BM_PROD8
 
@@ -179,6 +187,14 @@ bool load_images(bool progress)
 		if ( ret < 0 ) return false;
 		if (progress) update_bar(progbar, cnt++);
 	}
+	// 12 assemblers each with 3 images for animation
+	for (int fn=1; fn<=NUM_BM_ASSEMBLERS; fn++)
+	{
+		sprintf(fname, FN_ASSEMBLERS, fn);
+		int ret = load_bitmap_file(fname, 16, 16, BMOFF_ASSEMBLERS + fn-1 );
+		if ( ret < 0 ) return false;
+		if (progress) update_bar(progbar, cnt++);
+	}
 	
 	for (int fn=1; fn<=NUM_BM_PROD8; fn++)
 	{
@@ -188,6 +204,14 @@ bool load_images(bool progress)
 		if (progress) update_bar(progbar, cnt++);
 	}
 
+	// 12 inserters each with 3 images spanning tiles
+	for (int fn=1; fn<=NUM_BM_INSERTERS; fn++)
+	{
+		sprintf(fname, FN_INSERTERS, fn);
+		int ret = load_bitmap_file(fname, 16, 16, BMOFF_INSERTERS + fn-1 );
+		if ( ret < 0 ) return false;
+		if (progress) update_bar(progbar, cnt++);
+	}
 #if 0
 	printf("TILES start %d count %d\n",BMOFF_TERR16,NUM_BM_TERR16);
 	printf("FEATS start %d count %d\n",BMOFF_FEAT16,NUM_BM_FEAT16);
@@ -199,7 +223,9 @@ bool load_images(bool progress)
 	printf("CURS  start %d count %d\n",BMOFF_CURSORS,NUM_BM_CURSORS);
 	printf("MINER start %d count %d\n",BMOFF_MINERS,NUM_BM_MINERS);
 	printf("FURNA start %d count %d\n",BMOFF_FURNACES,NUM_BM_FURNACES);
+	printf("ASSMB start %d count %d\n",BMOFF_ASSEMBLERS,NUM_BM_ASSEMBLERS);
 	printf("PROD  start %d count %d\n",BMOFF_PROD8,NUM_BM_PROD8);
+	printf("INSER start %d count %d\n",BMOFF_INSERTERS,NUM_BM_INSERTERS);
 	printf("Total %d\n",TOTAL_BM);
 	wait_for_any_key();
 #endif
