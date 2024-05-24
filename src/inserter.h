@@ -10,6 +10,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "thinglist.h"
+
 typedef struct {
 	uint16_t tx;
 	uint16_t ty;
@@ -19,5 +21,34 @@ typedef struct {
 	uint16_t end_ty;
 	uint16_t bmid; // start, middle+1, end+2
 } Inserter;
+
+#endif
+
+#ifdef _INSERTER_IMPLEMENTATION
+
+ThingNodePtr findInserter(ThingNodePtr *inserterlist,  int tx, int ty)
+{
+	if (isEmptyThingList(inserterlist)) {
+		return false;
+	}
+
+	ThingNodePtr currPtr = (*inserterlist);
+	Inserter *ins = (Inserter*) currPtr->thing;
+	while (currPtr != NULL ) {
+		if ( ins->tx == tx && 
+			 ins->ty == ty)
+		{
+			break;
+		}
+		currPtr = currPtr->next;
+	}
+
+	if (currPtr == NULL) {
+		return NULL;
+	}
+
+	return currPtr;
+
+}
 
 #endif
