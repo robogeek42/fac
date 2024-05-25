@@ -13,30 +13,62 @@
 #include "thinglist.h"
 
 typedef struct {
+	uint8_t dir;
 	uint16_t tx;
 	uint16_t ty;
 	uint16_t start_tx;
 	uint16_t start_ty;
 	uint16_t end_tx;
 	uint16_t end_ty;
-	uint16_t bmid; // start, middle+1, end+2
 } Inserter;
 
 #endif
 
 #ifdef _INSERTER_IMPLEMENTATION
 
-ThingNodePtr findInserter(ThingNodePtr *inserterlist,  int tx, int ty)
+Inserter* findInserter(ThingNodePtr *inserterlist,  int tx, int ty)
 {
 	if (isEmptyThingList(inserterlist)) {
 		return false;
 	}
 
 	ThingNodePtr currPtr = (*inserterlist);
-	Inserter *ins = (Inserter*) currPtr->thing;
+	Inserter *insp = NULL;
 	while (currPtr != NULL ) {
-		if ( ins->tx == tx && 
-			 ins->ty == ty)
+		insp = (Inserter*) currPtr->thing;
+		if ( insp != NULL &&
+			 ( (insp->tx == tx && insp->ty == ty) ||
+			   (insp->start_tx == tx && insp->start_ty == ty) ||
+			   (insp->end_tx == tx && insp->end_ty == ty)
+			 ) )
+		{
+			break;
+		}
+		currPtr = currPtr->next;
+	}
+
+	if (currPtr == NULL) {
+		return NULL;
+	}
+
+	return insp;
+
+}
+ThingNodePtr findInserterNode(ThingNodePtr *inserterlist,  int tx, int ty)
+{
+	if (isEmptyThingList(inserterlist)) {
+		return false;
+	}
+
+	ThingNodePtr currPtr = (*inserterlist);
+	Inserter *insp = NULL;
+	while (currPtr != NULL ) {
+		insp = (Inserter*) currPtr->thing;
+		if ( insp != NULL &&
+			 ( (insp->tx == tx && insp->ty == ty) ||
+			   (insp->start_tx == tx && insp->start_ty == ty) ||
+			   (insp->end_tx == tx && insp->end_ty == ty)
+			 ) )
 		{
 			break;
 		}

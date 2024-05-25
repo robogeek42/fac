@@ -238,6 +238,7 @@ void draw_horizontal_layer(int tx, int ty, int len, bool bdraw_belts, bool bdraw
 void drop_item(int item);
 
 void move_items_on_belts();
+void move_items_on_inserters();
 void print_item_pos();
 void draw_items();
 void draw_items_at_tile(int tx, int ty);
@@ -499,6 +500,7 @@ void game_loop()
 			layer_wait_ticks = clock() + belt_speed; // belt anim speed
 			//draw_cursor(false);
 			move_items_on_belts();
+			move_items_on_inserters();
 			check_items_on_machines();
 			draw_layer(true);
 			draw_cursor(true);
@@ -1494,6 +1496,7 @@ void do_place()
 				Inserter *ins = (Inserter*) malloc(sizeof(Inserter));
 				ins->tx = cursor_tx;
 				ins->ty = cursor_ty;
+				ins->dir = place_belt_index;
 				switch (place_belt_index)
 				{
 					case DIR_UP:
@@ -1529,7 +1532,6 @@ void do_place()
 						layer_inserters[tileoffset - 1] = 1 + (place_belt_index << 5);
 						break;
 				}
-				ins->bmid = BMOFF_INSERTERS + place_belt_index*3;
 				insertAtFrontThingList(&inserterlist, ins);
 			}
 		} else 
@@ -1709,7 +1711,73 @@ void move_items_on_belts()
 
 void move_items_on_inserters()
 {
+	ItemNodePtr currPtr = itemlist;
+	int item_centre_offset = 4;
+	while (currPtr != NULL) {
+		bool moved = false;
+		int centrex = currPtr->x + item_centre_offset;
+		int centrey = currPtr->y + item_centre_offset;
 
+		// (tx,ty) is the tile the centre of the item is in
+		int tx = centrex >> 4; //getTileX(centrex);
+		int ty = centrey >> 4; //getTileY(centrey);
+
+		int nextx = centrex;
+		int nexty = centrey;
+		int nnx = centrex;
+		int nny = centrey;
+		int dx = centrex % gTileSize;
+		int dy = centrey % gTileSize;
+		Inserter *insp = findInserter( &inserterlist, tx, ty );
+		if (insp)
+		{
+			int sme = layer_inserters[tx+ty*fac.mapWidth] & 0x07;
+			switch ( insp->dir )
+			{
+				case DIR_UP:
+					if ( sme == 0 || sme == 1 || (sme == 2 && dy > 8)) 
+					{
+						nexty -= 1; nny -= 2; moved = true;
+					}
+					break;
+				case DIR_RIGHT:
+					if ( sme == 0 || sme == 1 || (sme == 2 && dx < 8)) 
+					{
+						nextx += 1; nnx += 2; moved = true;
+					}
+					break;
+				case DIR_DOWN:
+					if ( sme == 0 || sme == 1 || (sme == 2 && dy < 8)) 
+					{
+						nexty += 1; nny += 2; moved = true;
+					}
+					break;
+				case DIR_LEFT:
+					if ( sme == 0 || sme == 1 || (sme == 2 && dx > 8)) 
+					{
+						nextx -= 1; nnx -= 2; moved = true;
+					}
+					break;
+				default:
+					break;
+			}
+		}
+		if ( moved )
+		{
+			// check next pixel and the one after in the same direction
+			bool found = isAnythingAtXY(&itemlist, nextx-item_centre_offset, nexty-item_centre_offset );
+			found |= isAnythingAtXY(&itemlist, nnx-item_centre_offset, nny-item_centre_offset );
+			if (!found) 
+			{
+				currPtr->x = nextx - item_centre_offset;
+				currPtr->y = nexty - item_centre_offset;
+				tx = currPtr->x >> 4;
+				ty = currPtr->y >> 4;
+				draw_tile( tx, ty, gTileSize*tx, gTileSize*ty );
+			}
+		}
+		currPtr = currPtr->next;
+	}
 }
 
 void print_item_pos()
@@ -2225,9 +2293,10 @@ void removeAtCursor()
 					break;
 			}
 			// also delete inserter object
-			ThingNodePtr thingnode = findInserter(&inserterlist, cursor_tx, cursor_ty);
+			ThingNodePtr thingnode = findInserterNode(&inserterlist, cursor_tx, cursor_ty);
 			free( thingnode->thing );
-			popThing( &inserterlist, thingnode );
+			ThingNodePtr delme = popThing( &inserterlist, thingnode );
+			free( delme );
 			
 			draw_screen();
 		}
