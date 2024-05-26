@@ -1712,32 +1712,61 @@ void move_items_on_belts()
 void move_items_on_inserters()
 {
 	ItemNodePtr currPtr = itemlist;
+	ItemNodePtr nextPtr = NULL;
 	int item_centre_offset = 4;
+	// move any items that are on a sq containing an inserter to the ins list
 	while (currPtr != NULL) {
-		bool moved = false;
+		nextptr = currPtr->next;
 		int centrex = currPtr->x + item_centre_offset;
 		int centrey = currPtr->y + item_centre_offset;
-
-		// (tx,ty) is the tile the centre of the item is in
-		int tx = centrex >> 4; //getTileX(centrex);
-		int ty = centrey >> 4; //getTileY(centrey);
-
-		int nextx = centrex;
-		int nexty = centrey;
-		int nnx = centrex;
-		int nny = centrey;
-		int dx = centrex % gTileSize;
-		int dy = centrey % gTileSize;
+		int tx = centrex >> 4;
+		int ty = centrey >> 4;
 		Inserter *insp = findInserter( &inserterlist, tx, ty );
 		if (insp)
 		{
+			// pop item of global itemlist and put into inserter's own list
+			ItemNodePtr ip = popItem( &itemlist, currPtr );
+			ip->next = insp->itemlist;
+			insp->itemlist = ip;
+			if (insp->dir == DIR_UP || insp->dir == DIR_DOWN ) ip->tx = (tx*gTileSize)+4;
+			if (insp->dir == DIR_LEFT || insp->dir == DIR_RIGHT ) ip->ty = (ty*gTileSize)+4;
+		}
+		currPtr = nextptr;
+	}
+
+	// go through inserters and move their own items along
+	ThingNodePtr tlistp = inserterlist;
+	while ( tlistp != NULL )
+	{
+		if (tlistp->thing == NULL) continue;
+		Inserter *insp = (Inserter*)tlistp->thing;
+
+		currPtr = itemlist;
+		while (currPtr != NULL) {
+			bool moved = false;
+			int centrex = currPtr->x + item_centre_offset;
+			int centrey = currPtr->y + item_centre_offset;
+			int tx = centrex >> 4;
+			int ty = centrey >> 4;
+			int nextx = centrex;
+			int nexty = centrey;
+			int nnx = centrex;
+			int nny = centrey;
+			int dx = centrex % gTileSize;
+			int dy = centrey % gTileSize;
+
+			bool putback=false;
 			int sme = layer_inserters[tx+ty*fac.mapWidth] & 0x07;
-			switch ( insp->dir )
+			switch (insp->dir )
 			{
 				case DIR_UP:
 					if ( sme == 0 || sme == 1 || (sme == 2 && dy > 8)) 
 					{
 						nexty -= 1; nny -= 2; moved = true;
+					}
+					if (sme == 2 && dy >= 8) 
+					{
+						putback = true;
 					}
 					break;
 				case DIR_RIGHT:
@@ -1745,11 +1774,19 @@ void move_items_on_inserters()
 					{
 						nextx += 1; nnx += 2; moved = true;
 					}
+					if (sme == 2 && dx >= 8) 
+					{
+						putback = true;
+					}
 					break;
 				case DIR_DOWN:
 					if ( sme == 0 || sme == 1 || (sme == 2 && dy < 8)) 
 					{
 						nexty += 1; nny += 2; moved = true;
+					}
+					if (sme == 2 && dy >= 8) 
+					{
+						putback = true;
 					}
 					break;
 				case DIR_LEFT:
@@ -1757,26 +1794,37 @@ void move_items_on_inserters()
 					{
 						nextx -= 1; nnx -= 2; moved = true;
 					}
+					if (sme == 2 && dx <= 8) 
+					{
+						putback = true;
+					}
 					break;
 				default:
 					break;
+
 			}
-		}
-		if ( moved )
-		{
-			// check next pixel and the one after in the same direction
-			bool found = isAnythingAtXY(&itemlist, nextx-item_centre_offset, nexty-item_centre_offset );
-			found |= isAnythingAtXY(&itemlist, nnx-item_centre_offset, nny-item_centre_offset );
-			if (!found) 
+
+			if ( moved )
 			{
-				currPtr->x = nextx - item_centre_offset;
-				currPtr->y = nexty - item_centre_offset;
-				tx = currPtr->x >> 4;
-				ty = currPtr->y >> 4;
-				draw_tile( tx, ty, gTileSize*tx, gTileSize*ty );
+				// check next pixel and the one after in the same direction
+				bool found = isAnythingAtXY(&insp->itemlist, nextx-item_centre_offset, nexty-item_centre_offset );
+				found |= isAnythingAtXY(&insp->itemlist, nnx-item_centre_offset, nny-item_centre_offset );
+				if (!found) 
+				{
+					currPtr->x = nextx - item_centre_offset;
+					currPtr->y = nexty - item_centre_offset;
+					tx = currPtr->x >> 4;
+					ty = currPtr->y >> 4;
+					draw_tile( tx, ty, gTileSize*tx, gTileSize*ty );
+				}
 			}
+			if (putback)
+			{
+			}
+			currPtr = currPtr->next;
 		}
-		currPtr = currPtr->next;
+
+			tlisp = tlistp->next;
 	}
 }
 
