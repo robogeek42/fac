@@ -786,6 +786,8 @@ int getOverlayAtCursor()
 }
 
 // draws terrain, features and machines at a tile
+// (tx,ty) tile in map 
+// (tposx,tposy) tile position in screen
 void draw_tile(int tx, int ty, int tposx, int tposy)
 {
 	int offset = ty*fac.mapWidth + tx;
@@ -802,6 +804,8 @@ void draw_tile(int tx, int ty, int tposx, int tposy)
 	}
 }
 
+// (tx,ty) tile in map 
+// (tposx,tposy) tile position in screen
 void draw_machines(int tx, int ty, int tposx, int tposy)
 {
 	int offset = ty*fac.mapWidth + tx;
@@ -1360,6 +1364,26 @@ void draw_layer(bool draw_items)
 			cnt++;
 			if (cnt % 4 == 0) vdp_update_key_state();
 		}
+		
+		ThingNodePtr tlistp = inserterlist;
+		while ( tlistp != NULL )
+		{
+			if (tlistp->thing == NULL) break;
+			Inserter *insp = (Inserter*)tlistp->thing;
+
+			currPtr = insp->itemlist;
+			while (currPtr != NULL) {
+				if ( itemIsOnScreen(currPtr) )
+				{
+					vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+					vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+				}
+				currPtr = currPtr->next;
+				cnt++;
+				if (cnt % 4 == 0) vdp_update_key_state();
+			}
+			tlistp = tlistp->next;
+		}
 	}		
 
 	vdp_update_key_state();
@@ -1404,6 +1428,26 @@ void draw_horizontal_layer(int tx, int ty, int len, bool bdraw_belts, bool bdraw
 			currPtr = currPtr->next;
 			cnt++;
 			if (cnt % 4 == 0) vdp_update_key_state();
+		}
+
+		ThingNodePtr tlistp = inserterlist;
+		while ( tlistp != NULL )
+		{
+			if (tlistp->thing == NULL) break;
+			Inserter *insp = (Inserter*)tlistp->thing;
+
+			currPtr = insp->itemlist;
+			while (currPtr != NULL) {
+				if ( itemIsInHorizontal(currPtr, tx, ty, len) )
+				{
+					vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+					vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+				}
+				currPtr = currPtr->next;
+				cnt++;
+				if (cnt % 4 == 0) vdp_update_key_state();
+			}
+			tlistp = tlistp->next;
 		}
 	}
 }
@@ -1489,50 +1533,66 @@ void do_place()
 		} else 
 		if ( item_selected == IT_INSERTER )
 		{
-			if ( !isValid(layer_inserters[tileoffset]) && inventory_remove_item( inventory, item_selected, 1 ))
+			int tileoffset_start = tileoffset;
+			int tileoffset_end = tileoffset;
+			int start_tx = cursor_tx;
+			int start_ty = cursor_ty;
+			int end_tx = cursor_tx;
+			int end_ty = cursor_ty;
+			switch (place_belt_index)
 			{
-				layer_inserters[tileoffset] = 1 + (place_belt_index << 5); // centre part
+				case DIR_UP:
+					tileoffset_start += fac.mapWidth;
+					tileoffset_end -= fac.mapWidth;
+					start_ty += 1;
+					end_ty -= 1;
+					break;
+				case DIR_RIGHT:
+					tileoffset_start -= 1;
+					tileoffset_end += 1;
+					start_tx -= 1;
+					end_tx += 1;
+					break;
+				case DIR_DOWN:
+					tileoffset_start -= fac.mapWidth;
+					tileoffset_end += fac.mapWidth;
+					start_ty -= 1;
+					end_ty += 1;
+					break;
+				case DIR_LEFT:
+					tileoffset_start += 1;
+					tileoffset_end -= 1;
+					start_tx += 1;
+					end_tx -= 1;
+					break;
+			}
 
-				Inserter *ins = (Inserter*) malloc(sizeof(Inserter));
-				ins->tx = cursor_tx;
-				ins->ty = cursor_ty;
-				ins->dir = place_belt_index;
-				switch (place_belt_index)
+			if ( !isValid(layer_inserters[tileoffset]) && 
+			     !isValid(layer_inserters[tileoffset_start]) && 
+			     !isValid(layer_inserters[tileoffset_end]) )
+			{
+				if ( inventory_remove_item( inventory, item_selected, 1 ) ) // take from inventory
 				{
-					case DIR_UP:
-						ins->start_tx = cursor_tx;
-						ins->start_ty = cursor_ty+1;
-						ins->end_tx = cursor_tx;
-						ins->end_ty = cursor_ty-1;
-						layer_inserters[tileoffset + fac.mapWidth] = 0 + (place_belt_index << 5);
-						layer_inserters[tileoffset - fac.mapWidth] = 2 + (place_belt_index << 5);
-						break;
-					case DIR_RIGHT:
-						ins->start_tx = cursor_tx-1;
-						ins->start_ty = cursor_ty;
-						ins->end_tx = cursor_tx+1;
-						ins->end_ty = cursor_ty;
-						layer_inserters[tileoffset - 1] = 0 + (place_belt_index << 5);
-						layer_inserters[tileoffset + 1] = 2 + (place_belt_index << 5);
-						break;
-					case DIR_DOWN:
-						ins->start_tx = cursor_tx;
-						ins->start_ty = cursor_ty-1;
-						ins->end_tx = cursor_tx;
-						ins->end_ty = cursor_ty+1;
-						layer_inserters[tileoffset - fac.mapWidth] = 0 + (place_belt_index << 5);
-						layer_inserters[tileoffset + fac.mapWidth] = 2 + (place_belt_index << 5);
-						break;
-					case DIR_LEFT:
-						ins->start_tx = cursor_tx+1;
-						ins->start_ty = cursor_ty;
-						ins->end_tx = cursor_tx-1;
-						ins->end_ty = cursor_ty;
-						layer_inserters[tileoffset + 1] = 0 + (place_belt_index << 5);
-						layer_inserters[tileoffset - 1] = 1 + (place_belt_index << 5);
-						break;
+					// insert
+					Inserter *ins = (Inserter*) malloc(sizeof(Inserter));
+					ins->tx = cursor_tx;
+					ins->ty = cursor_ty;
+					ins->dir = place_belt_index;
+					ins->itemlist = NULL;
+					ins->itemcnt = 0;
+					ins->maxitemcnt = 2;
+					ins->start_tx = start_tx;
+					ins->start_ty = start_ty;
+					ins->end_tx = end_tx;
+					ins->end_ty = end_ty;
+
+					insertAtFrontThingList(&inserterlist, ins);
+
+					// put into inserter layer
+					layer_inserters[tileoffset] = 1 + (place_belt_index << 5); // centre part
+					layer_inserters[tileoffset_start] = 0 + (place_belt_index << 5);
+					layer_inserters[tileoffset_end] = 2 + (place_belt_index << 5);
 				}
-				insertAtFrontThingList(&inserterlist, ins);
 			}
 		} else 
 		if ( inventory_remove_item( inventory, item_selected, 1 ) )
@@ -1716,33 +1776,57 @@ void move_items_on_inserters()
 	int item_centre_offset = 4;
 	// move any items that are on a sq containing an inserter to the ins list
 	while (currPtr != NULL) {
-		nextptr = currPtr->next;
+		nextPtr = currPtr->next;
 		int centrex = currPtr->x + item_centre_offset;
 		int centrey = currPtr->y + item_centre_offset;
 		int tx = centrex >> 4;
 		int ty = centrey >> 4;
+		int dx = centrex % gTileSize;
+		int dy = centrey % gTileSize;
 		Inserter *insp = findInserter( &inserterlist, tx, ty );
 		if (insp)
 		{
-			// pop item of global itemlist and put into inserter's own list
-			ItemNodePtr ip = popItem( &itemlist, currPtr );
-			ip->next = insp->itemlist;
-			insp->itemlist = ip;
-			if (insp->dir == DIR_UP || insp->dir == DIR_DOWN ) ip->tx = (tx*gTileSize)+4;
-			if (insp->dir == DIR_LEFT || insp->dir == DIR_RIGHT ) ip->ty = (ty*gTileSize)+4;
+			if (insp->itemcnt < insp->maxitemcnt)
+			{
+				bool pop=false;
+				switch(insp->dir)
+				{
+					case DIR_UP:
+					case DIR_DOWN:
+						if (dx==8) pop=true;
+						break;
+					case DIR_RIGHT:
+					case DIR_LEFT:
+						if (dy==8) pop=true;
+						break;
+					default:
+						break;
+				}
+				if (pop)
+				{
+					// pop item off global itemlist and put into inserter's own list
+					ItemNodePtr ip = popItem( &itemlist, currPtr );
+					ip->next = insp->itemlist;
+					insp->itemlist = ip;
+					if (insp->dir == DIR_UP || insp->dir == DIR_DOWN ) ip->x = (tx*gTileSize)+4;
+					if (insp->dir == DIR_LEFT || insp->dir == DIR_RIGHT ) ip->y = (ty*gTileSize)+4;
+					insp->itemcnt++;
+				}
+			}
 		}
-		currPtr = nextptr;
+		currPtr = nextPtr;
 	}
-
 	// go through inserters and move their own items along
 	ThingNodePtr tlistp = inserterlist;
 	while ( tlistp != NULL )
 	{
-		if (tlistp->thing == NULL) continue;
+		if (tlistp->thing == NULL) break;
 		Inserter *insp = (Inserter*)tlistp->thing;
 
-		currPtr = itemlist;
+		currPtr = insp->itemlist;
 		while (currPtr != NULL) {
+			nextPtr = currPtr->next;
+
 			bool moved = false;
 			int centrex = currPtr->x + item_centre_offset;
 			int centrey = currPtr->y + item_centre_offset;
@@ -1760,11 +1844,11 @@ void move_items_on_inserters()
 			switch (insp->dir )
 			{
 				case DIR_UP:
-					if ( sme == 0 || sme == 1 || (sme == 2 && dy > 8)) 
+					if ( (sme == 0) || sme == 1 || (sme == 2 && dy > 8)) 
 					{
 						nexty -= 1; nny -= 2; moved = true;
 					}
-					if (sme == 2 && dy >= 8) 
+					if (sme == 2 && dy <= 8) 
 					{
 						putback = true;
 					}
@@ -1815,16 +1899,29 @@ void move_items_on_inserters()
 					currPtr->y = nexty - item_centre_offset;
 					tx = currPtr->x >> 4;
 					ty = currPtr->y >> 4;
-					draw_tile( tx, ty, gTileSize*tx, gTileSize*ty );
 				}
+				int px = getTilePosInScreenX(insp->start_tx);
+				int py = getTilePosInScreenY(insp->start_ty);
+				draw_tile(insp->start_tx, insp->start_ty, px, py);
+				px = getTilePosInScreenX(insp->tx);
+				py = getTilePosInScreenY(insp->ty);
+				draw_tile(insp->tx, insp->ty, px, py);
+				px = getTilePosInScreenX(insp->end_tx);
+				py = getTilePosInScreenY(insp->end_ty);
+				draw_tile(insp->end_tx, insp->end_ty, px, py);
 			}
 			if (putback)
 			{
+				ItemNodePtr it = popItem( &insp->itemlist, currPtr );
+				// add to front of itemlist;
+				it->next = itemlist;
+				itemlist = it;
+				insp->itemcnt--;
 			}
-			currPtr = currPtr->next;
+			currPtr = nextPtr;
 		}
 
-			tlisp = tlistp->next;
+		tlistp = tlistp->next;
 	}
 }
 
@@ -1866,6 +1963,25 @@ void draw_items()
 		cnt++;
 		if (cnt % 4 == 0) vdp_update_key_state();
 	}
+	ThingNodePtr tlistp = inserterlist;
+	while ( tlistp != NULL )
+	{
+		if (tlistp->thing == NULL) break;
+		Inserter *insp = (Inserter*)tlistp->thing;
+
+		currPtr = insp->itemlist;
+		while (currPtr != NULL) {
+			if (itemIsOnScreen(currPtr))
+			{
+				vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+				vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+			}
+			currPtr = currPtr->next;
+			cnt++;
+			if (cnt % 4 == 0) vdp_update_key_state();
+		}
+		tlistp = tlistp->next;
+	}
 }
 void draw_items_at_tile(int tx, int ty) 
 {
@@ -1880,6 +1996,26 @@ void draw_items_at_tile(int tx, int ty)
 			vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
 		}
 		currPtr = currPtr->next;
+	}
+	ThingNodePtr tlistp = inserterlist;
+	while ( tlistp != NULL )
+	{
+		if (tlistp->thing == NULL) break;
+		Inserter *insp = (Inserter*)tlistp->thing;
+
+		currPtr = insp->itemlist;
+		while (currPtr != NULL) {
+			if ( currPtr->x >= tx*gTileSize &&
+				 currPtr->x < (tx+1)*gTileSize &&
+				 currPtr->y >= ty*gTileSize &&
+				 currPtr->y < (ty+1)*gTileSize )
+			{
+				vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+				vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+			}
+			currPtr = currPtr->next;
+		}
+		tlistp = tlistp->next;
 	}
 }
 

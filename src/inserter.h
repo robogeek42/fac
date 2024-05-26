@@ -20,9 +20,9 @@ typedef struct {
 	uint16_t start_ty;
 	uint16_t end_tx;
 	uint16_t end_ty;
-	ItemNodePtr *itemlist;
+	ItemNodePtr itemlist;
 	int itemcnt;
-	//int maxitemcnt;
+	int maxitemcnt;
 } Inserter;
 
 #endif
