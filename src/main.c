@@ -1668,17 +1668,31 @@ void move_items_on_belts()
 				// check next pixel and the one after in the same direction
 				bool found = isAnythingAtXY(&itemlist, nextx, nexty);
 				found |= isAnythingAtXY(&itemlist, nnx, nny);
+
 				if (!found) 
 				{
 					currPtr->x = nextx - item_centre_offset;
 					currPtr->y = nexty - item_centre_offset;
+
+					// jump the tile to the centre of the belt it just moved into
+					// bit hacky but avoids the item moving outside of the belt
+					tx = (currPtr->x + item_centre_offset) >> 4;
+					ty = (currPtr->y + item_centre_offset) >> 4;
+
+					int offset = tx + ty*fac.mapWidth;
+					int newbeltID = layer_belts[ offset ];
+					if (newbeltID >= 0)
+					{
+						currPtr->x = tx*gTileSize + 4;
+						currPtr->y = ty*gTileSize + 4;
+					}
 				}
 			}
 		}
 
 		int beltID = layer_belts[ tx + ty*fac.mapWidth ];
 
-		if (beltID >= 0)
+		if (!moved && beltID >= 0)
 		{
 			// (dx,dy) offset of centre of item in relation to tile
 			int dx = centrex % gTileSize;
@@ -1900,6 +1914,7 @@ void move_items_on_inserters()
 					tx = currPtr->x >> 4;
 					ty = currPtr->y >> 4;
 				}
+				// re-draw all 3 tiles covered by inserter
 				int px = getTilePosInScreenX(insp->start_tx);
 				int py = getTilePosInScreenY(insp->start_ty);
 				draw_tile(insp->start_tx, insp->start_ty, px, py);
