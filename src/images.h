@@ -57,7 +57,11 @@
 #define BMOFF_INSERTERS BMOFF_PROD8 + NUM_BM_PROD8 
 #define NUM_BM_INSERTERS 12
 
-#define TOTAL_BM BMOFF_PROD8 + NUM_BM_PROD8
+#define FN_ONEINS "img/ins/oneins%02d.rgb2"
+#define BMOFF_ONEINS BMOFF_INSERTERS + NUM_BM_INSERTERS 
+#define NUM_BM_ONEINS 4
+
+#define TOTAL_BM BMOFF_ONEINS + NUM_BM_ONEINS
 
 #define BOB_SPRITE_DOWN 0
 #define BOB_SPRITE_UP 1
@@ -209,6 +213,13 @@ bool load_images(bool progress)
 	{
 		sprintf(fname, FN_INSERTERS, fn);
 		int ret = load_bitmap_file(fname, 16, 16, BMOFF_INSERTERS + fn-1 );
+		if ( ret < 0 ) return false;
+		if (progress) update_bar(progbar, cnt++);
+	}
+	for (int fn=1; fn<=NUM_BM_ONEINS; fn++)
+	{
+		sprintf(fname, FN_ONEINS, fn);
+		int ret = load_bitmap_file(fname, 16, 16, BMOFF_ONEINS + fn-1);
 		if ( ret < 0 ) return false;
 		if (progress) update_bar(progbar, cnt++);
 	}

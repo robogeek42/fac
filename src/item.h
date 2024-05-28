@@ -141,7 +141,7 @@ static ItemType itemtypes[] = {
     {IT_FURNACE,		"Furnace",		false, true, false, false, BMOFF_MACH16+0, BM_SIZE16, 0 },
     {IT_MINER,			"Miner",		false, true, false, false, BMOFF_MACH16+1, BM_SIZE16, 0 },
     {IT_ASSEMBLER,		"Assembler",	false, true, false, false, BMOFF_MACH16+2, BM_SIZE16, 0 },
-    {IT_INSERTER,		"Inserter", 	false, true, false, false, BMOFF_MACH16+3, BM_SIZE16, 0 },
+    {IT_INSERTER,		"Inserter", 	false, true, false, false, BMOFF_ONEINS+0, BM_SIZE16, 0 },
     {IT_BOX,			"Box",		 	false, true, false, false, BMOFF_MACH16+4, BM_SIZE16, 0 },
     {IT_GENERATOR,		"Generator", 	false, true, false, false, BMOFF_MACH16+5, BM_SIZE16, 0 },
 // Overlays

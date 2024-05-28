@@ -91,12 +91,6 @@ int8_t* layer_belts;
 //     valid outdir          ID   
 uint8_t* layer_machines;
 
-// inserter layer
-// bit     7    6 5   4 3  2 1 0
-//     valid outdir indir     ID   
-// ID 0 = start, ID 1 = middle, ID 2 = end
-uint8_t* layer_inserters;
-
 // first node (head) of the Item list
 ItemNodePtr itemlist = NULL;
 
@@ -233,7 +227,7 @@ void do_place();
 void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty);
 
 void draw_layer(bool draw_items);
-void draw_horizontal_layer(int tx, int ty, int len, bool bdraw_belts, bool bdraw_machines, bool bdraw_items, bool bdraw_inserters);
+void draw_horizontal_layer(int tx, int ty, int len, bool bdraw_belts, bool bdraw_machines, bool bdraw_items);
 
 void drop_item(int item);
 
@@ -317,14 +311,6 @@ bool alloc_map()
 	{
 		printf("Failed to alloc machines\n");
 	}
-
-	layer_inserters = (uint8_t *) malloc(sizeof(uint8_t) * fac.mapWidth * fac.mapHeight);
-	if (layer_inserters == NULL)
-	{
-		printf("Out of memory\n");
-		return false;
-	}
-	memset(layer_inserters, (uint8_t) 1<<7, fac.mapWidth * fac.mapHeight);
 
 	return true;
 }
@@ -646,9 +632,9 @@ void game_loop()
 			int tx=getTileX(message_posx);
 			int ty=getTileY(message_posy);
 			draw_horizontal( tx, ty, message_len+1 );
-			draw_horizontal_layer( tx, ty, message_len+1, true, true, true, true );
+			draw_horizontal_layer( tx, ty, message_len+1, true, true, true );
 			draw_horizontal( tx, ty+1, message_len+1 );
-			draw_horizontal_layer( tx, ty+1, message_len+1, true, true, true, true );
+			draw_horizontal_layer( tx, ty+1, message_len+1, true, true, true );
 		}
 
 		if ( machine_anim_timeout_ticks < clock() )
@@ -757,23 +743,16 @@ int getMachineBMID(int tx, int ty)
 			bmid += machine_frame;
 		}
 		return bmid;
+	} else 
+	if ( machine_itemtype == IT_INSERTER)
+	{
+		int machine_outdir = (machine_byte & 0x60) >> 5;
+		int bmid = BMOFF_ONEINS + machine_outdir;
+
+		return bmid;
 	} else {
 		return itemtypes[machine_itemtype].bmID;
 	}
-}
-
-int getInserterBMID(int tx, int ty)
-{
-	int offset = ty*fac.mapWidth + tx;
-	uint8_t inserter_byte = layer_inserters[offset];
-
-	if ( !isValid(inserter_byte) ) return -1;
-
-	uint8_t ID = inserter_byte & 0x07;
-	uint8_t outdir = (inserter_byte & 0x60) >> 5;
-	int bmid = BMOFF_INSERTERS + 3*outdir + ID;
-	return bmid;
-
 }
 
 int getOverlayAtOffset( int offset )
@@ -813,14 +792,6 @@ void draw_machines(int tx, int ty, int tposx, int tposy)
 	if ( isValid(machine_byte) )
 	{
 		int bmid = getMachineBMID(tx, ty);
-		vdp_adv_select_bitmap( bmid );
-		vdp_draw_bitmap( tposx, tposy );
-	}
-
-	uint8_t inserter_byte = layer_inserters[offset];
-	if ( isValid(inserter_byte) )
-	{
-		int bmid = getInserterBMID(tx, ty);
 		vdp_adv_select_bitmap( bmid );
 		vdp_draw_bitmap( tposx, tposy );
 	}
@@ -1217,49 +1188,14 @@ void draw_place_machine()
 	{
 		vdp_adv_select_bitmap( BMOFF_ASSEMBLERS + place_belt_index*3 );
 		vdp_draw_bitmap( cursorx, cursory);
+	} else
+	if ( item_selected == IT_INSERTER )
+	{
+		vdp_adv_select_bitmap( BMOFF_ONEINS + place_belt_index );
+		vdp_draw_bitmap( cursorx, cursory);
 	} else {
 		vdp_adv_select_bitmap( itemtypes[item_selected].bmID );
 		vdp_draw_bitmap( cursorx, cursory);
-	}
-}
-
-void draw_place_inserter()
-{
-	switch( place_belt_index )
-	{
-		case DIR_UP:
-			vdp_adv_select_bitmap( BMOFF_INSERTERS + place_belt_index*3 );
-			vdp_draw_bitmap( cursorx, cursory + gTileSize );
-			vdp_adv_select_bitmap( BMOFF_INSERTERS + place_belt_index*3 + 1 );
-			vdp_draw_bitmap( cursorx, cursory );
-			vdp_adv_select_bitmap( BMOFF_INSERTERS + place_belt_index*3 + 2 );
-			vdp_draw_bitmap( cursorx, cursory - gTileSize );
-			break;
-		case DIR_RIGHT:
-			vdp_adv_select_bitmap( BMOFF_INSERTERS + place_belt_index*3 );
-			vdp_draw_bitmap( cursorx - gTileSize, cursory );
-			vdp_adv_select_bitmap( BMOFF_INSERTERS + place_belt_index*3 + 1 );
-			vdp_draw_bitmap( cursorx, cursory );
-			vdp_adv_select_bitmap( BMOFF_INSERTERS + place_belt_index*3 + 2 );
-			vdp_draw_bitmap( cursorx + gTileSize, cursory );
-			break;
-		case DIR_DOWN:
-			vdp_adv_select_bitmap( BMOFF_INSERTERS + place_belt_index*3 );
-			vdp_draw_bitmap( cursorx, cursory - gTileSize );
-			vdp_adv_select_bitmap( BMOFF_INSERTERS + place_belt_index*3 + 1 );
-			vdp_draw_bitmap( cursorx, cursory );
-			vdp_adv_select_bitmap( BMOFF_INSERTERS + place_belt_index*3 + 2 );
-			vdp_draw_bitmap( cursorx, cursory + gTileSize );
-			break;
-		case DIR_LEFT:
-			vdp_adv_select_bitmap( BMOFF_INSERTERS + place_belt_index*3 );
-			vdp_draw_bitmap( cursorx + gTileSize, cursory );
-			vdp_adv_select_bitmap( BMOFF_INSERTERS + place_belt_index*3 + 1 );
-			vdp_draw_bitmap( cursorx, cursory );
-			vdp_adv_select_bitmap( BMOFF_INSERTERS + place_belt_index*3 + 2 );
-			vdp_draw_bitmap( cursorx - gTileSize, cursory );
-			break;
-		default: break;
 	}
 }
 
@@ -1295,12 +1231,7 @@ void draw_cursor(bool draw)
 		}
 		if ( isMachine( item_selected ) )
 		{
-			if ( item_selected == IT_INSERTER )
-			{
-				draw_place_inserter();
-			} else {
-				draw_place_machine();
-			}
+			draw_place_machine();
 		}
 		
 		vdp_select_sprite( CURSOR_SPRITE );
@@ -1347,7 +1278,7 @@ void draw_layer(bool draw_items)
 
 	for (int i=0; i < (1+gScreenHeight/gTileSize); i++) 
 	{
-		draw_horizontal_layer(tx, ty+i, 1+(gScreenWidth/gTileSize), true, true, false, true);
+		draw_horizontal_layer(tx, ty+i, 1+(gScreenWidth/gTileSize), true, true, false );
 	}
 
 	if ( draw_items )
@@ -1391,7 +1322,7 @@ void draw_layer(bool draw_items)
 }
 
 // draws the a single row of the additional layers: belts, machines and items
-void draw_horizontal_layer(int tx, int ty, int len, bool bdraw_belts, bool bdraw_machines, bool bdraw_items, bool bdraw_inserters)
+void draw_horizontal_layer(int tx, int ty, int len, bool bdraw_belts, bool bdraw_machines, bool bdraw_items)
 {
 	int px=getTilePosInScreenX(tx);
 	int py=getTilePosInScreenY(ty);
@@ -1408,8 +1339,7 @@ void draw_horizontal_layer(int tx, int ty, int len, bool bdraw_belts, bool bdraw
 			vdp_adv_select_bitmap( layer_belts[offset]*4 + BMOFF_BELT16 + belt_layer_frame);
 			vdp_draw_bitmap( px + i*gTileSize, py );
 		}
-		if ( ( bdraw_machines && isValid(layer_machines[offset]) ) ||
-		     ( bdraw_inserters && isValid(layer_inserters[offset]) ) )
+		if ( bdraw_machines && isValid(layer_machines[offset]) )
 		{
 			draw_machines(tx + i, ty, px + i*gTileSize, py); 
 		}
@@ -1533,8 +1463,6 @@ void do_place()
 		} else 
 		if ( item_selected == IT_INSERTER )
 		{
-			int tileoffset_start = tileoffset;
-			int tileoffset_end = tileoffset;
 			int start_tx = cursor_tx;
 			int start_ty = cursor_ty;
 			int end_tx = cursor_tx;
@@ -1542,38 +1470,32 @@ void do_place()
 			switch (place_belt_index)
 			{
 				case DIR_UP:
-					tileoffset_start += fac.mapWidth;
-					tileoffset_end -= fac.mapWidth;
 					start_ty += 1;
 					end_ty -= 1;
 					break;
 				case DIR_RIGHT:
-					tileoffset_start -= 1;
-					tileoffset_end += 1;
 					start_tx -= 1;
 					end_tx += 1;
 					break;
 				case DIR_DOWN:
-					tileoffset_start -= fac.mapWidth;
-					tileoffset_end += fac.mapWidth;
 					start_ty -= 1;
 					end_ty += 1;
 					break;
 				case DIR_LEFT:
-					tileoffset_start += 1;
-					tileoffset_end -= 1;
 					start_tx += 1;
 					end_tx -= 1;
 					break;
 			}
 
-			if ( !isValid(layer_inserters[tileoffset]) && 
-			     !isValid(layer_inserters[tileoffset_start]) && 
-			     !isValid(layer_inserters[tileoffset_end]) )
+			if ( !isValid(layer_machines[tileoffset]) )
 			{
 				if ( inventory_remove_item( inventory, item_selected, 1 ) ) // take from inventory
 				{
-					// insert
+					// put into machine layer
+					layer_machines[tileoffset] =
+						(item_selected - IT_TYPES_MACHINE) + (place_belt_index << 5);
+
+					// insert into inserter list
 					Inserter *ins = (Inserter*) malloc(sizeof(Inserter));
 					ins->tx = cursor_tx;
 					ins->ty = cursor_ty;
@@ -1587,11 +1509,6 @@ void do_place()
 					ins->end_ty = end_ty;
 
 					insertAtFrontThingList(&inserterlist, ins);
-
-					// put into inserter layer
-					layer_inserters[tileoffset] = 1 + (place_belt_index << 5); // centre part
-					layer_inserters[tileoffset_start] = 0 + (place_belt_index << 5);
-					layer_inserters[tileoffset_end] = 2 + (place_belt_index << 5);
 				}
 			}
 		} else 
@@ -1674,6 +1591,7 @@ void move_items_on_belts()
 					currPtr->x = nextx - item_centre_offset;
 					currPtr->y = nexty - item_centre_offset;
 
+					/*
 					// jump the tile to the centre of the belt it just moved into
 					// bit hacky but avoids the item moving outside of the belt
 					tx = (currPtr->x + item_centre_offset) >> 4;
@@ -1686,6 +1604,7 @@ void move_items_on_belts()
 						currPtr->x = tx*gTileSize + 4;
 						currPtr->y = ty*gTileSize + 4;
 					}
+					*/
 				}
 			}
 		}
@@ -1818,6 +1737,7 @@ void move_items_on_inserters()
 				}
 				if (pop)
 				{
+					printf("pop");
 					// pop item off global itemlist and put into inserter's own list
 					ItemNodePtr ip = popItem( &itemlist, currPtr );
 					ip->next = insp->itemlist;
@@ -1844,8 +1764,6 @@ void move_items_on_inserters()
 			bool moved = false;
 			int centrex = currPtr->x + item_centre_offset;
 			int centrey = currPtr->y + item_centre_offset;
-			int tx = centrex >> 4;
-			int ty = centrey >> 4;
 			int nextx = centrex;
 			int nexty = centrey;
 			int nnx = centrex;
@@ -1854,46 +1772,37 @@ void move_items_on_inserters()
 			int dy = centrey % gTileSize;
 
 			bool putback=false;
-			int sme = layer_inserters[tx+ty*fac.mapWidth] & 0x07;
 			switch (insp->dir )
 			{
 				case DIR_UP:
-					if ( (sme == 0) || sme == 1 || (sme == 2 && dy > 8)) 
+					if ( dy > 0 ) 
 					{
 						nexty -= 1; nny -= 2; moved = true;
-					}
-					if (sme == 2 && dy <= 8) 
-					{
+					} else {
 						putback = true;
 					}
 					break;
 				case DIR_RIGHT:
-					if ( sme == 0 || sme == 1 || (sme == 2 && dx < 8)) 
+					if ( dx < 15 ) 
 					{
 						nextx += 1; nnx += 2; moved = true;
-					}
-					if (sme == 2 && dx >= 8) 
-					{
+					} else {
 						putback = true;
 					}
 					break;
 				case DIR_DOWN:
-					if ( sme == 0 || sme == 1 || (sme == 2 && dy < 8)) 
+					if ( dy < 15 ) 
 					{
 						nexty += 1; nny += 2; moved = true;
-					}
-					if (sme == 2 && dy >= 8) 
-					{
+					} else {
 						putback = true;
 					}
 					break;
 				case DIR_LEFT:
-					if ( sme == 0 || sme == 1 || (sme == 2 && dx > 8)) 
+					if ( dx > 0 ) 
 					{
 						nextx -= 1; nnx -= 2; moved = true;
-					}
-					if (sme == 2 && dx <= 8) 
-					{
+					} else {
 						putback = true;
 					}
 					break;
@@ -1904,6 +1813,7 @@ void move_items_on_inserters()
 
 			if ( moved )
 			{
+				printf("back");
 				// check next pixel and the one after in the same direction
 				bool found = isAnythingAtXY(&insp->itemlist, nextx-item_centre_offset, nexty-item_centre_offset );
 				found |= isAnythingAtXY(&insp->itemlist, nnx-item_centre_offset, nny-item_centre_offset );
@@ -1911,19 +1821,11 @@ void move_items_on_inserters()
 				{
 					currPtr->x = nextx - item_centre_offset;
 					currPtr->y = nexty - item_centre_offset;
-					tx = currPtr->x >> 4;
-					ty = currPtr->y >> 4;
 				}
-				// re-draw all 3 tiles covered by inserter
+				// re-draw tile covered by inserter
 				int px = getTilePosInScreenX(insp->start_tx);
 				int py = getTilePosInScreenY(insp->start_ty);
 				draw_tile(insp->start_tx, insp->start_ty, px, py);
-				px = getTilePosInScreenX(insp->tx);
-				py = getTilePosInScreenY(insp->ty);
-				draw_tile(insp->tx, insp->ty, px, py);
-				px = getTilePosInScreenX(insp->end_tx);
-				py = getTilePosInScreenY(insp->end_ty);
-				draw_tile(insp->end_tx, insp->end_ty, px, py);
 			}
 			if (putback)
 			{
@@ -2459,6 +2361,16 @@ void removeAtCursor()
 				inventory_add_item( inventory, machine, 1 );
 				layer_machines[offset] = 0x80;
 			}
+		} else
+		if ( machine == IT_INSERTER )
+		{
+			inventory_add_item( inventory, IT_INSERTER, 1 );
+			layer_machines[offset] = 0x80;
+			// also delete inserter object
+			ThingNodePtr thingnode = findInserterNode(&inserterlist, cursor_tx, cursor_ty);
+			free( thingnode->thing );
+			ThingNodePtr delme = popThing( &inserterlist, thingnode );
+			free( delme );
 		} else {
 			inventory_add_item( inventory, machine, 1 );
 			layer_machines[offset] = 0x80;
@@ -2467,39 +2379,6 @@ void removeAtCursor()
 	draw_tile( cursor_tx, cursor_ty, cursorx, cursory );
 	draw_machines( cursor_tx, cursor_ty, cursorx, cursory );
 
-	if ( isValid(layer_inserters[offset]) )
-	{
-		int inserter_byte = layer_inserters[ offset ];
-		int ID = inserter_byte & 0x07;
-		int dir = (inserter_byte & 0x60) >> 5;
-		if ( ID == 1 ) // only allow delete of middle
-		{
-			inventory_add_item( inventory, IT_INSERTER, 1 );
-			layer_inserters[offset] = 0x80;
-			switch (dir)
-			{
-				case DIR_UP:
-				case DIR_DOWN:
-					layer_inserters[offset+fac.mapWidth] = 0x80;
-					layer_inserters[offset-fac.mapWidth] = 0x80;
-					break;
-				case DIR_RIGHT:
-				case DIR_LEFT:
-					layer_inserters[offset+1] = 0x80;
-					layer_inserters[offset-1] = 0x80;
-					break;
-				default:
-					break;
-			}
-			// also delete inserter object
-			ThingNodePtr thingnode = findInserterNode(&inserterlist, cursor_tx, cursor_ty);
-			free( thingnode->thing );
-			ThingNodePtr delme = popThing( &inserterlist, thingnode );
-			free( delme );
-			
-			draw_screen();
-		}
-	}
 }
 
 // z will pick up items at a tile and put them into the inventory
