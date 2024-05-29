@@ -1572,7 +1572,7 @@ void move_items_on_belts()
 					if ( !moved ) { nextx++; nnx+=2; moved=true; }
 					break;
 				case DIR_DOWN:
-					if ( !moved ) { nexty++; nny+=2; moved=true; }
+					if ( !moved && centrey < (tx*gTileSize + 16)) { nexty++; nny+=2; moved=true; }
 					break;
 				case DIR_LEFT:
 					if ( !moved ) { nextx--; nnx-=2; moved=true; }
@@ -1726,25 +1726,27 @@ void move_items_on_inserters()
 				{
 					case DIR_UP:
 					case DIR_DOWN:
-						if (dx==8) pop=true;
+						if (dx==8 || dx==7 || dx==6) pop=true;
 						break;
 					case DIR_RIGHT:
 					case DIR_LEFT:
-						if (dy==8) pop=true;
+						if (dy==8 || dx==7 || dx==6) pop=true;
 						break;
 					default:
 						break;
 				}
 				if (pop)
 				{
-					printf("pop");
-					// pop item off global itemlist and put into inserter's own list
-					ItemNodePtr ip = popItem( &itemlist, currPtr );
-					ip->next = insp->itemlist;
-					insp->itemlist = ip;
-					if (insp->dir == DIR_UP || insp->dir == DIR_DOWN ) ip->x = (tx*gTileSize)+4;
-					if (insp->dir == DIR_LEFT || insp->dir == DIR_RIGHT ) ip->y = (ty*gTileSize)+4;
-					insp->itemcnt++;
+					if ( insp->start_tx == tx && insp->start_ty == ty )
+					{
+						// pop item off global itemlist and put into inserter's own list
+						ItemNodePtr ip = popItem( &itemlist, currPtr );
+						ip->next = insp->itemlist;
+						insp->itemlist = ip;
+						//if (insp->dir == DIR_UP || insp->dir == DIR_DOWN ) ip->x = (tx*gTileSize)+4;
+						//if (insp->dir == DIR_LEFT || insp->dir == DIR_RIGHT ) ip->y = (ty*gTileSize)+4;
+						insp->itemcnt++;
+					}
 				}
 			}
 		}
@@ -1768,43 +1770,25 @@ void move_items_on_inserters()
 			int nexty = centrey;
 			int nnx = centrex;
 			int nny = centrey;
-			int dx = centrex % gTileSize;
-			int dy = centrey % gTileSize;
 
 			bool putback=false;
 			switch (insp->dir )
 			{
 				case DIR_UP:
-					if ( dy > 0 ) 
-					{
-						nexty -= 1; nny -= 2; moved = true;
-					} else {
-						putback = true;
-					}
+					nexty -= 1; nny -= 2; moved = true;
+					if (nexty < ((insp->end_ty) * gTileSize + 8)) putback = true;
 					break;
 				case DIR_RIGHT:
-					if ( dx < 15 ) 
-					{
-						nextx += 1; nnx += 2; moved = true;
-					} else {
-						putback = true;
-					}
+					nextx += 1; nnx += 2; moved = true;
+					if (nextx > ((insp->end_tx) * gTileSize + 7)) putback = true;
 					break;
 				case DIR_DOWN:
-					if ( dy < 15 ) 
-					{
-						nexty += 1; nny += 2; moved = true;
-					} else {
-						putback = true;
-					}
+					nexty += 1; nny += 2; moved = true;
+					if (nexty > ((insp->end_ty) * gTileSize + 7)) putback = true;
 					break;
 				case DIR_LEFT:
-					if ( dx > 0 ) 
-					{
-						nextx -= 1; nnx -= 2; moved = true;
-					} else {
-						putback = true;
-					}
+					nextx -= 1; nnx -= 2; moved = true;
+					if (nextx < ((insp->end_tx) * gTileSize + 8)) putback = true;
 					break;
 				default:
 					break;
@@ -1813,7 +1797,6 @@ void move_items_on_inserters()
 
 			if ( moved )
 			{
-				printf("back");
 				// check next pixel and the one after in the same direction
 				bool found = isAnythingAtXY(&insp->itemlist, nextx-item_centre_offset, nexty-item_centre_offset );
 				found |= isAnythingAtXY(&insp->itemlist, nnx-item_centre_offset, nny-item_centre_offset );
@@ -1826,14 +1809,23 @@ void move_items_on_inserters()
 				int px = getTilePosInScreenX(insp->start_tx);
 				int py = getTilePosInScreenY(insp->start_ty);
 				draw_tile(insp->start_tx, insp->start_ty, px, py);
+				px = getTilePosInScreenX(insp->tx);
+				py = getTilePosInScreenY(insp->ty);
+				draw_tile(insp->tx, insp->ty, px, py);
+				px = getTilePosInScreenX(insp->end_tx);
+				py = getTilePosInScreenY(insp->end_ty);
+				draw_tile(insp->end_tx, insp->end_ty, px, py);
 			}
 			if (putback)
 			{
 				ItemNodePtr it = popItem( &insp->itemlist, currPtr );
-				// add to front of itemlist;
-				it->next = itemlist;
-				itemlist = it;
-				insp->itemcnt--;
+				if ( it )
+				{
+					// add to front of itemlist;
+					it->next = itemlist;
+					itemlist = it;
+					insp->itemcnt--;
+				}
 			}
 			currPtr = nextPtr;
 		}
