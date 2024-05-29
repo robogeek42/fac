@@ -747,7 +747,8 @@ int getMachineBMID(int tx, int ty)
 	if ( machine_itemtype == IT_INSERTER)
 	{
 		int machine_outdir = (machine_byte & 0x60) >> 5;
-		int bmid = BMOFF_ONEINS + machine_outdir;
+		int bmid = BMOFF_INSERTERS + 3*machine_outdir;
+		bmid += machine_frame;
 
 		return bmid;
 	} else {
@@ -1191,7 +1192,7 @@ void draw_place_machine()
 	} else
 	if ( item_selected == IT_INSERTER )
 	{
-		vdp_adv_select_bitmap( BMOFF_ONEINS + place_belt_index );
+		vdp_adv_select_bitmap( BMOFF_INSERTERS + place_belt_index*3 );
 		vdp_draw_bitmap( cursorx, cursory);
 	} else {
 		vdp_adv_select_bitmap( itemtypes[item_selected].bmID );
@@ -1205,14 +1206,6 @@ void draw_cursor(bool draw)
 	// undraw
 	if (!draw) {
 		draw_tile(oldcursor_tx, oldcursor_ty, old_cursorx, old_cursory);
-		if ( item_selected == IT_INSERTER )
-		{
-			// wipe 4 cardinals also FIXME should be only 2
-			draw_tile(oldcursor_tx - 1, oldcursor_ty, old_cursorx - gTileSize, old_cursory);
-			draw_tile(oldcursor_tx + 1, oldcursor_ty, old_cursorx + gTileSize, old_cursory);
-			draw_tile(oldcursor_tx, oldcursor_ty - 1, old_cursorx, old_cursory - gTileSize);
-			draw_tile(oldcursor_tx, oldcursor_ty + 1, old_cursorx, old_cursory + gTileSize);
-		}
 		return;
 	}
 
@@ -2440,21 +2433,21 @@ bool save_game( char *filepath )
 		return false;
 	}
 
-	// write file signature to 1st 3 bytes "FAC"	
+	// 0. write file signature to 1st 3 bytes "FAC"	
 	printf("Save: signature\n");
 	for (int i=0;i<3;i++)
 	{
 		fputc( sigref[i], fp );
 	}
 
-	// write the fac state
+	// 1. write the fac state
 	printf("Save: fac state\n");
 	objs_written = fwrite( (const void*) &fac, sizeof(FacState), 1, fp);
 	if (objs_written!=1) {
 		msg = "Fail: fac state\n"; goto save_game_errexit;
 	}
 
-	// write the tile map and layers
+	// 2. write the tile map and layers
 	printf("Save: tilemap\n");
 	objs_written = fwrite( (const void*) tilemap, sizeof(uint8_t) * fac.mapWidth * fac.mapHeight, 1, fp);
 	if (objs_written!=1) {
@@ -2471,7 +2464,7 @@ bool save_game( char *filepath )
 		msg = "Fail: layer_machines\n"; goto save_game_errexit;
 	}
 
-	// save the item list
+	// 3. save the item list
 
 	// get and write number of items
 	ItemNodePtr currPtr = itemlist;
@@ -2502,14 +2495,14 @@ bool save_game( char *filepath )
 		currPtr = nextPtr;
 	}
 
-	// write the inventory
+	// 4. write the inventory
 	printf("Save: inventory\n");
 	objs_written = fwrite( (const void*) inventory, sizeof(INV_ITEM), MAX_INVENTORY_ITEMS, fp);
 	if (objs_written!=MAX_INVENTORY_ITEMS) {
 		msg = "Fail: inventory\n"; goto save_game_errexit;
 	}
 
-	// write machine data
+	// 5. write machine data
 	printf("Save: machines\n");
 	int num_machine_objects = machinesAllocated;
 	objs_written = fwrite( (const void*) &num_machine_objects, sizeof(int), 1, fp);
@@ -2521,7 +2514,7 @@ bool save_game( char *filepath )
 		msg = "Fail: machines\n"; goto save_game_errexit;
 	}
 
-	// write the resource data
+	// 6. write the resource data
 	currPtr = resourcelist;
 	cnt=0;
 	while (currPtr != NULL) {
@@ -2552,6 +2545,7 @@ bool save_game( char *filepath )
 
 
 
+
 	printf("done.\n");
 	fclose(fp);
 	return ret;
@@ -2565,6 +2559,13 @@ save_game_errexit:
 }
 bool load_game( char *filepath )
 {
+	// 0. write file signature to 1st 3 bytes "FAC"	
+	// 1. write the fac state
+	// 2. write the tile map and layers
+	// 3. save the item list
+	// 4. write the inventory
+	// 5. write machine data
+	// 6. write the resource data
 	bool ret = true;
 	FILE *fp;
 	int objs_read = 0;
@@ -2580,6 +2581,7 @@ bool load_game( char *filepath )
 
 	char sig[4];
 
+	// 0. read file signature to 1st 3 bytes "FAC"	
 	printf("Load: signature\n");
 	fgets( sig, 4, fp );
 
@@ -2593,7 +2595,7 @@ bool load_game( char *filepath )
 		}
 	}
 
-	// read the fac state
+	// 1. read the fac state
 	printf("Load: fac state\n");
 	objs_read = fread( &fac, sizeof(FacState), 1, fp );
 	if ( objs_read != 1 || fac.version != SAVE_VERSION )
@@ -2603,6 +2605,8 @@ bool load_game( char *filepath )
 		return NULL;
 	}
 
+	// 2. read the tile map and layers
+	
 	// clear and read tilemap and layers
 	free(tilemap);
 	free(layer_belts);
@@ -2628,6 +2632,8 @@ bool load_game( char *filepath )
 		msg = "Fail read layer_machines\n"; goto load_game_errexit;
 	}
 
+	// 3. read the item list
+	
 	// clear out item list
 	ItemNodePtr currPtr = itemlist;
 	ItemNodePtr nextPtr = NULL;
@@ -2663,7 +2669,7 @@ bool load_game( char *filepath )
 		num_items--;
 	}
 
-	// read the inventory
+	// 4. write the inventory
 	printf("Load: inventory\n");
 	for ( int i=0;i<MAX_INVENTORY_ITEMS; i++)
 	{
@@ -2673,7 +2679,7 @@ bool load_game( char *filepath )
 		}
 	}
 
-	// read the machines
+	// 5. read machine data
 	printf("Load: machines ");
 	int num_machine_objects=0;
 	objs_read = fread( &num_machine_objects, sizeof(int), 1, fp );
@@ -2697,6 +2703,8 @@ bool load_game( char *filepath )
 	// calculate number of machines active
 	machineCount=0; for(int m=0;m<machinesAllocated;m++) if (machines[m].machine_type != 0) machineCount++;
 
+	// 6. read the resource data
+	
 	// clear out resources list
 	currPtr = resourcelist;
 	nextPtr = NULL;
@@ -2731,6 +2739,8 @@ bool load_game( char *filepath )
 		insertAtBackItemList( &resourcelist, newitem.item, newitem.x, newitem.y );
 		num_items--;
 	}
+
+	// 7. read inserter list and inserter item lists
 
 	printf("\nDone.\n");
 	fclose(fp);
