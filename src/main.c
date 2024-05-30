@@ -307,11 +307,6 @@ bool alloc_map()
 	}
 	memset(layer_machines, (uint8_t) 1<<7, fac.mapWidth * fac.mapHeight);
 
-	if ( !allocMachines(&machines) )
-	{
-		printf("Failed to alloc machines\n");
-	}
-
 	return true;
 }
 
@@ -331,7 +326,17 @@ int main(/*int argc, char *argv[]*/)
 	fac.mapWidth = 45;
 	fac.mapHeight = 45;
 
-	if ( !alloc_map() ) return -1;
+	if ( !alloc_map() ) 
+	{
+		printf("Failed to alloc map layers\n");
+		return -1;
+	}
+	if ( !allocMachines(&machines) )
+	{
+		printf("Failed to alloc machines\n");
+		return -1;
+	}
+
 
 	if ( ! check_dir_exists("maps") )
 	{
@@ -994,6 +999,18 @@ int load_map(char *mapname)
 
 	place_feature_overlay(rnd1_block4x4,4,4,4,28,19);
 	place_feature_overlay(rnd1_block4x4,4,4,4,12,3);
+
+#if 0
+	printf("Resources allocated %p : ", resourcelist);
+	ItemNodePtr currPtr = resourcelist;
+	int cnt=0;
+	while (currPtr != NULL) {
+		currPtr = currPtr->next;
+		cnt++;
+	}
+	printf("%d\n",cnt);
+	wait();
+#endif
 	return ret;
 }
 
@@ -2543,8 +2560,29 @@ bool save_game( char *filepath )
 		currPtr = nextPtr;
 	}
 
+	// 7. write the Inserter objects
+	printf("Save: inserters ");
+	int num_inserter_objects = countInserters(&inserterlist);
+	printf("%d objects\n",num_inserter_objects);
+	objs_written = fwrite( (const void*) &num_inserter_objects, sizeof(int), 1, fp);
+	if (objs_written!=1) {
+		msg = "Fail: inserter count\n"; goto save_game_errexit;
+	}
 
+	ThingNodePtr thptr = inserterlist;
+	Inserter *insp = NULL;
+	while (thptr != NULL )
+	{
+		// save the inserter without the items
+		insp = (Inserter*)thptr->thing;
 
+		objs_written = fwrite( (const void*) insp, sizeof(InserterSave), 1, fp);
+		if (objs_written!=1) {
+			msg = "Fail: inserter\n"; goto save_game_errexit;
+		}
+
+		thptr = thptr->next;
+	}
 
 	printf("done.\n");
 	fclose(fp);
@@ -2686,25 +2724,29 @@ bool load_game( char *filepath )
 	if ( objs_read != 1 ) {
 		msg = "Fail read num machines\n"; goto load_game_errexit;
 	}
-	printf("%d\n",num_machine_objects);
+	printf("%d ... ",num_machine_objects);
 	if ( machines )
 	{
 		free(machines);
 	}
+
 	machines = malloc(sizeof(Machine) * num_machine_objects);
 	if ( !machines ) { 
 		msg="Alloc Error\n"; goto load_game_errexit;
 	}
 	machinesAllocated = num_machine_objects;
+	printf("read ... ");
 	objs_read = fread( machines, sizeof(Machine), machinesAllocated, fp );
 	if ( objs_read != machinesAllocated ) { 
 		msg="Fail read machines\n"; goto load_game_errexit;
 	}
 	// calculate number of machines active
 	machineCount=0; for(int m=0;m<machinesAllocated;m++) if (machines[m].machine_type != 0) machineCount++;
+	printf(" load %d actived.\n", machineCount);
 
 	// 6. read the resource data
 	
+	printf("Load: resources. Clear ... ");
 	// clear out resources list
 	currPtr = resourcelist;
 	nextPtr = NULL;
@@ -2712,7 +2754,7 @@ bool load_game( char *filepath )
 	{
 		nextPtr = currPtr->next;
 		ItemNodePtr pitem = popFrontItem(&resourcelist);
-		free(pitem);
+		free(pitem); pitem=NULL;
 		currPtr = nextPtr;
 	}
 	resourcelist = NULL;
@@ -2720,12 +2762,12 @@ bool load_game( char *filepath )
 	// read number of resources in list
 	num_items = 0;
 
-	printf("Load: resources ");
+	printf("num_items ");
 	objs_read = fread( &num_items, sizeof(int), 1, fp );
 	if ( objs_read != 1 ) {
 		msg = "Fail read num resources\n"; goto load_game_errexit;
 	}
-	printf("%d\n",num_items);
+	printf("%d ",num_items);
 
 	// add items in one by one
 	while (num_items > 0 && !feof( fp ) )
@@ -2739,8 +2781,40 @@ bool load_game( char *filepath )
 		insertAtBackItemList( &resourcelist, newitem.item, newitem.x, newitem.y );
 		num_items--;
 	}
+	printf("done.\n");
 
-	// 7. read inserter list and inserter item lists
+	// 7. read the Inserter objects
+
+	printf("Load: Inserters. clear ... ");
+	clearInserters(&inserterlist);
+
+	int num_ins = 0;
+
+	printf("num ");
+	objs_read = fread( &num_ins, sizeof(int), 1, fp );
+	if ( objs_read != 1 ) {
+		msg = "Fail read num inserters\n"; goto load_game_errexit;
+	}
+	printf("%d ",num_ins);
+	while (num_ins > 0 && !feof( fp ) )
+	{
+		Inserter* newinsp = malloc(sizeof(Inserter));
+		if (newinsp == NULL)
+		{
+			msg="Alloc Error\n"; goto load_game_errexit;
+		}
+
+		objs_read = fread( newinsp, sizeof(InserterSave), 1, fp );
+		if ( objs_read != 1 ) {
+			msg = "Fail read inserter\n"; goto load_game_errexit;
+		}
+		newinsp->itemlist = NULL;
+
+		insertAtBackThingList( &inserterlist, newinsp);
+		num_ins--;
+	}
+
+	printf("done.\n");
 
 	printf("\nDone.\n");
 	fclose(fp);

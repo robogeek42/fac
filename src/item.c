@@ -294,6 +294,30 @@ ItemNodePtr popItem(ItemNodePtr *listptr, ItemNodePtr ptr)
 	return NULL;
 }
 
+int getItemCount(ItemNodePtr *listptr)
+{
+	int cnt=0;
+	ItemNodePtr ptr = (*listptr);
+	while (ptr!=NULL)
+	{
+		cnt++;
+		ptr = ptr->next;
+	}
+	return cnt;
+}
+
+void clearItemList(ItemNodePtr *listptr)
+{
+	ItemNodePtr ptr = (*listptr);
+	ItemNodePtr next = NULL;
+	while (ptr!=NULL)
+	{
+		next = ptr->next;
+		free(ptr);
+		ptr = next;
+	}
+}
+
 bool isBelt(int item) {
 	return itemtypes[item].isBelt;
 }

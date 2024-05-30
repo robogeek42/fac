@@ -67,6 +67,9 @@ ItemNodePtr popItemsAtTile(ItemNodePtr *listptr,  int tx, int ty );
 
 void deleteItem(ItemNodePtr *listptr, ItemNodePtr ptr);
 ItemNodePtr popItem(ItemNodePtr *listptr, ItemNodePtr ptr);
+int getItemCount(ItemNodePtr *listptr);
+
+void clearItemList(ItemNodePtr *listptr);
 
 #define BM_SIZE16 0
 #define BM_SIZE8 1

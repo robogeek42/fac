@@ -20,10 +20,22 @@ typedef struct {
 	uint16_t start_ty;
 	uint16_t end_tx;
 	uint16_t end_ty;
-	ItemNodePtr itemlist;
 	int itemcnt;
 	int maxitemcnt;
+	ItemNodePtr itemlist;
 } Inserter;
+
+typedef struct {
+	uint8_t dir;
+	uint16_t tx;
+	uint16_t ty;
+	uint16_t start_tx;
+	uint16_t start_ty;
+	uint16_t end_tx;
+	uint16_t end_ty;
+	int itemcnt;
+	int maxitemcnt;
+} InserterSave;
 
 #endif
 
@@ -84,6 +96,39 @@ ThingNodePtr findInserterNode(ThingNodePtr *inserterlist,  int tx, int ty)
 
 	return currPtr;
 
+}
+
+int countInserters(ThingNodePtr *inserterlist)
+{
+	int cnt = 0;
+	if (isEmptyThingList(inserterlist)) {
+		return 0;
+	}
+
+	ThingNodePtr currPtr = (*inserterlist);
+	while (currPtr != NULL ) {
+		cnt++;
+		currPtr = currPtr->next;
+	}
+
+	return cnt;
+}
+
+void clearInserters(ThingNodePtr *inserterlist)
+{
+	ThingNodePtr currPtr = (*inserterlist);
+	ThingNodePtr nextPtr = NULL;
+	Inserter *insp = NULL;
+	while (currPtr != NULL ) {
+		nextPtr = currPtr->next;
+		insp = (Inserter*) currPtr->thing;
+		
+		clearItemList(&insp->itemlist);
+		free(insp);
+		free(currPtr);
+		currPtr = nextPtr;
+	}
+	
 }
 
 #endif
