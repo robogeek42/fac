@@ -82,6 +82,10 @@ SmallFilInfo* get_files(const char* path, int *num_files) {
 		printf("Error FR=%d\n",fr);
 		return NULL;
 	}
+	if ( num_dirent == 0 )
+	{
+		return NULL;
+	}
     sfinfo = malloc(sizeof(SmallFilInfo) * num_dirent);
 	if ( !sfinfo )
 	{

@@ -235,7 +235,7 @@ void drop_item(int item);
 
 void move_items();
 void move_items_on_inserters();
-void print_item_pos();
+void move_items_on_machines();
 void draw_items();
 void draw_items_at_tile(int tx, int ty);
 
@@ -384,12 +384,12 @@ int main(/*int argc, char *argv[]*/)
 	inventory_add_item(inventory, IT_BELT, 112); // belt
 	inventory_add_item(inventory, IT_IRON_ORE, 12);
 	inventory_add_item(inventory, IT_COAL, 7);
-	inventory_add_item(inventory, IT_COPPER_PLATE, 255);
-	inventory_add_item(inventory, IT_FURNACE, 8);
-	inventory_add_item(inventory, IT_MINER, 6);
-	inventory_add_item(inventory, IT_ASSEMBLER, 5);
-	inventory_add_item(inventory, IT_INSERTER, 8);
-	inventory_add_item(inventory, IT_BOX, 4);
+	inventory_add_item(inventory, IT_COPPER_PLATE, 100);
+	inventory_add_item(inventory, IT_FURNACE, 20);
+	inventory_add_item(inventory, IT_MINER, 20);
+	inventory_add_item(inventory, IT_ASSEMBLER, 10);
+	inventory_add_item(inventory, IT_INSERTER, 25);
+	inventory_add_item(inventory, IT_BOX, 8);
 	inventory_add_item(inventory, IT_GENERATOR, 4);
 	inventory_add_item(inventory, IT_GEARWHEEL, 20);
 	inventory_add_item(inventory, IT_WIRE, 20);
@@ -494,6 +494,7 @@ void game_loop()
 			//draw_cursor(false);
 			move_items();
 			move_items_on_inserters();
+			move_items_on_machines();
 			check_items_on_machines();
 			draw_layer(true);
 			draw_cursor(true);
@@ -672,7 +673,7 @@ void game_loop()
 				{
 					if ( getResourceCount( machines[m].tx, machines[m].ty ) > 0 )
 					{
-						if ( minerProduce( machines, m, &itemlist, &numItems) )
+						if ( minerProduce( machines, m) )
 						{
 							reduceResourceCount( machines[m].tx, machines[m].ty );
 						}
@@ -682,11 +683,11 @@ void game_loop()
 				// call producer for each of these
 				if ( machines[m].machine_type == IT_FURNACE )
 				{
-					furnaceProduce( machines, m, &itemlist, &numItems);
+					furnaceProduce( machines, m);
 				}
 				if ( machines[m].machine_type == IT_ASSEMBLER )
 				{
-					assemblerProduce( machines, m, &itemlist, &numItems);
+					assemblerProduce( machines, m);
 				}
 			}
 		}
@@ -1893,27 +1894,86 @@ void move_items_on_inserters()
 	}
 }
 
-void print_item_pos()
+void move_items_on_machines()
 {
-	TAB(0,0);
-	ItemNodePtr currPtr = itemlist;
-	while (currPtr != NULL) {
-		if (itemIsOnScreen(currPtr))
-		{
-			int tx = getTileX(currPtr->x);
-			int ty = getTileY(currPtr->y);
-			int beltID = layer_belts[ tx + ty*fac.mapWidth ];
-			if (beltID >= 0)
-			{
-				int dx = currPtr->x % gTileSize;
-				int dy = currPtr->y % gTileSize;
-				int in = belts[beltID].in;
-				int out = belts[beltID].out;
+	// go through machines and move their own items along
+	
+	for (int m=0; m<machineCount; m++)
+	{
+		Machine *mach = &machines[m];
+		ItemNodePtr currPtr = mach->itemlist;
+		ItemNodePtr nextPtr = NULL;
+		while (currPtr != NULL) {
+			nextPtr = currPtr->next;
 
-				printf("%d,%d : %d,%d (I%d O%d)   \n",currPtr->x, currPtr->y, dx, dy, in, out);
+			bool moved = false;
+			int centrex = currPtr->x + ITEM_CENTRE_OFFSET;
+			int centrey = currPtr->y + ITEM_CENTRE_OFFSET;
+			int nextx = centrex;
+			int nexty = centrey;
+			int nnx = centrex;
+			int nny = centrey;
+			int end_tx = mach->tx;
+			int end_ty = mach->ty;
+
+			bool putback=false;
+			switch (mach->outDir )
+			{
+				case DIR_UP:
+					nexty -= 1; nny -= 2; moved = true; end_ty -=1;
+					if (nexty < ((mach->ty) * gTileSize - 8)) putback = true;
+					break;
+				case DIR_RIGHT:
+					nextx += 1; nnx += 2; moved = true; end_tx +=1;
+					if (nextx > ((mach->tx+1) * gTileSize + 7)) putback = true;
+					break;
+				case DIR_DOWN:
+					nexty += 1; nny += 2; moved = true; end_ty +=1;
+					if (nexty > ((mach->ty+1) * gTileSize + 7)) putback = true;
+					break;
+				case DIR_LEFT:
+					nextx -= 1; nnx -= 2; moved = true; end_tx -=1;
+					if (nextx < ((mach->tx) * gTileSize - 8)) putback = true;
+					break;
+				default:
+					break;
+
 			}
+
+			if ( moved )
+			{
+				// check next pixel and the one after in the same direction
+				bool found = isAnythingAtXY(&mach->itemlist, nextx-ITEM_CENTRE_OFFSET, nexty-ITEM_CENTRE_OFFSET );
+				found |= isAnythingAtXY(&mach->itemlist, nnx-ITEM_CENTRE_OFFSET, nny-ITEM_CENTRE_OFFSET );
+				if (!found) 
+				{
+					currPtr->x = nextx - ITEM_CENTRE_OFFSET;
+					currPtr->y = nexty - ITEM_CENTRE_OFFSET;
+				}
+				// re-draw tile covered by machine
+				/*
+				int px = getTilePosInScreenX(mach->tx);
+				int py = getTilePosInScreenY(mach->ty);
+				draw_tile(mach->tx, mach->ty, px, py);
+				draw_items_at_tile(mach->tx, mach->ty);
+				px = getTilePosInScreenX(end_tx);
+				py = getTilePosInScreenY(end_ty);
+				draw_tile(end_tx, end_ty, px, py);
+				draw_items_at_tile(end_tx, end_ty);
+				*/
+			}
+			if (putback)
+			{
+				ItemNodePtr it = popItem( &mach->itemlist, currPtr );
+				if ( it )
+				{
+					// add to front of itemlist;
+					it->next = itemlist;
+					itemlist = it;
+				}
+			}
+			currPtr = nextPtr;
 		}
-		currPtr = currPtr->next;
 	}
 }
 
@@ -1984,6 +2044,16 @@ void draw_items_at_tile(int tx, int ty)
 			currPtr = currPtr->next;
 		}
 		tlistp = tlistp->next;
+	}
+	for (int m=0; m<machineCount; m++)
+	{
+		Machine *mach = &machines[m];
+		ItemNodePtr currPtr = mach->itemlist;
+		while (currPtr != NULL) {
+			vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+			vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+			currPtr = currPtr->next;
+		}
 	}
 }
 

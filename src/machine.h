@@ -29,6 +29,7 @@ typedef struct {
 	int countIn[3];
 	int countOut;
 	clock_t ticksTillProduce;
+	ItemNodePtr itemlist;
 } Machine;
 
 // use furnaceProcessTypes[ rawtype - IT_TYPES_RAW ]
@@ -144,6 +145,7 @@ int addMachine( Machine **machines, uint8_t machine_type, int tx, int ty, uint8_
 	(*machines)[mnum].processTime = speed;
 	(*machines)[mnum].outDir = direction;
 	(*machines)[mnum].ticksTillProduce = 0;
+	(*machines)[mnum].itemlist = NULL;
 	machineCount++;
 	//TAB(0,4);printf("added miner %d %d,%d\n",mnum,tx,ty);
 	
@@ -175,20 +177,19 @@ int addAssembler( Machine **machines, int tx, int ty, uint8_t direction, int pty
 }
 
 // special case for machine producer for 0 raw materials
-bool minerProduce( Machine *machines, int m, ItemNodePtr *itemlist, int *numItems )
+bool minerProduce( Machine *machines, int m)
 {
 	if ( machines[m].machine_type == 0 ) return false;
 	if ( machines[m].ticksTillProduce < clock() )
 	{
 		machines[m].ticksTillProduce = clock() + machines[m].processTime;
-		if ( ! isAnythingAtXY(itemlist, 
+		if ( ! isAnythingAtXY(&machines[m].itemlist, 
 					machines[m].tx*gTileSize+4, machines[m].ty*gTileSize+4) )
 		{
-			insertAtFrontItemList(itemlist, 
+			insertAtFrontItemList(&machines[m].itemlist, 
 					minerProcessTypes[machines[m].ptype].out, 
 					machines[m].tx*gTileSize+4, 
 					machines[m].ty*gTileSize+4);
-			(*numItems)++;
 			return true;
 		}
 	}
@@ -196,7 +197,7 @@ bool minerProduce( Machine *machines, int m, ItemNodePtr *itemlist, int *numItem
 }
 
 // machine producer for 1 raw materials
-bool furnaceProduce( Machine *machines, int m, ItemNodePtr *itemlist, int *numItems )
+bool furnaceProduce( Machine *machines, int m )
 {
 	if ( machines[m].machine_type == 0 ) return true;
 	if ( machines[m].ticksTillProduce == 0 && 
@@ -209,11 +210,12 @@ bool furnaceProduce( Machine *machines, int m, ItemNodePtr *itemlist, int *numIt
 		 machines[m].ticksTillProduce < clock() )
 	{
 		machines[m].ticksTillProduce = 0;
-		if ( ! isAnythingAtXY(itemlist, 
+		if ( ! isAnythingAtXY(&machines[m].itemlist, 
 					machines[m].tx*gTileSize+4, machines[m].ty*gTileSize+4) )
 		{
 			int  outx = machines[m].tx*gTileSize+4;
 			int  outy = machines[m].ty*gTileSize+4;
+			/*
 			switch ( machines[m].outDir )
 			{
 				case DIR_UP: outy-=8; break;
@@ -222,10 +224,10 @@ bool furnaceProduce( Machine *machines, int m, ItemNodePtr *itemlist, int *numIt
 				case DIR_LEFT: outx-=8; break;
 				default: break;
 			}
+			*/
 
-			insertAtFrontItemList(itemlist, 
+			insertAtFrontItemList(&machines[m].itemlist, 
 					furnaceProcessTypes[machines[m].ptype].out, outx, outy);
-			(*numItems)++;
 			return true;
 		}
 	}
@@ -233,7 +235,7 @@ bool furnaceProduce( Machine *machines, int m, ItemNodePtr *itemlist, int *numIt
 }
 
 // machine producer for N raw materials
-bool assemblerProduce( Machine *machines, int m, ItemNodePtr *itemlist, int *numItems )
+bool assemblerProduce( Machine *machines, int m )
 {
 	if ( machines[m].machine_type == 0 ) return true;
 
@@ -281,12 +283,11 @@ bool assemblerProduce( Machine *machines, int m, ItemNodePtr *itemlist, int *num
 			case DIR_LEFT: outx-=8; break;
 			default: break;
 		}
-		if ( ! isAnythingAtXY(itemlist, outx, outy) )
+		if ( ! isAnythingAtXY(&machines[m].itemlist, outx, outy) )
 		{
 			machines[m].countOut -= 1;
-			insertAtFrontItemList(itemlist, 
+			insertAtFrontItemList(&machines[m].itemlist, 
 					assemblerProcessTypes[ptype].out, outx, outy);
-			(*numItems)++;
 			return true;
 		}
 	}

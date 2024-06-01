@@ -80,7 +80,7 @@ void show_files(int *line, int select_offset, int fno_start )
 	{
 		clear_files_area();
 		if ( !sfinfos ) {
-			TAB(1,files_start_row);printf("No such directory");
+			TAB(1,files_start_row);printf("<EMPTY>");
 		}
 		return;
 	}
