@@ -44,6 +44,8 @@ int gTileSize = 16;
 
 int numItems;
 
+#define ITEM_CENTRE_OFFSET 4
+
 #define SCROLL_RIGHT 0
 #define SCROLL_LEFT 1
 #define SCROLL_UP 2
@@ -231,7 +233,7 @@ void draw_horizontal_layer(int tx, int ty, int len, bool bdraw_belts, bool bdraw
 
 void drop_item(int item);
 
-void move_items_on_belts();
+void move_items();
 void move_items_on_inserters();
 void print_item_pos();
 void draw_items();
@@ -490,7 +492,7 @@ void game_loop()
 		{
 			layer_wait_ticks = clock() + belt_speed; // belt anim speed
 			//draw_cursor(false);
-			move_items_on_belts();
+			move_items();
 			move_items_on_inserters();
 			check_items_on_machines();
 			draw_layer(true);
@@ -1549,22 +1551,69 @@ void drop_item(int item)
 	numItems++;
 }
 
-void move_items_on_belts()
+void move_items()
 {
 	// function timer
 	func_start = clock();
 
 	ItemNodePtr currPtr = itemlist;
-	int item_centre_offset = 4;
+	ItemNodePtr nextPtr = NULL;
 	while (currPtr != NULL) {
+		nextPtr = currPtr->next;
+
 		bool moved = false;
-		int centrex = currPtr->x + item_centre_offset;
-		int centrey = currPtr->y + item_centre_offset;
+		int centrex = currPtr->x + ITEM_CENTRE_OFFSET;
+		int centrey = currPtr->y + ITEM_CENTRE_OFFSET;
 
 		// (tx,ty) is the tile the centre of the item is in
 		int tx = centrex >> 4; //getTileX(centrex);
 		int ty = centrey >> 4; //getTileY(centrey);
 
+		// (dx,dy) offset of centre of item in relation to tile
+		int dx = centrex % gTileSize;
+		int dy = centrey % gTileSize;
+
+		// Check if item can move to an inserter
+		Inserter *insp = findInserter( &inserterlist, tx, ty );
+		if (insp)
+		{
+			if (insp->itemcnt < insp->maxitemcnt)
+			{
+				bool pop=false;
+				switch(insp->dir)
+				{
+					case DIR_UP:
+					case DIR_DOWN:
+						if (dx==8 || dx==7 || dx==6) pop=true;
+						break;
+					case DIR_RIGHT:
+					case DIR_LEFT:
+						if (dy==8 || dy==7 || dy==6) pop=true;
+						break;
+					default:
+						break;
+				}
+				if (pop)
+				{
+					if ( ( insp->start_tx == tx && insp->start_ty == ty ) ||
+						 ( insp->tx == tx && insp->ty == ty ) )
+					{
+						// pop item off global itemlist and put into inserter's own list
+						ItemNodePtr ip = popItem( &itemlist, currPtr );
+						ip->next = insp->itemlist;
+						insp->itemlist = ip;
+						//if (insp->dir == DIR_UP || insp->dir == DIR_DOWN ) ip->x = (tx*gTileSize)+4;
+						//if (insp->dir == DIR_LEFT || insp->dir == DIR_RIGHT ) ip->y = (ty*gTileSize)+4;
+						insp->itemcnt++;
+
+						currPtr = nextPtr;
+						continue;
+					}
+				}
+			}
+		}
+
+		// machine is index into machines array
 		int machine = getMachineAtTileXY( machines, tx, ty );
 
 		if ( machine >= 0 ) 
@@ -1573,7 +1622,8 @@ void move_items_on_belts()
 			int nexty = centrey;
 			int nnx = nextx;
 			int nny = nexty;
-			switch( machines[machine].outDir )
+			int outDir = machines[machine].outDir;
+			switch( outDir )
 			{
 				case DIR_UP:	// exit to top, reduce Y
 					if ( !moved ) { nexty--; nny-=2; moved=true; }
@@ -1598,35 +1648,46 @@ void move_items_on_belts()
 
 				if (!found) 
 				{
-					currPtr->x = nextx - item_centre_offset;
-					currPtr->y = nexty - item_centre_offset;
+					currPtr->x = nextx - ITEM_CENTRE_OFFSET;
+					currPtr->y = nexty - ITEM_CENTRE_OFFSET;
 
-					/*
 					// jump the tile to the centre of the belt it just moved into
 					// bit hacky but avoids the item moving outside of the belt
-					tx = (currPtr->x + item_centre_offset) >> 4;
-					ty = (currPtr->y + item_centre_offset) >> 4;
+					tx = (currPtr->x + ITEM_CENTRE_OFFSET) >> 4;
+					ty = (currPtr->y + ITEM_CENTRE_OFFSET) >> 4;
 
 					int offset = tx + ty*fac.mapWidth;
 					int newbeltID = layer_belts[ offset ];
 					if (newbeltID >= 0)
 					{
-						currPtr->x = tx*gTileSize + 4;
-						currPtr->y = ty*gTileSize + 4;
+						int in = belts[newbeltID].in;
+						switch ( machines[machine].outDir ) 
+						{
+							case DIR_UP:
+								if ( in != DIR_DOWN ) currPtr->y = ty*gTileSize + 4;
+								break;
+							case DIR_RIGHT:
+								if ( in != DIR_LEFT ) currPtr->x = tx*gTileSize + 4;
+								break;
+							case DIR_DOWN:
+								if ( in != DIR_UP ) currPtr->y = ty*gTileSize + 4;
+								break;
+							case DIR_LEFT:
+								if ( in != DIR_RIGHT ) currPtr->x = tx*gTileSize + 4;
+								break;
+							default:
+								break;
+						}
 					}
-					*/
 				}
 			}
 		}
 
-		int beltID = layer_belts[ tx + ty*fac.mapWidth ];
-
+		int beltOffset =  tx + ty*fac.mapWidth;
+		int beltID = layer_belts[ beltOffset ];
+		bool redraw=false;
 		if (!moved && beltID >= 0)
 		{
-			// (dx,dy) offset of centre of item in relation to tile
-			int dx = centrex % gTileSize;
-			int dy = centrey % gTileSize;
-
 			int in = belts[beltID].in;
 			int out = belts[beltID].out;
 
@@ -1674,12 +1735,45 @@ void move_items_on_belts()
 			if (moved)
 			{
 				// check next pixel and the one after in the same direction
-				bool found = isAnythingAtXY(&itemlist, nextx-item_centre_offset, nexty-item_centre_offset );
-				found |= isAnythingAtXY(&itemlist, nnx-item_centre_offset, nny-item_centre_offset );
+				bool found = isAnythingAtXY(&itemlist, nextx-ITEM_CENTRE_OFFSET, nexty-ITEM_CENTRE_OFFSET );
+				found |= isAnythingAtXY(&itemlist, nnx-ITEM_CENTRE_OFFSET, nny-ITEM_CENTRE_OFFSET );
 				if (!found) 
 				{
-					currPtr->x = nextx - item_centre_offset;
-					currPtr->y = nexty - item_centre_offset;
+					currPtr->x = nextx - ITEM_CENTRE_OFFSET;
+					currPtr->y = nexty - ITEM_CENTRE_OFFSET;
+#if 1
+					// jump the tile to the centre of the belt it just moved into
+					// bit hacky but avoids the item moving outside of the belt
+					tx = (currPtr->x + ITEM_CENTRE_OFFSET) >> 4;
+					ty = (currPtr->y + ITEM_CENTRE_OFFSET) >> 4;
+
+					int newbeltOffset = tx + ty*fac.mapWidth;
+					if ( newbeltOffset != beltOffset )
+					{
+						int newbeltID = layer_belts[ newbeltOffset ];
+						if (newbeltID >= 0)
+						{
+							int in = belts[newbeltID].in;
+							switch ( belts[beltID].out ) 
+							{
+								case DIR_UP:
+									if ( in != DIR_DOWN ) { redraw=true; currPtr->y = ty*gTileSize + 4; }
+									break;
+								case DIR_RIGHT:
+									if ( in != DIR_LEFT ) { redraw=true; currPtr->x = tx*gTileSize + 4; }
+									break;
+								case DIR_DOWN:
+									if ( in != DIR_UP ) { redraw=true; currPtr->y = ty*gTileSize + 4; }
+									break;
+								case DIR_LEFT:
+									if ( in != DIR_RIGHT ) { redraw=true; currPtr->x = tx*gTileSize + 4; }
+									break;
+								default:
+									break;
+							}
+						}
+					}
+#endif
 				}
 			}
 		}
@@ -1688,24 +1782,27 @@ void move_items_on_belts()
 		if ( moved )
 		{
 			// get new tx/ty, if there is a belt there fine, otherwise, draw it
-			tx = (currPtr->x + item_centre_offset) >> 4;
-			ty = (currPtr->y + item_centre_offset) >> 4;
-
+			tx = (currPtr->x + ITEM_CENTRE_OFFSET) >> 4;
+			ty = (currPtr->y + ITEM_CENTRE_OFFSET) >> 4;
+			
 			int offset = tx + ty*fac.mapWidth;
 			int newbeltID = layer_belts[ offset ];
 
 			// draw tiles where there is no belt that the item has moved into
-			if (itemIsOnScreen(currPtr) && newbeltID<0 && !isValid(layer_machines[offset]) )
+			if (itemIsOnScreen(currPtr) )
 			{
-				int px=getTilePosInScreenX(tx);
-				int py=getTilePosInScreenY(ty);
-				draw_tile(tx, ty, px, py);
-				draw_machines(tx, ty, px, py);
-				draw_items_at_tile(tx, ty);
+				if ( ( newbeltID<0 && !isValid(layer_machines[offset]) ) || redraw )
+				{
+					int px=getTilePosInScreenX(tx);
+					int py=getTilePosInScreenY(ty);
+					draw_tile(tx, ty, px, py);
+					draw_machines(tx, ty, px, py);
+					draw_items_at_tile(tx, ty);
+				}
 			}
 		}
 		// next
-		currPtr = currPtr->next;
+		currPtr = nextPtr;
 	}
 
 	// function timer
@@ -1714,68 +1811,20 @@ void move_items_on_belts()
 
 void move_items_on_inserters()
 {
-	ItemNodePtr currPtr = itemlist;
-	ItemNodePtr nextPtr = NULL;
-	int item_centre_offset = 4;
-	// move any items that are on a sq containing an inserter to the ins list
-	while (currPtr != NULL) {
-		nextPtr = currPtr->next;
-		int centrex = currPtr->x + item_centre_offset;
-		int centrey = currPtr->y + item_centre_offset;
-		int tx = centrex >> 4;
-		int ty = centrey >> 4;
-		int dx = centrex % gTileSize;
-		int dy = centrey % gTileSize;
-		Inserter *insp = findInserter( &inserterlist, tx, ty );
-		if (insp)
-		{
-			if (insp->itemcnt < insp->maxitemcnt)
-			{
-				bool pop=false;
-				switch(insp->dir)
-				{
-					case DIR_UP:
-					case DIR_DOWN:
-						if (dx==8 || dx==7 || dx==6) pop=true;
-						break;
-					case DIR_RIGHT:
-					case DIR_LEFT:
-						if (dy==8 || dx==7 || dx==6) pop=true;
-						break;
-					default:
-						break;
-				}
-				if (pop)
-				{
-					if ( insp->start_tx == tx && insp->start_ty == ty )
-					{
-						// pop item off global itemlist and put into inserter's own list
-						ItemNodePtr ip = popItem( &itemlist, currPtr );
-						ip->next = insp->itemlist;
-						insp->itemlist = ip;
-						//if (insp->dir == DIR_UP || insp->dir == DIR_DOWN ) ip->x = (tx*gTileSize)+4;
-						//if (insp->dir == DIR_LEFT || insp->dir == DIR_RIGHT ) ip->y = (ty*gTileSize)+4;
-						insp->itemcnt++;
-					}
-				}
-			}
-		}
-		currPtr = nextPtr;
-	}
 	// go through inserters and move their own items along
 	ThingNodePtr tlistp = inserterlist;
 	while ( tlistp != NULL )
 	{
-		if (tlistp->thing == NULL) break;
 		Inserter *insp = (Inserter*)tlistp->thing;
 
-		currPtr = insp->itemlist;
+		ItemNodePtr currPtr = insp->itemlist;
+		ItemNodePtr nextPtr = NULL;
 		while (currPtr != NULL) {
 			nextPtr = currPtr->next;
 
 			bool moved = false;
-			int centrex = currPtr->x + item_centre_offset;
-			int centrey = currPtr->y + item_centre_offset;
+			int centrex = currPtr->x + ITEM_CENTRE_OFFSET;
+			int centrey = currPtr->y + ITEM_CENTRE_OFFSET;
 			int nextx = centrex;
 			int nexty = centrey;
 			int nnx = centrex;
@@ -1808,12 +1857,12 @@ void move_items_on_inserters()
 			if ( moved )
 			{
 				// check next pixel and the one after in the same direction
-				bool found = isAnythingAtXY(&insp->itemlist, nextx-item_centre_offset, nexty-item_centre_offset );
-				found |= isAnythingAtXY(&insp->itemlist, nnx-item_centre_offset, nny-item_centre_offset );
+				bool found = isAnythingAtXY(&insp->itemlist, nextx-ITEM_CENTRE_OFFSET, nexty-ITEM_CENTRE_OFFSET );
+				found |= isAnythingAtXY(&insp->itemlist, nnx-ITEM_CENTRE_OFFSET, nny-ITEM_CENTRE_OFFSET );
 				if (!found) 
 				{
-					currPtr->x = nextx - item_centre_offset;
-					currPtr->y = nexty - item_centre_offset;
+					currPtr->x = nextx - ITEM_CENTRE_OFFSET;
+					currPtr->y = nexty - ITEM_CENTRE_OFFSET;
 				}
 				// re-draw tile covered by inserter
 				int px = getTilePosInScreenX(insp->start_tx);
@@ -2933,11 +2982,10 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 void check_items_on_machines()
 {
 	ItemNodePtr currPtr = itemlist;
-	int item_centre_offset = 4;
 	while (currPtr != NULL) {
 		ItemNodePtr nextPtr = currPtr->next;
-		int centrex = currPtr->x + item_centre_offset;
-		int centrey = currPtr->y + item_centre_offset;
+		int centrex = currPtr->x + ITEM_CENTRE_OFFSET;
+		int centrey = currPtr->y + ITEM_CENTRE_OFFSET;
 
 		// (tx,ty) is the tile the centre of the item is in
 		int tx = centrex >> 4;

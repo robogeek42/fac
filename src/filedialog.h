@@ -47,7 +47,7 @@ int selected_fno = 0;
 int selected_fno_start = 0;
 int max_linestr = 0;
 
-int key_wait_time = 15;
+int key_wait_time = 20;
 int key_scroll_wait_time = 10;
 
 void print_key(int x, int y, char *pre, char *key, char* post)
