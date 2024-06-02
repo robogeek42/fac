@@ -1797,7 +1797,7 @@ void move_items()
 					int px=getTilePosInScreenX(tx);
 					int py=getTilePosInScreenY(ty);
 					draw_tile(tx, ty, px, py);
-					draw_machines(tx, ty, px, py);
+					//draw_machines(tx, ty, px, py);
 					draw_items_at_tile(tx, ty);
 				}
 			}
@@ -1869,12 +1869,17 @@ void move_items_on_inserters()
 				int px = getTilePosInScreenX(insp->start_tx);
 				int py = getTilePosInScreenY(insp->start_ty);
 				draw_tile(insp->start_tx, insp->start_ty, px, py);
+				draw_items_at_tile(insp->start_tx, insp->start_ty);
+
 				px = getTilePosInScreenX(insp->tx);
 				py = getTilePosInScreenY(insp->ty);
 				draw_tile(insp->tx, insp->ty, px, py);
+				draw_items_at_tile(insp->tx, insp->ty);
+
 				px = getTilePosInScreenX(insp->end_tx);
 				py = getTilePosInScreenY(insp->end_ty);
 				draw_tile(insp->end_tx, insp->end_ty, px, py);
+				draw_items_at_tile(insp->end_tx, insp->end_ty);
 			}
 			if (putback)
 			{
@@ -1913,26 +1918,24 @@ void move_items_on_machines()
 			int nexty = centrey;
 			int nnx = centrex;
 			int nny = centrey;
-			int end_tx = mach->tx;
-			int end_ty = mach->ty;
 
 			bool putback=false;
 			switch (mach->outDir )
 			{
 				case DIR_UP:
-					nexty -= 1; nny -= 2; moved = true; end_ty -=1;
+					nexty -= 1; nny -= 2; moved = true;
 					if (nexty < ((mach->ty) * gTileSize - 8)) putback = true;
 					break;
 				case DIR_RIGHT:
-					nextx += 1; nnx += 2; moved = true; end_tx +=1;
+					nextx += 1; nnx += 2; moved = true;
 					if (nextx > ((mach->tx+1) * gTileSize + 7)) putback = true;
 					break;
 				case DIR_DOWN:
-					nexty += 1; nny += 2; moved = true; end_ty +=1;
+					nexty += 1; nny += 2; moved = true;
 					if (nexty > ((mach->ty+1) * gTileSize + 7)) putback = true;
 					break;
 				case DIR_LEFT:
-					nextx -= 1; nnx -= 2; moved = true; end_tx -=1;
+					nextx -= 1; nnx -= 2; moved = true;
 					if (nextx < ((mach->tx) * gTileSize - 8)) putback = true;
 					break;
 				default:
@@ -1951,16 +1954,15 @@ void move_items_on_machines()
 					currPtr->y = nexty - ITEM_CENTRE_OFFSET;
 				}
 				// re-draw tile covered by machine
-				/*
 				int px = getTilePosInScreenX(mach->tx);
 				int py = getTilePosInScreenY(mach->ty);
 				draw_tile(mach->tx, mach->ty, px, py);
 				draw_items_at_tile(mach->tx, mach->ty);
-				px = getTilePosInScreenX(end_tx);
-				py = getTilePosInScreenY(end_ty);
-				draw_tile(end_tx, end_ty, px, py);
-				draw_items_at_tile(end_tx, end_ty);
-				*/
+
+				px = getTilePosInScreenX(mach->end_tx);
+				py = getTilePosInScreenY(mach->end_ty);
+				draw_tile(mach->end_tx, mach->end_ty, px, py);
+				draw_items_at_tile(mach->end_tx, mach->end_ty);
 			}
 			if (putback)
 			{
@@ -1991,24 +1993,50 @@ void draw_items()
 		cnt++;
 		if (cnt % 4 == 0) vdp_update_key_state();
 	}
+	
+	// Items on inserters
 	ThingNodePtr tlistp = inserterlist;
 	while ( tlistp != NULL )
 	{
 		if (tlistp->thing == NULL) break;
 		Inserter *insp = (Inserter*)tlistp->thing;
 
-		currPtr = insp->itemlist;
-		while (currPtr != NULL) {
-			if (itemIsOnScreen(currPtr))
-			{
+		// if inserter is on screen
+		if ( (insp->tx +1) >= (fac.xpos >>4) && (insp->ty +1) >= (fac.ypos >>4) && 
+		     (insp->tx -1) <= ((fac.xpos+gScreenWidth) >>4) && (insp->ty -1) <= ((fac.ypos+gScreenHeight) >>4) )
+		{
+			// draw its items
+			currPtr = insp->itemlist;
+			while (currPtr != NULL) {
 				vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
 				vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+				currPtr = currPtr->next;
+				cnt++;
+				if (cnt % 4 == 0) vdp_update_key_state();
 			}
-			currPtr = currPtr->next;
-			cnt++;
-			if (cnt % 4 == 0) vdp_update_key_state();
 		}
 		tlistp = tlistp->next;
+	}
+	
+	// Items on machines
+	for (int m=0; m<machineCount; m++)
+	{
+		Machine *mach=&machines[m];
+		if (mach)
+		{
+			if ( mach->tx >= (fac.xpos >>4) && mach->ty >= (fac.ypos >>4) &&
+				 mach->tx <= ((fac.xpos+gScreenWidth) >>4) && mach->ty >= ((fac.ypos+gScreenHeight) >>4) )
+			{
+				currPtr = mach->itemlist;
+				while (currPtr != NULL) {
+					vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+					vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+					currPtr = currPtr->next;
+					cnt++;
+					if (cnt % 4 == 0) vdp_update_key_state();
+				}
+			}
+		}
 	}
 }
 void draw_items_at_tile(int tx, int ty) 
@@ -2030,29 +2058,32 @@ void draw_items_at_tile(int tx, int ty)
 	{
 		if (tlistp->thing == NULL) break;
 		Inserter *insp = (Inserter*)tlistp->thing;
-
-		currPtr = insp->itemlist;
-		while (currPtr != NULL) {
-			if ( currPtr->x >= tx*gTileSize &&
-				 currPtr->x < (tx+1)*gTileSize &&
-				 currPtr->y >= ty*gTileSize &&
-				 currPtr->y < (ty+1)*gTileSize )
-			{
+		if ( (insp->tx == tx && insp->ty == ty) ||
+		     (insp->start_tx == tx && insp->start_ty == ty) ||
+		     (insp->end_tx == tx && insp->end_ty == ty) )
+		{
+			currPtr = insp->itemlist;
+			while (currPtr != NULL) {
 				vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
 				vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+				currPtr = currPtr->next;
 			}
-			currPtr = currPtr->next;
 		}
 		tlistp = tlistp->next;
 	}
 	for (int m=0; m<machineCount; m++)
 	{
 		Machine *mach = &machines[m];
-		ItemNodePtr currPtr = mach->itemlist;
-		while (currPtr != NULL) {
-			vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
-			vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
-			currPtr = currPtr->next;
+		
+		if ( (mach->tx == tx && mach->ty == ty) ||
+		     (mach->end_tx == tx && mach->end_ty == ty) )
+		{
+			ItemNodePtr currPtr = mach->itemlist;
+			while (currPtr != NULL) {
+				vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+				vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+				currPtr = currPtr->next;
+			}
 		}
 	}
 }

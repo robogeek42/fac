@@ -23,6 +23,8 @@ typedef struct {
 	uint8_t machine_type; // enum ItemTypesEnum
 	int tx;
 	int ty;
+	int end_tx;
+	int end_ty;
 	uint8_t outDir;
 	int processTime;
 	int ptype;
@@ -133,10 +135,27 @@ int addMachine( Machine **machines, uint8_t machine_type, int tx, int ty, uint8_
 		printf("Error\n");
 		return -1;
 	}
+	int end_tx = tx; 
+	int end_ty = ty;
+	switch(direction)
+	{
+		case DIR_UP:
+			end_ty -= 1; break;
+		case DIR_RIGHT:
+			end_tx += 1; break;
+		case DIR_DOWN:
+			end_ty += 1; break;
+		case DIR_LEFT:
+			end_tx -= 1; break;
+		default:
+			break;
+	}
 	// set-up the machine as a miner
 	(*machines)[mnum].machine_type = machine_type; 
 	(*machines)[mnum].tx = tx; 
 	(*machines)[mnum].ty = ty;
+	(*machines)[mnum].end_tx = end_tx; 
+	(*machines)[mnum].end_ty = end_ty;
 	(*machines)[mnum].ptype = ptype;
 	(*machines)[mnum].countIn[0] = 0;
 	(*machines)[mnum].countIn[1] = 0;
@@ -147,7 +166,7 @@ int addMachine( Machine **machines, uint8_t machine_type, int tx, int ty, uint8_
 	(*machines)[mnum].ticksTillProduce = 0;
 	(*machines)[mnum].itemlist = NULL;
 	machineCount++;
-	//TAB(0,4);printf("added miner %d %d,%d\n",mnum,tx,ty);
+	TAB(0,4);printf("addmach %d %d,%d dir%d\n",mnum,tx,ty, direction);
 	
 	return mnum;
 }
@@ -283,6 +302,7 @@ bool assemblerProduce( Machine *machines, int m )
 			case DIR_LEFT: outx-=8; break;
 			default: break;
 		}
+		//TAB(0,1+m);printf("m%d:d%d %d,%d\nprod %d,%d ",m, machines[m].outDir, machines[m].tx*gTileSize,  machines[m].ty*gTileSize, outx,outy);
 		if ( ! isAnythingAtXY(&machines[m].itemlist, outx, outy) )
 		{
 			machines[m].countOut -= 1;
