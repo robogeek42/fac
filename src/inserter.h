@@ -13,13 +13,14 @@
 #include "thinglist.h"
 
 typedef struct {
+	uint8_t type;
 	uint8_t dir;
 	uint16_t tx;
 	uint16_t ty;
-	uint16_t start_tx;
-	uint16_t start_ty;
 	uint16_t end_tx;
 	uint16_t end_ty;
+	uint16_t start_tx;
+	uint16_t start_ty;
 	int itemcnt;
 	int maxitemcnt;
 	ItemNodePtr itemlist;

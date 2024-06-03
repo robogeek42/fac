@@ -21,11 +21,11 @@ typedef struct {
 
 typedef struct {
 	uint8_t machine_type; // enum ItemTypesEnum
+	uint8_t outDir;
 	int tx;
 	int ty;
 	int end_tx;
 	int end_ty;
-	uint8_t outDir;
 	int processTime;
 	int ptype;
 	int countIn[3];
@@ -33,6 +33,19 @@ typedef struct {
 	clock_t ticksTillProduce;
 	ItemNodePtr itemlist;
 } Machine;
+typedef struct {
+	uint8_t machine_type; // enum ItemTypesEnum
+	uint8_t outDir;
+	int tx;
+	int ty;
+	int end_tx;
+	int end_ty;
+	int processTime;
+	int ptype;
+	int countIn[3];
+	int countOut;
+	clock_t ticksTillProduce;
+} MachineSave;
 
 // use furnaceProcessTypes[ rawtype - IT_TYPES_RAW ]
 // to get the correct process type
@@ -61,79 +74,101 @@ ProcessType assemblerProcessTypes[NUM_ASM_PROCESSES] = {
 
 #endif
 #ifdef _MACHINE_IMPLEMENTATION
-int machineCount = 0;
-int machinesAllocated = 0;
-int machinesBlockSize = 10;
 
-bool allocMachines(Machine **machines)
+Machine* findMachine(ThingNodePtr *machinelist,  int tx, int ty)
 {
-	if ( !(*machines) )
-	{
-		(*machines) = (Machine*) calloc( machinesBlockSize, sizeof(Machine) );
-		if (*machines) 
+	if (isEmptyThingList(machinelist)) {
+		return false;
+	}
+
+	ThingNodePtr currPtr = (*machinelist);
+	Machine *insp = NULL;
+	while (currPtr != NULL ) {
+		insp = (Machine*) currPtr->thing;
+		if ( insp != NULL &&
+			 ( (insp->tx == tx && insp->ty == ty) ||
+			   (insp->end_tx == tx && insp->end_ty == ty)
+			 ) )
 		{
-			machinesAllocated = machinesBlockSize;
-			for ( int i=0;i<machinesAllocated;i++)
-			{
-				(*machines)[i].machine_type = 0; // not valid
-			}
+			break;
 		}
-	} else {
-		printf("realloc %d\n", machinesAllocated+machinesBlockSize);
-		(*machines) = (Machine*) realloc( (void*) (*machines), machinesAllocated+machinesBlockSize);
-		if (*machines) 
+		currPtr = currPtr->next;
+	}
+
+	if (currPtr == NULL) {
+		return NULL;
+	}
+
+	return insp;
+
+}
+ThingNodePtr findMachineNode(ThingNodePtr *machinelist,  int tx, int ty)
+{
+	if (isEmptyThingList(machinelist)) {
+		return false;
+	}
+
+	ThingNodePtr currPtr = (*machinelist);
+	Machine *insp = NULL;
+	while (currPtr != NULL ) {
+		insp = (Machine*) currPtr->thing;
+		if ( insp != NULL &&
+			 ( (insp->tx == tx && insp->ty == ty) ||
+			   (insp->end_tx == tx && insp->end_ty == ty)
+			 ) )
 		{
-			for ( int i=machinesAllocated;i<machinesAllocated+machinesBlockSize;i++)
-			{
-				(*machines)[i].machine_type = 0; // not valid
-			}
-			machinesAllocated += machinesBlockSize;
+			break;
 		}
+		currPtr = currPtr->next;
 	}
-	if (*machines) return true;
-	return false;
+
+	if (currPtr == NULL) {
+		return NULL;
+	}
+
+	return currPtr;
+
 }
 
-void deleteMachine( Machine *machines, int mnum )
+int countMachine(ThingNodePtr *machinelist)
 {
-	if ( mnum < machinesAllocated )
-	{
-		machines[mnum].machine_type = 0;
-		--machineCount;
+	int cnt = 0;
+	if (isEmptyThingList(machinelist)) {
+		return 0;
 	}
+
+	ThingNodePtr currPtr = (*machinelist);
+	while (currPtr != NULL ) {
+		cnt++;
+		currPtr = currPtr->next;
+	}
+
+	return cnt;
 }
 
-int getMachineAtTileXY( Machine *machines, int tx, int ty )
+void clearMachines(ThingNodePtr *machinelist)
 {
-	for (int m=0;m<machinesAllocated;m++)
-	{
-		if ( machines[m].machine_type == 0 ) continue;
-		if ( machines[m].tx == tx && machines[m].ty == ty ) return m;
+	ThingNodePtr currPtr = (*machinelist);
+	ThingNodePtr nextPtr = NULL;
+	Machine *insp = NULL;
+	while (currPtr != NULL ) {
+		nextPtr = currPtr->next;
+		insp = (Machine*) currPtr->thing;
+		
+		clearItemList(&insp->itemlist);
+		free(insp);
+		free(currPtr);
+		currPtr = nextPtr;
 	}
-	return -1;
+	
 }
 
-int addMachine( Machine **machines, uint8_t machine_type, int tx, int ty, uint8_t direction, int speed, int ptype )
+Machine* addMachine( ThingNodePtr *machinelist, uint8_t machine_type, int tx, int ty, uint8_t direction, int speed, int ptype )
 {
-	if (machineCount >= machinesAllocated)
+	Machine *mach = (Machine*) malloc(sizeof(Machine));
+	if ( !mach )
 	{
-		if ( !allocMachines( machines ) ) {
-			printf("Memory\n");
-			return -1;
-		}
-	}
-
-	// find the next allocated machine that isn't being used (valid==false)
-	int mnum = 0;
-	for (mnum=0;mnum<machinesAllocated;mnum++)
-	{
-		if ( (*machines)[mnum].machine_type == 0 ) break;
-	}
-	// did we find one?
-	if ( mnum == machinesAllocated )
-	{
-		printf("Error\n");
-		return -1;
+		return NULL;
 	}
 	int end_tx = tx; 
 	int end_ty = ty;
@@ -150,65 +185,66 @@ int addMachine( Machine **machines, uint8_t machine_type, int tx, int ty, uint8_
 		default:
 			break;
 	}
-	// set-up the machine as a miner
-	(*machines)[mnum].machine_type = machine_type; 
-	(*machines)[mnum].tx = tx; 
-	(*machines)[mnum].ty = ty;
-	(*machines)[mnum].end_tx = end_tx; 
-	(*machines)[mnum].end_ty = end_ty;
-	(*machines)[mnum].ptype = ptype;
-	(*machines)[mnum].countIn[0] = 0;
-	(*machines)[mnum].countIn[1] = 0;
-	(*machines)[mnum].countIn[2] = 0;
-	(*machines)[mnum].countOut = 0;
-	(*machines)[mnum].processTime = speed;
-	(*machines)[mnum].outDir = direction;
-	(*machines)[mnum].ticksTillProduce = 0;
-	(*machines)[mnum].itemlist = NULL;
-	machineCount++;
-	TAB(0,4);printf("addmach %d %d,%d dir%d\n",mnum,tx,ty, direction);
-	
-	return mnum;
+	// set-up the machine 
+	mach->machine_type = machine_type; 
+	mach->tx = tx; 
+	mach->ty = ty;
+	mach->end_tx = end_tx; 
+	mach->end_ty = end_ty;
+	mach->ptype = ptype;
+	mach->countIn[0] = 0;
+	mach->countIn[1] = 0;
+	mach->countIn[2] = 0;
+	mach->countOut = 0;
+	mach->processTime = speed;
+	mach->outDir = direction;
+	mach->ticksTillProduce = 0;
+	mach->itemlist = NULL;
+	//TAB(0,4);printf("addmach %d,%d dir%d\n",tx,ty, direction);
+
+	insertAtFrontThingList(machinelist, mach);
+
+	return mach;
 }
 
-int addMiner( Machine **machines, int tx, int ty, uint8_t rawtype, uint8_t direction)
+Machine* addMiner( ThingNodePtr *machinelist, int tx, int ty, uint8_t rawtype, uint8_t direction)
 {
 	int ptype=0;
 	for (ptype=0; ptype<NUM_MINER_PROCESSES; ptype++)
 	{
 		if ( minerProcessTypes[ptype].out == rawtype ) { break; }
 	}
-	if (ptype == NUM_MINER_PROCESSES) return -1;
+	if (ptype == NUM_MINER_PROCESSES) return NULL;
 
-	int m = addMachine( machines, IT_MINER, tx, ty, direction, 300, ptype);
-	(*machines)[m].ticksTillProduce = clock() + (*machines)[m].processTime;
-	return m;
+	Machine* mach = addMachine( machinelist, IT_MINER, tx, ty, direction, 300, ptype);
+	mach->ticksTillProduce = clock() + mach->processTime;
+	return mach;
 }
 
-int addFurnace( Machine **machines, int tx, int ty, uint8_t direction )
+Machine* addFurnace( ThingNodePtr *machinelist, int tx, int ty, uint8_t direction )
 {
-	return addMachine( machines, IT_FURNACE, tx, ty, direction, 200, -1);
+	return addMachine( machinelist, IT_FURNACE, tx, ty, direction, 200, -1);
 }
 
-int addAssembler( Machine **machines, int tx, int ty, uint8_t direction, int ptype )
+Machine* addAssembler( ThingNodePtr *machinelist, int tx, int ty, uint8_t direction, int ptype )
 {
-	return addMachine( machines, IT_ASSEMBLER, tx, ty, direction, 400, ptype );
+	return addMachine( machinelist, IT_ASSEMBLER, tx, ty, direction, 400, ptype );
 }
 
 // special case for machine producer for 0 raw materials
-bool minerProduce( Machine *machines, int m)
+bool minerProduce( Machine* mach)
 {
-	if ( machines[m].machine_type == 0 ) return false;
-	if ( machines[m].ticksTillProduce < clock() )
+	if ( mach->machine_type == 0 ) return false;
+	if ( mach->ticksTillProduce < clock() )
 	{
-		machines[m].ticksTillProduce = clock() + machines[m].processTime;
-		if ( ! isAnythingAtXY(&machines[m].itemlist, 
-					machines[m].tx*gTileSize+4, machines[m].ty*gTileSize+4) )
+		mach->ticksTillProduce = clock() + mach->processTime;
+		if ( ! isAnythingAtXY(&mach->itemlist, 
+					mach->tx*gTileSize+4, mach->ty*gTileSize+4) )
 		{
-			insertAtFrontItemList(&machines[m].itemlist, 
-					minerProcessTypes[machines[m].ptype].out, 
-					machines[m].tx*gTileSize+4, 
-					machines[m].ty*gTileSize+4);
+			insertAtFrontItemList(&mach->itemlist, 
+					minerProcessTypes[mach->ptype].out, 
+					mach->tx*gTileSize+4, 
+					mach->ty*gTileSize+4);
 			return true;
 		}
 	}
@@ -216,26 +252,26 @@ bool minerProduce( Machine *machines, int m)
 }
 
 // machine producer for 1 raw materials
-bool furnaceProduce( Machine *machines, int m )
+bool furnaceProduce( Machine *mach )
 {
-	if ( machines[m].machine_type == 0 ) return true;
-	if ( machines[m].ticksTillProduce == 0 && 
-			machines[m].countIn[0] > 0 )
+	if ( mach->machine_type == 0 ) return true;
+	if ( mach->ticksTillProduce == 0 && 
+			mach->countIn[0] > 0 )
 	{
-		machines[m].ticksTillProduce = clock() + machines[m].processTime;
-		machines[m].countIn[0]--;
+		mach->ticksTillProduce = clock() + mach->processTime;
+		mach->countIn[0]--;
 	}
-	if ( machines[m].ticksTillProduce != 0 &&
-		 machines[m].ticksTillProduce < clock() )
+	if ( mach->ticksTillProduce != 0 &&
+		 mach->ticksTillProduce < clock() )
 	{
-		machines[m].ticksTillProduce = 0;
-		if ( ! isAnythingAtXY(&machines[m].itemlist, 
-					machines[m].tx*gTileSize+4, machines[m].ty*gTileSize+4) )
+		mach->ticksTillProduce = 0;
+		if ( ! isAnythingAtXY(&mach->itemlist, 
+					mach->tx*gTileSize+4, mach->ty*gTileSize+4) )
 		{
-			int  outx = machines[m].tx*gTileSize+4;
-			int  outy = machines[m].ty*gTileSize+4;
+			int  outx = mach->tx*gTileSize+4;
+			int  outy = mach->ty*gTileSize+4;
 			/*
-			switch ( machines[m].outDir )
+			switch ( mach->outDir )
 			{
 				case DIR_UP: outy-=8; break;
 				case DIR_RIGHT: outx+=8; break;
@@ -245,8 +281,8 @@ bool furnaceProduce( Machine *machines, int m )
 			}
 			*/
 
-			insertAtFrontItemList(&machines[m].itemlist, 
-					furnaceProcessTypes[machines[m].ptype].out, outx, outy);
+			insertAtFrontItemList(&mach->itemlist, 
+					furnaceProcessTypes[mach->ptype].out, outx, outy);
 			return true;
 		}
 	}
@@ -254,19 +290,19 @@ bool furnaceProduce( Machine *machines, int m )
 }
 
 // machine producer for N raw materials
-bool assemblerProduce( Machine *machines, int m )
+bool assemblerProduce( Machine *mach )
 {
-	if ( machines[m].machine_type == 0 ) return true;
+	if ( mach->machine_type == 0 ) return true;
 
-	int ptype = machines[m].ptype;
+	int ptype = mach->ptype;
 	ProcessType *pt = &assemblerProcessTypes[ptype];
-	if ( machines[m].ticksTillProduce == 0 )
+	if ( mach->ticksTillProduce == 0 )
 	{
 		// check to see if recipe inputs are satisfied
 		bool materials_present = true;
 		for (int k=0; k < pt->innum; k++)
 		{
-			if (machines[m].countIn[k] < pt->incnt[k] )
+			if (mach->countIn[k] < pt->incnt[k] )
 			{
 				materials_present = false;
 				break;
@@ -277,24 +313,24 @@ bool assemblerProduce( Machine *machines, int m )
 			// got all inputs? consume them
 			for (int k=0; k < pt->innum; k++)
 			{
-				machines[m].countIn[k] -= pt->incnt[k];
+				mach->countIn[k] -= pt->incnt[k];
 			}
 			// start timer
-			machines[m].ticksTillProduce = clock() + machines[m].processTime;
+			mach->ticksTillProduce = clock() + mach->processTime;
 		}
 	}
 
 	// are we producing? Has timer expired?
-	if ( machines[m].ticksTillProduce != 0 &&
-		 machines[m].ticksTillProduce < clock() )
+	if ( mach->ticksTillProduce != 0 &&
+		 mach->ticksTillProduce < clock() )
 	{
 		// reset timer
-		machines[m].ticksTillProduce = 0;
-		machines[m].countOut += pt->outcnt; // usually 1
+		mach->ticksTillProduce = 0;
+		mach->countOut += pt->outcnt; // usually 1
 
-		int  outx = machines[m].tx*gTileSize+4;
-		int  outy = machines[m].ty*gTileSize+4;
-		switch ( machines[m].outDir )
+		int  outx = mach->tx*gTileSize+4;
+		int  outy = mach->ty*gTileSize+4;
+		switch ( mach->outDir )
 		{
 			case DIR_UP: outy-=8; break;
 			case DIR_RIGHT: outx+=8; break;
@@ -302,11 +338,11 @@ bool assemblerProduce( Machine *machines, int m )
 			case DIR_LEFT: outx-=8; break;
 			default: break;
 		}
-		//TAB(0,1+m);printf("m%d:d%d %d,%d\nprod %d,%d ",m, machines[m].outDir, machines[m].tx*gTileSize,  machines[m].ty*gTileSize, outx,outy);
-		if ( ! isAnythingAtXY(&machines[m].itemlist, outx, outy) )
+		//TAB(0,1+m);printf("m%d:d%d %d,%d\nprod %d,%d ",m, mach->outDir, mach->tx*gTileSize,  mach->ty*gTileSize, outx,outy);
+		if ( ! isAnythingAtXY(&mach->itemlist, outx, outy) )
 		{
-			machines[m].countOut -= 1;
-			insertAtFrontItemList(&machines[m].itemlist, 
+			mach->countOut -= 1;
+			insertAtFrontItemList(&mach->itemlist, 
 					assemblerProcessTypes[ptype].out, outx, outy);
 			return true;
 		}

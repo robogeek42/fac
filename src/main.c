@@ -99,7 +99,7 @@ ItemNodePtr itemlist = NULL;
 // inventory
 INV_ITEM inventory[MAX_INVENTORY_ITEMS];
 
-Machine* machines = NULL;
+ThingNodePtr machinelist = NULL;
 
 ItemNodePtr resourcelist = NULL;
 
@@ -333,12 +333,6 @@ int main(/*int argc, char *argv[]*/)
 		printf("Failed to alloc map layers\n");
 		return -1;
 	}
-	if ( !allocMachines(&machines) )
-	{
-		printf("Failed to alloc machines\n");
-		return -1;
-	}
-
 
 	if ( ! check_dir_exists("maps") )
 	{
@@ -504,7 +498,6 @@ void game_loop()
 			COL(15);COL(128);
 			//TAB(0,29); printf("%d %d  ",frame_time_in_ticks,func_time[0]);
 			TAB(0,29); printf("%d %d i:%d   ",frame_time_in_ticks,func_time[0], numItems);
-			TAB(20,29); printf("mcnt %d ma %d  ",machineCount, machinesAllocated);
 		}
 			
 		if ( vdp_check_key_press( KEY_p ) ) { // do place - get ready to place an item from inventory
@@ -666,29 +659,33 @@ void game_loop()
 		{
 			machine_update_ticks = clock() + machine_update_rate;
 			// update all the machines in turn
-			for (int m=0; m<machinesAllocated; m++)
+			ThingNodePtr tlistp = machinelist;
+			while (tlistp != NULL)
 			{
+				if (tlistp->thing == NULL) break;
+				Machine *mach = (Machine*) tlistp->thing;
 				// miners reduce the resource count that they are mining
-				if ( machines[m].machine_type == IT_MINER )
+				if ( mach->machine_type == IT_MINER )
 				{
-					if ( getResourceCount( machines[m].tx, machines[m].ty ) > 0 )
+					if ( getResourceCount( mach->tx, mach->ty ) > 0 )
 					{
-						if ( minerProduce( machines, m) )
+						if ( minerProduce( mach) )
 						{
-							reduceResourceCount( machines[m].tx, machines[m].ty );
+							reduceResourceCount( mach->tx, mach->ty );
 						}
 					}
 				}
 
 				// call producer for each of these
-				if ( machines[m].machine_type == IT_FURNACE )
+				if ( mach->machine_type == IT_FURNACE )
 				{
-					furnaceProduce( machines, m);
+					furnaceProduce( mach );
 				}
-				if ( machines[m].machine_type == IT_ASSEMBLER )
+				if ( mach->machine_type == IT_ASSEMBLER )
 				{
-					assemblerProduce( machines, m);
+					assemblerProduce( mach );
 				}
+				tlistp = tlistp->next;
 			}
 		}
 		vdp_update_key_state();
@@ -733,8 +730,8 @@ int getMachineBMID(int tx, int ty)
 		int machine_outdir = (machine_byte & 0x60) >> 5;
 		int bmid = BMOFF_FURNACES + 3*machine_outdir;
 
-		int mid = getMachineAtTileXY(machines, tx, ty); // this could be slow with a lot of machines
-		if ( machines[mid].ticksTillProduce>0)
+		Machine* mach = findMachine(&machinelist, tx, ty); // this could be slow with a lot of machines
+		if ( mach->ticksTillProduce>0)
 		{
 			bmid += machine_frame;
 		}
@@ -745,8 +742,8 @@ int getMachineBMID(int tx, int ty)
 		int machine_outdir = (machine_byte & 0x60) >> 5;
 		int bmid = BMOFF_ASSEMBLERS + 3*machine_outdir;
 
-		int mid = getMachineAtTileXY(machines, tx, ty); // this could be slow with a lot of machines
-		if ( machines[mid].ticksTillProduce>0)
+		Machine* mach = findMachine(&machinelist, tx, ty); // this could be slow with a lot of machines
+		if ( mach->ticksTillProduce>0)
 		{
 			bmid += machine_frame;
 		}
@@ -1449,7 +1446,7 @@ void do_place()
 
 					int feat_type = item_feature_map[overlay-1].feature_type;
 					uint8_t raw_item = process_map[feat_type - IT_FEAT_STONE].raw_type;
-					addMiner( &machines, cursor_tx, cursor_ty, raw_item, place_belt_index );
+					addMiner( &machinelist, cursor_tx, cursor_ty, raw_item, place_belt_index );
 				}
 			}
 		} else 
@@ -1460,7 +1457,7 @@ void do_place()
 				layer_machines[tileoffset] = 
 					(item_selected - IT_TYPES_MACHINE) + (place_belt_index << 5);
 
-				addFurnace( &machines, cursor_tx, cursor_ty, place_belt_index );
+				addFurnace( &machinelist, cursor_tx, cursor_ty, place_belt_index );
 			}
 		} else 
 		if ( item_selected == IT_ASSEMBLER )
@@ -1471,7 +1468,7 @@ void do_place()
 				layer_machines[tileoffset] = 
 					(item_selected - IT_TYPES_MACHINE) + (place_belt_index << 5);
 
-				addAssembler( &machines, cursor_tx, cursor_ty, place_belt_index, recipe );
+				addAssembler( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
 			}
 		} else 
 		if ( item_selected == IT_INSERTER )
@@ -1510,6 +1507,7 @@ void do_place()
 
 					// insert into inserter list
 					Inserter *ins = (Inserter*) malloc(sizeof(Inserter));
+					ins->type = IT_INSERTER;
 					ins->tx = cursor_tx;
 					ins->ty = cursor_ty;
 					ins->dir = place_belt_index;
@@ -1615,15 +1613,15 @@ void move_items()
 		}
 
 		// machine is index into machines array
-		int machine = getMachineAtTileXY( machines, tx, ty );
+		Machine* mach = findMachine( &machinelist, tx, ty );
 
-		if ( machine >= 0 ) 
+		if ( mach ) 
 		{
 			int nextx = centrex;
 			int nexty = centrey;
 			int nnx = nextx;
 			int nny = nexty;
-			int outDir = machines[machine].outDir;
+			int outDir = mach->outDir;
 			switch( outDir )
 			{
 				case DIR_UP:	// exit to top, reduce Y
@@ -1662,7 +1660,7 @@ void move_items()
 					if (newbeltID >= 0)
 					{
 						int in = belts[newbeltID].in;
-						switch ( machines[machine].outDir ) 
+						switch ( mach->outDir ) 
 						{
 							case DIR_UP:
 								if ( in != DIR_DOWN ) currPtr->y = ty*gTileSize + 4;
@@ -1903,9 +1901,11 @@ void move_items_on_machines()
 {
 	// go through machines and move their own items along
 	
-	for (int m=0; m<machineCount; m++)
+	ThingNodePtr tlistp = machinelist;
+	while (tlistp != NULL)
 	{
-		Machine *mach = &machines[m];
+		if (tlistp->thing == NULL) break;
+		Machine *mach = (Machine*) tlistp->thing;
 		ItemNodePtr currPtr = mach->itemlist;
 		ItemNodePtr nextPtr = NULL;
 		while (currPtr != NULL) {
@@ -1976,6 +1976,7 @@ void move_items_on_machines()
 			}
 			currPtr = nextPtr;
 		}
+		tlistp = tlistp->next;
 	}
 }
 
@@ -2019,24 +2020,24 @@ void draw_items()
 	}
 	
 	// Items on machines
-	for (int m=0; m<machineCount; m++)
+	tlistp = machinelist;
+	while (tlistp != NULL)
 	{
-		Machine *mach=&machines[m];
-		if (mach)
+		if (tlistp->thing == NULL) break;
+		Machine *mach = (Machine*) tlistp->thing;
+		if ( mach->tx >= (fac.xpos >>4) && mach->ty >= (fac.ypos >>4) &&
+			 mach->tx <= ((fac.xpos+gScreenWidth) >>4) && mach->ty >= ((fac.ypos+gScreenHeight) >>4) )
 		{
-			if ( mach->tx >= (fac.xpos >>4) && mach->ty >= (fac.ypos >>4) &&
-				 mach->tx <= ((fac.xpos+gScreenWidth) >>4) && mach->ty >= ((fac.ypos+gScreenHeight) >>4) )
-			{
-				currPtr = mach->itemlist;
-				while (currPtr != NULL) {
-					vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
-					vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
-					currPtr = currPtr->next;
-					cnt++;
-					if (cnt % 4 == 0) vdp_update_key_state();
-				}
+			currPtr = mach->itemlist;
+			while (currPtr != NULL) {
+				vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+				vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+				currPtr = currPtr->next;
+				cnt++;
+				if (cnt % 4 == 0) vdp_update_key_state();
 			}
 		}
+		tlistp = tlistp->next;
 	}
 }
 void draw_items_at_tile(int tx, int ty) 
@@ -2053,37 +2054,25 @@ void draw_items_at_tile(int tx, int ty)
 		}
 		currPtr = currPtr->next;
 	}
-	ThingNodePtr tlistp = inserterlist;
-	while ( tlistp != NULL )
+	Inserter *insp = findInserter( &inserterlist, tx, ty );
+	if (insp)
 	{
-		if (tlistp->thing == NULL) break;
-		Inserter *insp = (Inserter*)tlistp->thing;
-		if ( (insp->tx == tx && insp->ty == ty) ||
-		     (insp->start_tx == tx && insp->start_ty == ty) ||
-		     (insp->end_tx == tx && insp->end_ty == ty) )
-		{
-			currPtr = insp->itemlist;
-			while (currPtr != NULL) {
-				vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
-				vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
-				currPtr = currPtr->next;
-			}
+		currPtr = insp->itemlist;
+		while (currPtr != NULL) {
+			vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+			vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+			currPtr = currPtr->next;
 		}
-		tlistp = tlistp->next;
 	}
-	for (int m=0; m<machineCount; m++)
+
+	Machine *mach = findMachine( &machinelist, tx, ty);
+	if (mach)
 	{
-		Machine *mach = &machines[m];
-		
-		if ( (mach->tx == tx && mach->ty == ty) ||
-		     (mach->end_tx == tx && mach->end_ty == ty) )
-		{
-			ItemNodePtr currPtr = mach->itemlist;
-			while (currPtr != NULL) {
-				vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
-				vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
-				currPtr = currPtr->next;
-			}
+		ItemNodePtr currPtr = mach->itemlist;
+		while (currPtr != NULL) {
+			vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+			vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+			currPtr = currPtr->next;
 		}
 	}
 }
@@ -2325,8 +2314,8 @@ void show_info()
 		putch(0x05); // print at graphics cursor
 		if ( info_item_type == IT_FURNACE || info_item_type == IT_ASSEMBLER )
 		{
-			int m = getMachineAtTileXY(machines, cursor_tx, cursor_ty);
-			int ptype = machines[m].ptype;
+			Machine* mach = findMachine(&machinelist, cursor_tx, cursor_ty);
+			int ptype = mach->ptype;
 			if ( ptype >= 0 )
 			{
 				ProcessType *pt;
@@ -2350,7 +2339,7 @@ void show_info()
 						printf("?");
 					}
 					vdp_move_to( infox+4+32, infoy+4 + 8*it );
-					printf("%d",machines[m].countIn[it]);
+					printf("%d",mach->countIn[it]);
 				}
 				if ( pt->out > 0 )
 				{
@@ -2506,13 +2495,12 @@ void removeAtCursor()
 		int machine = getMachineItemType(layer_machines[offset]);
 		if ( machine == IT_MINER || machine == IT_FURNACE )
 		{
-			int mnum = getMachineAtTileXY( machines, cursor_tx, cursor_ty );
-			if ( mnum >=0 )
-			{
-				deleteMachine( machines, mnum );
-				inventory_add_item( inventory, machine, 1 );
-				layer_machines[offset] = 0x80;
-			}
+			inventory_add_item( inventory, machine, 1 );
+			layer_machines[offset] = 0x80;
+			ThingNodePtr thingnode = findMachineNode( &machinelist, cursor_tx, cursor_ty );
+			free( thingnode->thing );
+			ThingNodePtr delme = popThing( &machinelist, thingnode );
+			free( delme );
 		} else
 		if ( machine == IT_INSERTER )
 		{
@@ -2671,14 +2659,25 @@ bool save_game( char *filepath )
 
 	// 5. write machine data
 	printf("Save: machines\n");
-	int num_machine_objects = machinesAllocated;
+	int num_machine_objects = countMachine(&machinelist);
+	printf("%d objects\n",num_machine_objects);
 	objs_written = fwrite( (const void*) &num_machine_objects, sizeof(int), 1, fp);
 	if (objs_written!=1) {
 		msg = "Fail: machine count\n"; goto save_game_errexit;
 	}
-	objs_written = fwrite( (const void*) machines, sizeof(Machine), num_machine_objects, fp);
-	if (objs_written!=num_machine_objects) {
-		msg = "Fail: machines\n"; goto save_game_errexit;
+
+	ThingNodePtr thptr = machinelist;
+	while (thptr != NULL )
+	{
+		// save the machine without the items
+		Machine *mach = (Machine*)thptr->thing;
+
+		objs_written = fwrite( (const void*) mach, sizeof(MachineSave), 1, fp);
+		if (objs_written!=1) {
+			msg = "Fail: machines\n"; goto save_game_errexit;
+		}
+
+		thptr = thptr->next;
 	}
 
 	// 6. write the resource data
@@ -2719,7 +2718,7 @@ bool save_game( char *filepath )
 		msg = "Fail: inserter count\n"; goto save_game_errexit;
 	}
 
-	ThingNodePtr thptr = inserterlist;
+	thptr = inserterlist;
 	Inserter *insp = NULL;
 	while (thptr != NULL )
 	{
@@ -2868,31 +2867,35 @@ bool load_game( char *filepath )
 	}
 
 	// 5. read machine data
-	printf("Load: machines ");
-	int num_machine_objects=0;
-	objs_read = fread( &num_machine_objects, sizeof(int), 1, fp );
+	printf("Load: Machines. clear ... ");
+	clearMachines(&machinelist);
+
+	int num_machs = 0;
+
+	printf("num ");
+	objs_read = fread( &num_machs, sizeof(int), 1, fp );
 	if ( objs_read != 1 ) {
 		msg = "Fail read num machines\n"; goto load_game_errexit;
 	}
-	printf("%d ... ",num_machine_objects);
-	if ( machines )
+	printf("%d ",num_machs);
+	while (num_machs > 0 && !feof( fp ) )
 	{
-		free(machines);
-	}
+		Machine* newinsp = malloc(sizeof(Machine));
+		if (newinsp == NULL)
+		{
+			msg="Alloc Error\n"; goto load_game_errexit;
+		}
 
-	machines = malloc(sizeof(Machine) * num_machine_objects);
-	if ( !machines ) { 
-		msg="Alloc Error\n"; goto load_game_errexit;
+		objs_read = fread( newinsp, sizeof(MachineSave), 1, fp );
+		if ( objs_read != 1 ) {
+			msg = "Fail read machines\n"; goto load_game_errexit;
+		}
+		newinsp->itemlist = NULL;
+
+		insertAtBackThingList( &machinelist, newinsp);
+		num_machs--;
 	}
-	machinesAllocated = num_machine_objects;
-	printf("read ... ");
-	objs_read = fread( machines, sizeof(Machine), machinesAllocated, fp );
-	if ( objs_read != machinesAllocated ) { 
-		msg="Fail read machines\n"; goto load_game_errexit;
-	}
-	// calculate number of machines active
-	machineCount=0; for(int m=0;m<machinesAllocated;m++) if (machines[m].machine_type != 0) machineCount++;
-	printf(" load %d actived.\n", machineCount);
+	printf("done.\n");
 
 	// 6. read the resource data
 	
@@ -2963,7 +2966,6 @@ bool load_game( char *filepath )
 		insertAtBackThingList( &inserterlist, newinsp);
 		num_ins--;
 	}
-
 	printf("done.\n");
 
 	printf("\nDone.\n");
@@ -3037,8 +3039,8 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 	}
 	if ( machine_type == IT_FURNACE )
 	{
-		int m = getMachineAtTileXY(machines, tx, ty);
-		int ptype = machines[m].ptype;
+		Machine* mach = findMachine(&machinelist, tx, ty);
+		int ptype = mach->ptype;
 		// if the furnace recipe is not set, set it based on the item inserted
 		if ( ptype < 0 )
 		{
@@ -3047,22 +3049,22 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 			{
 				if ( furnaceProcessTypes[i].in[0] == item )
 				{
-					machines[m].ptype = i;
+					mach->ptype = i;
 					ptype=i; break;
 				}
 			}
 		}
 		if ( ptype >= 0 )
 		{
-			machines[m].countIn[0] += 1;
+			mach->countIn[0] += 1;
 		}
 	}
 	if ( machine_type == IT_ASSEMBLER )
 	{
 		//TAB(0,0);
-		int m = getMachineAtTileXY(machines, tx, ty);
-		int ptype = machines[m].ptype;
-		//printf("it=%d, mach=%d innum %d : ", item, m, machines[m].process_type.innum);
+		Machine* mach = findMachine(&machinelist, tx, ty);
+		int ptype = mach->ptype;
+		//printf("it=%d, mach=%d innum %d : ", item, m, mach->process_type.innum);
 
 		if ( ptype >= 0 )
 		{
@@ -3072,7 +3074,7 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 				if ( assemblerProcessTypes[ptype].in[k] == item )
 				{
 					// increment count of that item in the assembler
-					machines[m].countIn[k]++;
+					mach->countIn[k]++;
 					break;
 				}
 			}
