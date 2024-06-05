@@ -99,6 +99,29 @@ ThingNodePtr findInserterNode(ThingNodePtr *inserterlist,  int tx, int ty)
 
 }
 
+ThingNodePtr getInserterNode(ThingNodePtr *inserterlist, Inserter* insp)
+{
+	if (isEmptyThingList(inserterlist)) {
+		return false;
+	}
+
+	ThingNodePtr currPtr = (*inserterlist);
+	while (currPtr != NULL ) {
+		if ( (Inserter*)currPtr->thing == insp )
+		{
+			break;
+		}
+		currPtr = currPtr->next;
+	}
+
+	if (currPtr == NULL) {
+		return NULL;
+	}
+
+	return currPtr;
+}
+
+
 int countInserters(ThingNodePtr *inserterlist)
 {
 	int cnt = 0;
@@ -131,5 +154,51 @@ void clearInserters(ThingNodePtr *inserterlist)
 	}
 	
 }
+
+Inserter* addInserter(ThingNodePtr *inserterlist, int tx, int ty, int dir)
+{
+	int start_tx = tx;
+	int start_ty = ty;
+	int end_tx = tx;
+	int end_ty = ty;
+	switch (dir)
+	{
+		case DIR_UP:
+			start_ty += 1;
+			end_ty -= 1;
+			break;
+		case DIR_RIGHT:
+			start_tx -= 1;
+			end_tx += 1;
+			break;
+		case DIR_DOWN:
+			start_ty -= 1;
+			end_ty += 1;
+			break;
+		case DIR_LEFT:
+			start_tx += 1;
+			end_tx -= 1;
+			break;
+	}
+	// insert into inserter list
+	Inserter *insp = (Inserter*) malloc(sizeof(Inserter));
+
+	insp->type = IT_INSERTER;
+	insp->tx = tx;
+	insp->ty = ty;
+	insp->dir = dir;
+	insp->itemlist = NULL;
+	insp->itemcnt = 0;
+	insp->maxitemcnt = 2;
+	insp->start_tx = start_tx;
+	insp->start_ty = start_ty;
+	insp->end_tx = end_tx;
+	insp->end_ty = end_ty;
+
+	insertAtFrontThingList(inserterlist, insp);
+
+	return insp;
+}
+
 
 #endif

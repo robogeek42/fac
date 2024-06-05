@@ -10,22 +10,22 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Machine can process up to 3 items to produce 1
 typedef struct {
-	uint8_t in[3];
-	uint8_t out;
-	uint8_t incnt[3];
-	uint8_t outcnt;
-	uint8_t innum;
-} ProcessType;
+	uint8_t machine_type; // enum ItemTypesEnum
+	uint8_t dir;
+	uint16_t tx;
+	uint16_t ty;
+	uint16_t end_tx;
+	uint16_t end_ty;
+} MachineHeader;
 
 typedef struct {
 	uint8_t machine_type; // enum ItemTypesEnum
-	uint8_t outDir;
-	int tx;
-	int ty;
-	int end_tx;
-	int end_ty;
+	uint8_t dir;
+	uint16_t tx;
+	uint16_t ty;
+	uint16_t end_tx;
+	uint16_t end_ty;
 	int processTime;
 	int ptype;
 	int countIn[3];
@@ -35,17 +35,26 @@ typedef struct {
 } Machine;
 typedef struct {
 	uint8_t machine_type; // enum ItemTypesEnum
-	uint8_t outDir;
-	int tx;
-	int ty;
-	int end_tx;
-	int end_ty;
+	uint8_t dir;
+	uint16_t tx;
+	uint16_t ty;
+	uint16_t end_tx;
+	uint16_t end_ty;
 	int processTime;
 	int ptype;
 	int countIn[3];
 	int countOut;
 	clock_t ticksTillProduce;
 } MachineSave;
+
+// Machine can process up to 3 items to produce 1
+typedef struct {
+	uint8_t in[3];
+	uint8_t out;
+	uint8_t incnt[3];
+	uint8_t outcnt;
+	uint8_t innum;
+} ProcessType;
 
 // use furnaceProcessTypes[ rawtype - IT_TYPES_RAW ]
 // to get the correct process type
@@ -82,12 +91,12 @@ Machine* findMachine(ThingNodePtr *machinelist,  int tx, int ty)
 	}
 
 	ThingNodePtr currPtr = (*machinelist);
-	Machine *insp = NULL;
+	Machine *mach = NULL;
 	while (currPtr != NULL ) {
-		insp = (Machine*) currPtr->thing;
-		if ( insp != NULL &&
-			 ( (insp->tx == tx && insp->ty == ty) ||
-			   (insp->end_tx == tx && insp->end_ty == ty)
+		mach = (Machine*) currPtr->thing;
+		if ( mach != NULL &&
+			 ( (mach->tx == tx && mach->ty == ty) ||
+			   (mach->end_tx == tx && mach->end_ty == ty)
 			 ) )
 		{
 			break;
@@ -99,7 +108,7 @@ Machine* findMachine(ThingNodePtr *machinelist,  int tx, int ty)
 		return NULL;
 	}
 
-	return insp;
+	return mach;
 
 }
 ThingNodePtr findMachineNode(ThingNodePtr *machinelist,  int tx, int ty)
@@ -109,12 +118,12 @@ ThingNodePtr findMachineNode(ThingNodePtr *machinelist,  int tx, int ty)
 	}
 
 	ThingNodePtr currPtr = (*machinelist);
-	Machine *insp = NULL;
+	Machine *mach = NULL;
 	while (currPtr != NULL ) {
-		insp = (Machine*) currPtr->thing;
-		if ( insp != NULL &&
-			 ( (insp->tx == tx && insp->ty == ty) ||
-			   (insp->end_tx == tx && insp->end_ty == ty)
+		mach = (Machine*) currPtr->thing;
+		if ( mach != NULL &&
+			 ( (mach->tx == tx && mach->ty == ty) ||
+			   (mach->end_tx == tx && mach->end_ty == ty)
 			 ) )
 		{
 			break;
@@ -127,7 +136,28 @@ ThingNodePtr findMachineNode(ThingNodePtr *machinelist,  int tx, int ty)
 	}
 
 	return currPtr;
+}
 
+ThingNodePtr getMachineNode(ThingNodePtr *machinelist, Machine* mach)
+{
+	if (isEmptyThingList(machinelist)) {
+		return false;
+	}
+
+	ThingNodePtr currPtr = (*machinelist);
+	while (currPtr != NULL ) {
+		if ( (Machine*)currPtr->thing == mach )
+		{
+			break;
+		}
+		currPtr = currPtr->next;
+	}
+
+	if (currPtr == NULL) {
+		return NULL;
+	}
+
+	return currPtr;
 }
 
 int countMachine(ThingNodePtr *machinelist)
@@ -150,13 +180,13 @@ void clearMachines(ThingNodePtr *machinelist)
 {
 	ThingNodePtr currPtr = (*machinelist);
 	ThingNodePtr nextPtr = NULL;
-	Machine *insp = NULL;
+	Machine *mach = NULL;
 	while (currPtr != NULL ) {
 		nextPtr = currPtr->next;
-		insp = (Machine*) currPtr->thing;
+		mach = (Machine*) currPtr->thing;
 		
-		clearItemList(&insp->itemlist);
-		free(insp);
+		clearItemList(&mach->itemlist);
+		free(mach);
 		free(currPtr);
 		currPtr = nextPtr;
 	}
@@ -197,7 +227,7 @@ Machine* addMachine( ThingNodePtr *machinelist, uint8_t machine_type, int tx, in
 	mach->countIn[2] = 0;
 	mach->countOut = 0;
 	mach->processTime = speed;
-	mach->outDir = direction;
+	mach->dir = direction;
 	mach->ticksTillProduce = 0;
 	mach->itemlist = NULL;
 	//TAB(0,4);printf("addmach %d,%d dir%d\n",tx,ty, direction);
@@ -271,7 +301,7 @@ bool furnaceProduce( Machine *mach )
 			int  outx = mach->tx*gTileSize+4;
 			int  outy = mach->ty*gTileSize+4;
 			/*
-			switch ( mach->outDir )
+			switch ( mach->dir )
 			{
 				case DIR_UP: outy-=8; break;
 				case DIR_RIGHT: outx+=8; break;
@@ -330,7 +360,7 @@ bool assemblerProduce( Machine *mach )
 
 		int  outx = mach->tx*gTileSize+4;
 		int  outy = mach->ty*gTileSize+4;
-		switch ( mach->outDir )
+		switch ( mach->dir )
 		{
 			case DIR_UP: outy-=8; break;
 			case DIR_RIGHT: outx+=8; break;
@@ -338,7 +368,7 @@ bool assemblerProduce( Machine *mach )
 			case DIR_LEFT: outx-=8; break;
 			default: break;
 		}
-		//TAB(0,1+m);printf("m%d:d%d %d,%d\nprod %d,%d ",m, mach->outDir, mach->tx*gTileSize,  mach->ty*gTileSize, outx,outy);
+		//TAB(0,1+m);printf("m%d:d%d %d,%d\nprod %d,%d ",m, mach->dir, mach->tx*gTileSize,  mach->ty*gTileSize, outx,outy);
 		if ( ! isAnythingAtXY(&mach->itemlist, outx, outy) )
 		{
 			mach->countOut -= 1;
