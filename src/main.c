@@ -797,23 +797,6 @@ void draw_machines(int tx, int ty, int tposx, int tposy)
 	}
 }
 
-// draw full screen at World position in fac.xpos/fac.ypos
-// does not draw belts
-void draw_screen()
-{
-	int tx=getTileX(fac.xpos);
-	int ty=getTileY(fac.ypos);
-
-	for (int i=0; i < (1+gScreenHeight/gTileSize); i++) 
-	{
-		draw_horizontal(tx, ty+i, 1+(gScreenWidth/gTileSize));
-	}
-
-	draw_items();
-
-	draw_bob(fac.bobx,fac.boby,fac.xpos,fac.ypos);
-}
-
 void draw_horizontal(int tx, int ty, int len)
 {
 	int px=getTilePosInScreenX(tx);
@@ -838,6 +821,23 @@ void draw_vertical(int tx, int ty, int len)
 		draw_machines(tx, ty + i, px, py + i*gTileSize);
 		vdp_update_key_state();
 	}
+}
+
+// draw full screen at World position in fac.xpos/fac.ypos
+// does not draw belts
+void draw_screen()
+{
+	int tx=getTileX(fac.xpos);
+	int ty=getTileY(fac.ypos);
+
+	for (int i=0; i < (1+gScreenHeight/gTileSize); i++) 
+	{
+		draw_horizontal(tx, ty+i, 1+(gScreenWidth/gTileSize));
+	}
+
+	draw_items();
+
+	draw_bob(fac.bobx,fac.boby,fac.xpos,fac.ypos);
 }
 
 /* 0=right, 1=left, 2=up, 3=down */
@@ -1557,76 +1557,6 @@ void move_items()
 
 						currPtr = nextPtr;
 						continue;
-					}
-				}
-			}
-		}
-
-		// machine is index into machines array
-		Machine* mach = findMachine( &machinelist, tx, ty );
-
-		if ( mach ) 
-		{
-			int nextx = centrex;
-			int nexty = centrey;
-			int nnx = nextx;
-			int nny = nexty;
-			int dir = mach->dir;
-			switch( dir )
-			{
-				case DIR_UP:	// exit to top, reduce Y
-					if ( !moved ) { nexty--; nny-=2; moved=true; }
-					break;
-				case DIR_RIGHT:
-					if ( !moved ) { nextx++; nnx+=2; moved=true; }
-					break;
-				case DIR_DOWN:
-					if ( !moved && centrey < (tx*gTileSize + 16)) { nexty++; nny+=2; moved=true; }
-					break;
-				case DIR_LEFT:
-					if ( !moved ) { nextx--; nnx-=2; moved=true; }
-					break;
-				default:
-					break;
-			}
-			if (moved)
-			{
-				// check next pixel and the one after in the same direction
-				bool found = isAnythingAtXY(&itemlist, nextx, nexty);
-				found |= isAnythingAtXY(&itemlist, nnx, nny);
-
-				if (!found) 
-				{
-					currPtr->x = nextx - ITEM_CENTRE_OFFSET;
-					currPtr->y = nexty - ITEM_CENTRE_OFFSET;
-
-					// jump the tile to the centre of the belt it just moved into
-					// bit hacky but avoids the item moving outside of the belt
-					tx = (currPtr->x + ITEM_CENTRE_OFFSET) >> 4;
-					ty = (currPtr->y + ITEM_CENTRE_OFFSET) >> 4;
-
-					int tileoffset = tx + ty*fac.mapWidth;
-					int newbeltID = layer_belts[ tileoffset ];
-					if (newbeltID >= 0)
-					{
-						int in = belts[newbeltID].in;
-						switch ( mach->dir ) 
-						{
-							case DIR_UP:
-								if ( in != DIR_DOWN ) currPtr->y = ty*gTileSize + 4;
-								break;
-							case DIR_RIGHT:
-								if ( in != DIR_LEFT ) currPtr->x = tx*gTileSize + 4;
-								break;
-							case DIR_DOWN:
-								if ( in != DIR_UP ) currPtr->y = ty*gTileSize + 4;
-								break;
-							case DIR_LEFT:
-								if ( in != DIR_RIGHT ) currPtr->x = tx*gTileSize + 4;
-								break;
-							default:
-								break;
-						}
 					}
 				}
 			}
@@ -2566,11 +2496,6 @@ bool save_game( char *filepath )
 	if (objs_written!=1) {
 		msg = "Fail: layer_belts\n"; goto save_game_errexit;
 	}
-	printf("Save: objectmap\n");
-	objs_written = fwrite( (const void*) objectmap, sizeof(void*) * fac.mapWidth * fac.mapHeight, 1, fp);
-	if (objs_written!=1) {
-		msg = "Fail: objectmap\n"; goto save_game_errexit;
-	}
 
 	// 3. save the item list
 
@@ -2765,12 +2690,7 @@ bool load_game( char *filepath )
 	if ( objs_read != 1 ) {
 		msg = "Fail read layer_belts\n"; goto load_game_errexit;
 	}
-	// read the objectmap
-	printf("Load: objectmap\n");
-	objs_read = fread( objectmap, sizeof(void*) * fac.mapWidth * fac.mapHeight, 1, fp );
-	if ( objs_read != 1 ) {
-		msg = "Fail read objectmap\n"; goto load_game_errexit;
-	}
+	// objectmap is a list of pointers so will be filled in when we read the machines/inserters
 
 	// 3. read the item list
 	
@@ -2833,19 +2753,20 @@ bool load_game( char *filepath )
 	printf("%d ",num_machs);
 	while (num_machs > 0 && !feof( fp ) )
 	{
-		Machine* newinsp = malloc(sizeof(Machine));
-		if (newinsp == NULL)
+		Machine* newmachp = malloc(sizeof(Machine));
+		if (newmachp == NULL)
 		{
 			msg="Alloc Error\n"; goto load_game_errexit;
 		}
 
-		objs_read = fread( newinsp, sizeof(MachineSave), 1, fp );
+		objs_read = fread( newmachp, sizeof(MachineSave), 1, fp );
 		if ( objs_read != 1 ) {
 			msg = "Fail read machines\n"; goto load_game_errexit;
 		}
-		newinsp->itemlist = NULL;
+		newmachp->itemlist = NULL;
 
-		insertAtBackThingList( &machinelist, newinsp);
+		insertAtBackThingList( &machinelist, newmachp);
+		objectmap[newmachp->tx + newmachp->ty * fac.mapWidth] = newmachp;
 		num_machs--;
 	}
 	printf("done.\n");
@@ -2917,6 +2838,7 @@ bool load_game( char *filepath )
 		newinsp->itemlist = NULL;
 
 		insertAtBackThingList( &inserterlist, newinsp);
+		objectmap[newinsp->tx + newinsp->ty * fac.mapWidth] = newinsp;
 		num_ins--;
 	}
 	printf("done.\n");
