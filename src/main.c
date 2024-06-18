@@ -1320,6 +1320,25 @@ void draw_layer(bool draw_items)
 			}
 			tlistp = tlistp->next;
 		}
+		tlistp = machinelist;
+		while ( tlistp != NULL )
+		{
+			if (tlistp->thing == NULL) break;
+			Machine *machp = (Machine*)tlistp->thing;
+
+			currPtr = machp->itemlist;
+			while (currPtr != NULL) {
+				if ( itemIsOnScreen(currPtr) )
+				{
+					vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+					vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+				}
+				currPtr = currPtr->next;
+				cnt++;
+				if (cnt % 4 == 0) vdp_update_key_state();
+			}
+			tlistp = tlistp->next;
+		}
 	}		
 
 	vdp_update_key_state();
@@ -1373,6 +1392,25 @@ void draw_horizontal_layer(int tx, int ty, int len, bool bdraw_belts, bool bdraw
 			Inserter *insp = (Inserter*)tlistp->thing;
 
 			currPtr = insp->itemlist;
+			while (currPtr != NULL) {
+				if ( itemIsInHorizontal(currPtr, tx, ty, len) )
+				{
+					vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+					vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+				}
+				currPtr = currPtr->next;
+				cnt++;
+				if (cnt % 4 == 0) vdp_update_key_state();
+			}
+			tlistp = tlistp->next;
+		}
+		tlistp = machinelist;
+		while ( tlistp != NULL )
+		{
+			if (tlistp->thing == NULL) break;
+			Machine *machp = (Machine*)tlistp->thing;
+
+			currPtr = machp->itemlist;
 			while (currPtr != NULL) {
 				if ( itemIsInHorizontal(currPtr, tx, ty, len) )
 				{
