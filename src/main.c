@@ -1429,53 +1429,53 @@ void do_place()
 		}
 	}
 	if ( isMachine(item_selected) ) {
-		// miners can only be placed where there is an overlay resource
-		if ( item_selected == IT_MINER )
+		if ( objectmap[tileoffset]==NULL )
 		{
-			uint8_t overlay = getOverlayAtCursor();
-			if ( overlay > 0 )
+			// miners can only be placed where there is an overlay resource
+			if ( item_selected == IT_MINER )
+			{
+				uint8_t overlay = getOverlayAtCursor();
+				if ( overlay > 0 )
+				{
+					if (inventory_remove_item( inventory, item_selected, 1 ))
+					{
+						int feat_type = item_feature_map[overlay-1].feature_type;
+						uint8_t raw_item = process_map[feat_type - IT_FEAT_STONE].raw_type;
+						Machine *mach = addMiner( &machinelist, cursor_tx, cursor_ty, raw_item, place_belt_index );
+						objectmap[tileoffset] = mach;
+					}
+				}
+			} else 
+			if ( item_selected == IT_FURNACE )
 			{
 				if (inventory_remove_item( inventory, item_selected, 1 ))
 				{
-					int feat_type = item_feature_map[overlay-1].feature_type;
-					uint8_t raw_item = process_map[feat_type - IT_FEAT_STONE].raw_type;
-					Machine *mach = addMiner( &machinelist, cursor_tx, cursor_ty, raw_item, place_belt_index );
+					Machine *mach = addFurnace( &machinelist, cursor_tx, cursor_ty, place_belt_index );
 					objectmap[tileoffset] = mach;
 				}
-			}
-		} else 
-		if ( item_selected == IT_FURNACE )
-		{
-			if (inventory_remove_item( inventory, item_selected, 1 ))
+			} else 
+			if ( item_selected == IT_ASSEMBLER )
 			{
-				Machine *mach = addFurnace( &machinelist, cursor_tx, cursor_ty, place_belt_index );
-				objectmap[tileoffset] = mach;
-			}
-		} else 
-		if ( item_selected == IT_ASSEMBLER )
-		{
-			int recipe = show_assembler_dialog();
-			if (inventory_remove_item( inventory, item_selected, 1 ))
-			{
-				Machine *mach = addAssembler( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
-				objectmap[tileoffset] = mach;
-			}
-		} else 
-		if ( item_selected == IT_INSERTER )
-		{
-			if ( objectmap[tileoffset]==NULL )
+				int recipe = show_assembler_dialog();
+				if (inventory_remove_item( inventory, item_selected, 1 ))
+				{
+					Machine *mach = addAssembler( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
+					objectmap[tileoffset] = mach;
+				}
+			} else 
+			if ( item_selected == IT_INSERTER )
 			{
 				if ( inventory_remove_item( inventory, item_selected, 1 ) ) // take from inventory
 				{
 					Inserter *insp = addInserter(&inserterlist, cursor_tx, cursor_ty, place_belt_index);
 					objectmap[tileoffset] = insp;
 				}
+			} else 
+			if ( inventory_remove_item( inventory, item_selected, 1 ) )
+			{
+				// generic machine ... e.g. Box
+				objectmap[tileoffset] = addMachine( &machinelist, item_selected, cursor_tx, cursor_ty, 0, 100, 0);
 			}
-		} else 
-		if ( inventory_remove_item( inventory, item_selected, 1 ) )
-		{
-			// generic machine ... e.g. Box
-			objectmap[tileoffset] = addMachine( &machinelist, item_selected, cursor_tx, cursor_ty, 0, 100, 0);
 		}
 	}
 
@@ -1500,6 +1500,7 @@ void drop_item(int item)
 	numItems++;
 }
 
+/// @brief Move items along a belt or into an inserter or machine
 void move_items()
 {
 	// function timer
@@ -1523,43 +1524,40 @@ void move_items()
 		int dy = centrey % gTileSize;
 
 		// Check if item can move to an inserter
-		Inserter *insp = findInserter( &inserterlist, tx, ty );
-		if (insp)
+		ThingNodePtr thptr = inserterlist;
+		while (thptr != NULL)
 		{
-			if (insp->itemcnt < insp->maxitemcnt)
+			Inserter *insp = (Inserter*) thptr->thing;
+			if (insp->start_tx == tx && insp->start_ty == ty && insp->itemcnt < insp->maxitemcnt)
 			{
-				bool pop=false;
-				switch(insp->dir)
+				bool pop = false;
+				switch (insp->dir)
 				{
-					case DIR_UP:
-					case DIR_DOWN:
-						if (dx==8 || dx==7 || dx==6) pop=true;
-						break;
-					case DIR_RIGHT:
-					case DIR_LEFT:
-						if (dy==8 || dy==7 || dy==6) pop=true;
-						break;
-					default:
-						break;
+				case DIR_UP:
+				case DIR_DOWN:
+					if (dx == 7 || dx == 8 || dx == 9) pop=true;
+					break;
+				case DIR_LEFT:
+				case DIR_RIGHT:
+					if (dy == 7 || dy == 8 || dy == 9) pop=true;
+					break;
+				
+				default:
+					break;
 				}
 				if (pop)
 				{
-					if ( ( insp->start_tx == tx && insp->start_ty == ty ) ||
-						 ( insp->tx == tx && insp->ty == ty ) )
-					{
-						// pop item off global itemlist and put into inserter's own list
-						ItemNodePtr ip = popItem( &itemlist, currPtr );
-						ip->next = insp->itemlist;
-						insp->itemlist = ip;
-						//if (insp->dir == DIR_UP || insp->dir == DIR_DOWN ) ip->x = (tx*gTileSize)+4;
-						//if (insp->dir == DIR_LEFT || insp->dir == DIR_RIGHT ) ip->y = (ty*gTileSize)+4;
-						insp->itemcnt++;
-
-						currPtr = nextPtr;
-						continue;
-					}
+					// pop item off global itemlist and put into inserter's own list
+					ItemNodePtr ip = popItem( &itemlist, currPtr );
+					ip->next = insp->itemlist;
+					insp->itemlist = ip;
+					//if (insp->dir == DIR_UP || insp->dir == DIR_DOWN ) ip->x = (tx*gTileSize)+4;
+					//if (insp->dir == DIR_LEFT || insp->dir == DIR_RIGHT ) ip->y = (ty*gTileSize)+4;
+					insp->itemcnt++;
 				}
 			}
+			thptr = thptr->next;
+			continue;
 		}
 
 		int beltOffset =  tx + ty*fac.mapWidth;
@@ -1934,9 +1932,10 @@ void draw_items_at_tile(int tx, int ty)
 		}
 		currPtr = currPtr->next;
 	}
-	Inserter *insp = findInserter( &inserterlist, tx, ty );
-	if (insp)
+	int tileoffset = tx + ty * fac.mapWidth;
+	if ( objectmap[tileoffset] && ((MachineHeader*)objectmap[tileoffset])->machine_type == IT_INSERTER)
 	{
+		Inserter *insp = (Inserter*)objectmap[tileoffset];
 		currPtr = insp->itemlist;
 		while (currPtr != NULL) {
 			vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
@@ -1945,10 +1944,10 @@ void draw_items_at_tile(int tx, int ty)
 		}
 	}
 
-	Machine *mach = findMachine( &machinelist, tx, ty);
-	if (mach)
+	if ( objectmap[tileoffset] && ((MachineHeader*)objectmap[tileoffset])->machine_type != IT_INSERTER)
 	{
-		ItemNodePtr currPtr = mach->itemlist;
+		Machine *mach = (Machine*)objectmap[tileoffset];
+		currPtr = mach->itemlist;
 		while (currPtr != NULL) {
 			vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
 			vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
@@ -2764,7 +2763,7 @@ bool load_game( char *filepath )
 			msg = "Fail read machines\n"; goto load_game_errexit;
 		}
 		newmachp->itemlist = NULL;
-
+		newmachp->ticksTillProduce = 0;
 		insertAtBackThingList( &machinelist, newmachp);
 		objectmap[newmachp->tx + newmachp->ty * fac.mapWidth] = newmachp;
 		num_machs--;
@@ -2836,6 +2835,7 @@ bool load_game( char *filepath )
 			msg = "Fail read inserter\n"; goto load_game_errexit;
 		}
 		newinsp->itemlist = NULL;
+		newinsp->itemcnt = 0;
 
 		insertAtBackThingList( &inserterlist, newinsp);
 		objectmap[newinsp->tx + newinsp->ty * fac.mapWidth] = newinsp;

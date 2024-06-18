@@ -27,13 +27,14 @@ typedef struct {
 } Inserter;
 
 typedef struct {
+	uint8_t type;
 	uint8_t dir;
 	uint16_t tx;
 	uint16_t ty;
-	uint16_t start_tx;
-	uint16_t start_ty;
 	uint16_t end_tx;
 	uint16_t end_ty;
+	uint16_t start_tx;
+	uint16_t start_ty;
 	int itemcnt;
 	int maxitemcnt;
 } InserterSave;
@@ -194,7 +195,7 @@ Inserter* addInserter(ThingNodePtr *inserterlist, int tx, int ty, int dir)
 	insp->start_ty = start_ty;
 	insp->end_tx = end_tx;
 	insp->end_ty = end_ty;
-
+	//printf("Add ins %d,%d->%d,%d->%d,%d ",start_tx, start_ty, tx, ty, end_tx, end_ty);
 	insertAtFrontThingList(inserterlist, insp);
 
 	return insp;
