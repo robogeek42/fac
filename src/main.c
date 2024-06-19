@@ -229,9 +229,9 @@ void draw_horizontal_layer(int tx, int ty, int len, bool bdraw_belts, bool bdraw
 
 void drop_item(int item);
 
-void move_items();
-void move_items_on_inserters();
-void move_items_on_machines();
+void move_items(bool bDraw);
+void move_items_on_inserters(bool bDraw);
+void move_items_on_machines(bool bDraw);
 void draw_items();
 void draw_items_at_tile(int tx, int ty);
 
@@ -483,9 +483,9 @@ void game_loop()
 		{
 			layer_wait_ticks = clock() + belt_speed; // belt anim speed
 			//draw_cursor(false);
-			move_items();
-			move_items_on_inserters();
-			move_items_on_machines();
+			move_items(false);
+			move_items_on_inserters(true);
+			move_items_on_machines(true);
 			check_items_on_machines();
 			draw_layer(true);
 			draw_cursor(true);
@@ -1539,7 +1539,7 @@ void drop_item(int item)
 }
 
 /// @brief Move items along a belt or into an inserter or machine
-void move_items()
+void move_items(bool bDraw)
 {
 	// function timer
 	func_start = clock();
@@ -1566,7 +1566,9 @@ void move_items()
 		while (thptr != NULL)
 		{
 			Inserter *insp = (Inserter*) thptr->thing;
-			if (insp->start_tx == tx && insp->start_ty == ty && insp->itemcnt < insp->maxitemcnt)
+			if ( ( (insp->start_tx == tx && insp->start_ty == ty) || 
+			       (insp->tx == tx && insp->ty == ty))
+			 && insp->itemcnt < insp->maxitemcnt)
 			{
 				bool pop = false;
 				switch (insp->dir)
@@ -1589,8 +1591,6 @@ void move_items()
 					ItemNodePtr ip = popItem( &itemlist, currPtr );
 					ip->next = insp->itemlist;
 					insp->itemlist = ip;
-					//if (insp->dir == DIR_UP || insp->dir == DIR_DOWN ) ip->x = (tx*gTileSize)+4;
-					//if (insp->dir == DIR_LEFT || insp->dir == DIR_RIGHT ) ip->y = (ty*gTileSize)+4;
 					insp->itemcnt++;
 				}
 			}
@@ -1694,7 +1694,7 @@ void move_items()
 		}
 
 
-		if ( moved )
+		if ( bDraw && moved )
 		{
 			// get new tx/ty, if there is a belt there fine, otherwise, draw it
 			tx = (currPtr->x + ITEM_CENTRE_OFFSET) >> 4;
@@ -1724,7 +1724,7 @@ void move_items()
 	func_time[0]=clock()-func_start;
 }
 
-void move_items_on_inserters()
+void move_items_on_inserters(bool bDraw)
 {
 	// go through inserters and move their own items along
 	ThingNodePtr tlistp = inserterlist;
@@ -1769,7 +1769,7 @@ void move_items_on_inserters()
 
 			}
 
-			if ( moved )
+			if (  moved )
 			{
 				// check next pixel and the one after in the same direction
 				bool found = isAnythingAtXY(&insp->itemlist, nextx-ITEM_CENTRE_OFFSET, nexty-ITEM_CENTRE_OFFSET );
@@ -1779,21 +1779,24 @@ void move_items_on_inserters()
 					currPtr->x = nextx - ITEM_CENTRE_OFFSET;
 					currPtr->y = nexty - ITEM_CENTRE_OFFSET;
 				}
-				// re-draw tile covered by inserter
-				int px = getTilePosInScreenX(insp->start_tx);
-				int py = getTilePosInScreenY(insp->start_ty);
-				draw_tile(insp->start_tx, insp->start_ty, px, py);
-				draw_items_at_tile(insp->start_tx, insp->start_ty);
+				if ( bDraw)
+				{
+					// re-draw tile covered by inserter
+					int px = getTilePosInScreenX(insp->start_tx);
+					int py = getTilePosInScreenY(insp->start_ty);
+					draw_tile(insp->start_tx, insp->start_ty, px, py);
+					draw_items_at_tile(insp->start_tx, insp->start_ty);
 
-				px = getTilePosInScreenX(insp->tx);
-				py = getTilePosInScreenY(insp->ty);
-				draw_tile(insp->tx, insp->ty, px, py);
-				draw_items_at_tile(insp->tx, insp->ty);
+					px = getTilePosInScreenX(insp->tx);
+					py = getTilePosInScreenY(insp->ty);
+					draw_tile(insp->tx, insp->ty, px, py);
+					draw_items_at_tile(insp->tx, insp->ty);
 
-				px = getTilePosInScreenX(insp->end_tx);
-				py = getTilePosInScreenY(insp->end_ty);
-				draw_tile(insp->end_tx, insp->end_ty, px, py);
-				draw_items_at_tile(insp->end_tx, insp->end_ty);
+					px = getTilePosInScreenX(insp->end_tx);
+					py = getTilePosInScreenY(insp->end_ty);
+					draw_tile(insp->end_tx, insp->end_ty, px, py);
+					draw_items_at_tile(insp->end_tx, insp->end_ty);
+				}
 			}
 			if (putback)
 			{
@@ -1813,7 +1816,7 @@ void move_items_on_inserters()
 	}
 }
 
-void move_items_on_machines()
+void move_items_on_machines(bool bDraw)
 {
 	// go through machines and move their own items along
 	
@@ -1869,16 +1872,19 @@ void move_items_on_machines()
 					currPtr->x = nextx - ITEM_CENTRE_OFFSET;
 					currPtr->y = nexty - ITEM_CENTRE_OFFSET;
 				}
-				// re-draw tile covered by machine
-				int px = getTilePosInScreenX(mach->tx);
-				int py = getTilePosInScreenY(mach->ty);
-				draw_tile(mach->tx, mach->ty, px, py);
-				draw_items_at_tile(mach->tx, mach->ty);
+				if ( bDraw)
+				{
+					// re-draw tile covered by machine
+					int px = getTilePosInScreenX(mach->tx);
+					int py = getTilePosInScreenY(mach->ty);
+					draw_tile(mach->tx, mach->ty, px, py);
+					draw_items_at_tile(mach->tx, mach->ty);
 
-				px = getTilePosInScreenX(mach->end_tx);
-				py = getTilePosInScreenY(mach->end_ty);
-				draw_tile(mach->end_tx, mach->end_ty, px, py);
-				draw_items_at_tile(mach->end_tx, mach->end_ty);
+					px = getTilePosInScreenX(mach->end_tx);
+					py = getTilePosInScreenY(mach->end_ty);
+					draw_tile(mach->end_tx, mach->end_ty, px, py);
+					draw_items_at_tile(mach->end_tx, mach->end_ty);
+				}
 			}
 			if (putback)
 			{
