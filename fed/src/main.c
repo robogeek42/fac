@@ -46,8 +46,10 @@ int gTileSize = 16;
 int gScreenWidthTiles = 20;
 int gScreenHeightTiles = 15;
 
-int gMapTW = 16;
-int gMapTH = 12;
+int gMapTW = 14;
+int gMapTH = 14;
+int gViewOffX = 8;
+int gViewOffY = 8;
 
 typedef struct {
 	int tx;
@@ -65,15 +67,21 @@ uint8_t* tilemap;
 int cursor_tx=0, cursor_ty=0;
 
 bool bGridLines = true;
+bool bTileNumbers = true;
+
+int bank = 0; // selected bank of 10 tiles
+int bankMax = 3; // maximum number of banks
+int tselect = 0; // selected tile withing a bank (0-9)
+int total_bms = 0; // total number of bitmaps to select from
 
 clock_t key_wait_ticks;
-int key_wait = 15;
+int key_wait = 12;
 clock_t move_wait_ticks;
 
 static volatile SYSVAR *sys_vars = NULL;
 
-int getTilePosInScreenX(int tx) { return ((tx - fac.tx) * gTileSize); }
-int getTilePosInScreenY(int ty) { return ((ty - fac.ty) * gTileSize); }
+int getTilePosInScreenX(int tx) { return ((tx - fac.tx) * gTileSize)+gViewOffX; }
+int getTilePosInScreenY(int ty) { return ((ty - fac.ty) * gTileSize)+gViewOffY; }
 void game_loop();
 int getOverlayAtOffset( int tileoffset );
 int getOverlayAtCursor();
@@ -83,6 +91,10 @@ void draw_cursor();
 void draw_screen();
 void draw_horizontal(int tx, int ty, int len);
 void scroll_screen(int dir);
+void draw_digit(int i, int px, int py);
+void draw_number(int n, int px, int py);
+void draw_number_lj(int n, int px, int py);
+void draw_tile_menu();
 
 void wait()
 {
@@ -121,11 +133,13 @@ int main(/*int argc, char *argv[]*/)
 		goto my_exit2;
 	}
 	create_sprites();
+	total_bms = NUM_BM_TERR16 + NUM_BM_FEAT16;
 
 	cursor_tx = 0;
 	cursor_ty = 0;
 
 	draw_screen();
+	draw_cursor();
 
 	game_loop();
 
@@ -143,22 +157,11 @@ void game_loop()
 	key_wait_ticks = clock();
 	move_wait_ticks = clock();
 
-
+	draw_tile_menu();
 	do {
 		int dir=-1;
 		int cursor_dir=0;
-
-		if ( vdp_check_key_press( KEY_w ) ) { dir=SCROLL_UP; }
-		if ( vdp_check_key_press( KEY_a ) ) { dir=SCROLL_RIGHT; }
-		if ( vdp_check_key_press( KEY_s ) ) { dir=SCROLL_DOWN; }
-		if ( vdp_check_key_press( KEY_d ) ) { dir=SCROLL_LEFT; }
-
-		// scroll the screen
-		if (dir>=0 && ( move_wait_ticks < clock() ) ) {
-			move_wait_ticks = clock()+15;
-			scroll_screen(dir);
-			draw_screen();
-		}
+		bool bRedrawCursor = false;
 
 		// cursor movement
 		if ( vdp_check_key_press( KEY_LEFT ) ) {cursor_dir |= BITS_LEFT; }
@@ -174,17 +177,32 @@ void game_loop()
 			if ( cursor_dir & BITS_RIGHT ) cursor_tx++;
 			if ( cursor_dir & BITS_DOWN ) cursor_ty++;
 			if ( cursor_dir & BITS_LEFT ) cursor_tx--;
-
-			draw_cursor();
+			bRedrawCursor = true;
 		}
 		// keep cursor on screen
-		if ( cursor_tx < fac.tx ) { cursor_tx = fac.tx; draw_cursor(); }
-		if ( cursor_ty < fac.ty ) { cursor_ty = fac.ty; draw_cursor(); }
-		if ( cursor_tx > fac.tx + gScreenWidthTiles ) { cursor_tx = fac.tx + gScreenWidthTiles; draw_cursor(); }
-		if ( cursor_ty > fac.ty + gScreenHeightTiles ) { cursor_ty = fac.ty + gScreenHeightTiles; draw_cursor(); }
+		if ( cursor_tx < fac.tx ) { cursor_tx = fac.tx; dir=SCROLL_RIGHT; bRedrawCursor=true; }
+		if ( cursor_ty < fac.ty ) { cursor_ty = fac.ty; dir=SCROLL_UP; bRedrawCursor=true; }
+		if ( cursor_tx >= fac.tx + gMapTW ) { cursor_tx = fac.tx + gMapTW-1; dir=SCROLL_LEFT; bRedrawCursor=true; }
+		if ( cursor_ty >= fac.ty + gMapTH ) { cursor_ty = fac.ty + gMapTH-1; dir=SCROLL_DOWN; bRedrawCursor=true; }
 
+		if ( vdp_check_key_press( KEY_w ) ) { dir=SCROLL_UP; }
+		if ( vdp_check_key_press( KEY_a ) ) { dir=SCROLL_RIGHT; }
+		if ( vdp_check_key_press( KEY_s ) ) { dir=SCROLL_DOWN; }
+		if ( vdp_check_key_press( KEY_d ) ) { dir=SCROLL_LEFT; }
 
-		if ( vdp_check_key_press( KEY_g ) ) // grid lines
+		if (bRedrawCursor)
+		{
+			draw_cursor();
+		}
+
+		// scroll the screen
+		if (dir>=0 && ( move_wait_ticks < clock() ) ) {
+			move_wait_ticks = clock()+15;
+			scroll_screen(dir);
+			draw_screen();
+		}
+
+		if ( vdp_check_key_press( KEY_g ) ) // toggle grid lines
 		{
 			if (key_wait_ticks < clock()) 
 			{
@@ -192,6 +210,88 @@ void game_loop()
 
 				bGridLines = !bGridLines;
 				draw_screen();
+			}
+		}
+
+		if ( vdp_check_key_press( KEY_b ) ) // change bank
+		{
+			if (key_wait_ticks < clock()) 
+			{
+				key_wait_ticks = clock() + key_wait;
+				bank++; bank %= bankMax;
+				draw_tile_menu();
+			}
+		}
+
+		if ( vdp_check_key_press( KEY_forwardslash ) )
+		{
+			if (key_wait_ticks < clock()) 
+			{
+				key_wait_ticks = clock() + key_wait;
+				if (tselect < 9)
+				{
+					tselect++;
+				}
+				else
+				{
+					tselect=0;
+					bank++;
+				}
+				draw_tile_menu();
+			}
+		}
+		if ( vdp_check_key_press( KEY_tick ) )
+		{
+			if (key_wait_ticks < clock()) 
+			{
+				key_wait_ticks = clock() + key_wait;
+				if ( tselect > 0 || bank > 0 )
+				{
+					tselect--;
+					if ( tselect < 0 )
+					{
+						tselect = 9;
+						bank--;
+					}
+					draw_tile_menu();
+				}
+			}
+		}
+
+		for ( int k = KEY_0; k <= KEY_9; k++)
+		{
+			if ( vdp_check_key_press( k ) )
+			{
+				if (key_wait_ticks < clock()) 
+				{
+					key_wait_ticks = clock() + key_wait;
+					tselect = k - KEY_0;
+					draw_tile_menu();
+				}
+			}
+		}
+
+		if ( vdp_check_key_press( KEY_space ) ) 
+		{
+			if (key_wait_ticks < clock()) 
+			{
+				key_wait_ticks = clock() + key_wait;
+				int offset = cursor_tx+cursor_ty*fac.mapWidth;
+				int byte = tilemap[ offset ];
+				int bm = bank*10+tselect;
+				if (bm < total_bms)
+				{
+					if ( bm < NUM_BM_TERR16 )
+					{
+						byte &= 0xF0;
+						byte |= bm-BMOFF_TERR16;
+					} else {
+						byte &= 0x0F;
+						byte |= (bm-BMOFF_FEAT16+1) << 4;
+					}
+					tilemap[ offset ] = byte;
+					draw_screen();
+				}
 			}
 		}
 
@@ -352,16 +452,28 @@ void draw_screen()
 		vdp_gcol(0,8);
 		for (int x=0; x<gMapTW*gTileSize; x+=gTileSize)
 		{
-			vdp_move_to(x,0);
-			vdp_line_to(x,gMapTH*gTileSize-1);
+			vdp_move_to(x+gViewOffX,0+gViewOffY);
+			vdp_line_to(x+gViewOffX,gMapTH*gTileSize-1+gViewOffY);
 		}	
 		for (int y=0; y<gMapTH*gTileSize; y+=gTileSize)
 		{
-			vdp_move_to(0,y);
-			vdp_line_to(gMapTW*gTileSize-1,y);
+			vdp_move_to(0+gViewOffX,y+gViewOffY);
+			vdp_line_to(gMapTW*gTileSize-1+gViewOffX,y+gViewOffY);
 		}	
 	}
-	draw_cursor();
+	if (bTileNumbers)
+	{
+		draw_filled_box(0,0,gViewOffX+gMapTW*gTileSize,gViewOffY,0,0);
+		for (int tx=0; tx < gMapTW; tx++)
+		{
+			draw_number_lj( tx+fac.tx, (tx*gTileSize)+gViewOffX+4, gViewOffY-6); 
+		}
+		draw_filled_box(0,0,gViewOffX, gViewOffY+gMapTH*gTileSize,0,0);
+		for (int ty=0; ty < gMapTH; ty++)
+		{
+			draw_number( ty+fac.ty, gViewOffX, (ty*gTileSize)+gViewOffY+6); 
+		}
+	}
 }
 
 void draw_cursor() 
@@ -383,25 +495,25 @@ void scroll_screen(int dir)
 {
 	switch (dir) {
 		case SCROLL_RIGHT: // scroll screen to right, view moves left
-			if (fac.tx > 1)
+			if (fac.tx > 0)
 			{
 				fac.tx -= 1;
 			}
 			break;
 		case SCROLL_LEFT: // scroll screen to left, view moves right
-			if ((fac.tx + gScreenWidthTiles + 1) < fac.mapWidth)
+			if ((fac.tx + gMapTW ) < fac.mapWidth)
 			{
 				fac.tx += 1;
 			}
 			break;
 		case SCROLL_UP:
-			if (fac.ty > 1)
+			if (fac.ty > 0)
 			{
 				fac.ty -= 1;
 			}
 			break;
 		case SCROLL_DOWN:
-			if ((fac.ty + gScreenHeightTiles + 1) < fac.mapHeight)
+			if ((fac.ty + gMapTH ) < fac.mapHeight)
 			{
 				fac.ty += 1;
 			}
@@ -409,6 +521,88 @@ void scroll_screen(int dir)
 		default:
 			break;
 	}
+}
+
+void draw_digit(int i, int px, int py)
+{
+	vdp_adv_select_bitmap( BMOFF_NUMS + i );
+	vdp_draw_bitmap( px, py );
+}
+// draw reverse digits
+// right justified, so specify x,y at right edge of number
+void draw_number(int n, int px, int py)
+{
+	int x = px-4;
+	int y = py;
+
+	if (n==0)
+	{
+		draw_digit(0, x, y);
+		return;
+	}
+	while (n>0)
+	{
+		int dig = n % 10;
+		draw_digit( dig, x, y);
+		n /= 10;
+		x -= 4;
+	}
+}
+
+void draw_number_lj(int n, int px, int py)
+{
+	// left-just. x,y specifies left border 
+	int diglen = 0;
+	if (n<10) { 
+		diglen = 1; 
+	} else if (n<100) {
+		diglen = 2;
+	} else if (n<1000) {
+		diglen = 3;
+	}
+
+	draw_number(n, px+diglen*4, py);
+}
+
+void draw_tile_menu()
+{
+	int ytop = 0;
+	int xleft = gMapTW*gTileSize+gViewOffX;
+	int x = xleft;
+	int y = ytop;
+
+	draw_filled_box(xleft, ytop, (gTileSize+1)*(bankMax+1)+1, 11*(gTileSize+1)+1, 0, 0);
+	
+	for (int bank = 0; bank <= total_bms/10; bank++)
+	{
+		draw_number_lj(bank+1, x+(gTileSize+1)*(bank+1)+6,ytop+8);
+	}
+	ytop+=gTileSize;
+	y = ytop;
+	for (int tile = 0; tile < 10; tile++)
+	{
+		draw_number(tile, x+14, y+4);
+		y += gTileSize+1;
+	}
+	x += gTileSize;
+	y = ytop;
+	for (int bank = 0; bank <= total_bms/10; bank++)
+	{
+		for (int tile = 0; tile < 10; tile++)
+		{
+			int index = tile + 10*bank;
+			if (index == total_bms) break;
+			vdp_adv_select_bitmap( index );
+			vdp_draw_bitmap( x, y );
+			y += gTileSize+1;
+		}
+		x += gTileSize+1;
+		y = ytop;
+	}
+
+	draw_box(xleft+gTileSize + bank*(gTileSize+1) -1, ytop-1, gTileSize+1, 10*(gTileSize+1), 7); 
+
+	draw_box(xleft+gTileSize + bank*(gTileSize+1) -1, ytop+tselect*(gTileSize+1)-1, gTileSize+1, gTileSize+1, 11); 
 }
 
 
