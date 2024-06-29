@@ -65,6 +65,7 @@ uint8_t* tilemap;
 
 // cursor position in tile coords
 int cursor_tx=0, cursor_ty=0;
+int old_cursor_tx=0, old_cursor_ty=0;
 
 bool bGridLines = true;
 bool bTileNumbers = true;
@@ -74,8 +75,12 @@ int bankMax = 3; // maximum number of banks
 int tselect = 0; // selected tile withing a bank (0-9)
 int total_bms = 0; // total number of bitmaps to select from
 
+bool bBlockSelect = false;
+int block_tx = 0;
+int block_ty = 0;
+
 clock_t key_wait_ticks;
-int key_wait = 12;
+int key_wait = 14;
 clock_t move_wait_ticks;
 
 static volatile SYSVAR *sys_vars = NULL;
@@ -88,13 +93,18 @@ int getOverlayAtCursor();
 void show_filedialog();
 int load_map( char *filename, int width, int height );
 void draw_cursor();
+void draw_tile(int tx, int ty, int tposx, int tposy);
+void draw_tile_at_cursor();
 void draw_screen();
+void draw_block();
 void draw_horizontal(int tx, int ty, int len);
-void scroll_screen(int dir);
+void scroll_screen(int dir, int tiles);
 void draw_digit(int i, int px, int py);
 void draw_number(int n, int px, int py);
 void draw_number_lj(int n, int px, int py);
 void draw_tile_menu();
+void delete_tile(bool bOverlayOnly);
+void set_tile();
 
 void wait()
 {
@@ -137,6 +147,8 @@ int main(/*int argc, char *argv[]*/)
 
 	cursor_tx = 0;
 	cursor_ty = 0;
+	old_cursor_tx = 0;
+	old_cursor_ty = 0;
 
 	draw_screen();
 	draw_cursor();
@@ -162,6 +174,8 @@ void game_loop()
 		int dir=-1;
 		int cursor_dir=0;
 		bool bRedrawCursor = false;
+		bool bRedrawBlock = false;
+		int scroll_tiles=1;
 
 		// cursor movement
 		if ( vdp_check_key_press( KEY_LEFT ) ) {cursor_dir |= BITS_LEFT; }
@@ -173,22 +187,46 @@ void game_loop()
 		if (cursor_dir>0 && ( key_wait_ticks < clock() ) ) {
 			key_wait_ticks = clock() + key_wait;
 
-			if ( cursor_dir & BITS_UP ) cursor_ty--;
-			if ( cursor_dir & BITS_RIGHT ) cursor_tx++;
-			if ( cursor_dir & BITS_DOWN ) cursor_ty++;
-			if ( cursor_dir & BITS_LEFT ) cursor_tx--;
+			if ( cursor_dir & BITS_UP ) { old_cursor_ty=cursor_ty; cursor_ty--; }
+			if ( cursor_dir & BITS_RIGHT ) { old_cursor_tx=cursor_tx; cursor_tx++; }
+			if ( cursor_dir & BITS_DOWN ) { old_cursor_ty=cursor_ty; cursor_ty++; }
+			if ( cursor_dir & BITS_LEFT ) { old_cursor_tx=cursor_tx; cursor_tx--; }
 			bRedrawCursor = true;
+			if (bBlockSelect) 
+			{
+				bRedrawBlock = true;
+			}
 		}
 		// keep cursor on screen
-		if ( cursor_tx < fac.tx ) { cursor_tx = fac.tx; dir=SCROLL_RIGHT; bRedrawCursor=true; }
-		if ( cursor_ty < fac.ty ) { cursor_ty = fac.ty; dir=SCROLL_UP; bRedrawCursor=true; }
-		if ( cursor_tx >= fac.tx + gMapTW ) { cursor_tx = fac.tx + gMapTW-1; dir=SCROLL_LEFT; bRedrawCursor=true; }
-		if ( cursor_ty >= fac.ty + gMapTH ) { cursor_ty = fac.ty + gMapTH-1; dir=SCROLL_DOWN; bRedrawCursor=true; }
+		if ( cursor_tx < fac.tx ) { 
+			old_cursor_tx=cursor_tx; cursor_tx = fac.tx; 
+			dir=SCROLL_RIGHT; bRedrawCursor=true;
+		}
+		if ( cursor_ty < fac.ty ) {
+			old_cursor_ty=cursor_ty; cursor_ty = fac.ty; 
+			dir=SCROLL_UP; bRedrawCursor=true;
+		}
+		if ( cursor_tx >= fac.tx + gMapTW ) {
+			old_cursor_tx=cursor_tx; cursor_tx = fac.tx + gMapTW-1;
+			dir=SCROLL_LEFT; bRedrawCursor=true;
+		}
 
+		if ( cursor_ty >= fac.ty + gMapTH ) {
+			old_cursor_ty=cursor_ty; cursor_ty = fac.ty + gMapTH-1;
+			dir=SCROLL_DOWN; bRedrawCursor=true;
+		}
+
+		/*
 		if ( vdp_check_key_press( KEY_w ) ) { dir=SCROLL_UP; }
 		if ( vdp_check_key_press( KEY_a ) ) { dir=SCROLL_RIGHT; }
 		if ( vdp_check_key_press( KEY_s ) ) { dir=SCROLL_DOWN; }
 		if ( vdp_check_key_press( KEY_d ) ) { dir=SCROLL_LEFT; }
+		*/
+
+		if ( vdp_check_key_press( KEY_pageup ) ) { dir=SCROLL_UP; scroll_tiles = gMapTH; }
+		if ( vdp_check_key_press( KEY_home ) ) { dir=SCROLL_RIGHT; scroll_tiles = gMapTW; }
+		if ( vdp_check_key_press( KEY_pagedown ) ) { dir=SCROLL_DOWN; scroll_tiles = gMapTH; }
+		if ( vdp_check_key_press( KEY_end ) ) { dir=SCROLL_LEFT; scroll_tiles = gMapTW; }
 
 		if (bRedrawCursor)
 		{
@@ -198,9 +236,13 @@ void game_loop()
 		// scroll the screen
 		if (dir>=0 && ( move_wait_ticks < clock() ) ) {
 			move_wait_ticks = clock()+15;
-			scroll_screen(dir);
+			scroll_screen(dir, scroll_tiles);
 			draw_screen();
+		} else if (bRedrawBlock)
+		{
+			draw_block();
 		}
+
 
 		if ( vdp_check_key_press( KEY_g ) ) // toggle grid lines
 		{
@@ -213,7 +255,7 @@ void game_loop()
 			}
 		}
 
-		if ( vdp_check_key_press( KEY_b ) ) // change bank
+		if ( vdp_check_key_press( KEY_d ) ) // change bank
 		{
 			if (key_wait_ticks < clock()) 
 			{
@@ -222,8 +264,18 @@ void game_loop()
 				draw_tile_menu();
 			}
 		}
+		if ( vdp_check_key_press( KEY_a ) ) // change bank
+		{
+			if (key_wait_ticks < clock()) 
+			{
+				key_wait_ticks = clock() + key_wait;
+				bank--; 
+				if (bank < 0) bank += bankMax;
+				draw_tile_menu();
+			}
+		}
 
-		if ( vdp_check_key_press( KEY_forwardslash ) )
+		if ( vdp_check_key_press( KEY_s ) )
 		{
 			if (key_wait_ticks < clock()) 
 			{
@@ -240,7 +292,7 @@ void game_loop()
 				draw_tile_menu();
 			}
 		}
-		if ( vdp_check_key_press( KEY_tick ) )
+		if ( vdp_check_key_press( KEY_w ) )
 		{
 			if (key_wait_ticks < clock()) 
 			{
@@ -276,23 +328,36 @@ void game_loop()
 			if (key_wait_ticks < clock()) 
 			{
 				key_wait_ticks = clock() + key_wait;
-				int offset = cursor_tx+cursor_ty*fac.mapWidth;
-				int byte = tilemap[ offset ];
-				int bm = bank*10+tselect;
-				if (bm < total_bms)
-				{
-					if ( bm < NUM_BM_TERR16 )
-					{
-						byte &= 0xF0;
-						byte |= bm-BMOFF_TERR16;
-					} else {
-						byte &= 0x0F;
-						byte |= (bm-BMOFF_FEAT16+1) << 4;
-					}
-					tilemap[ offset ] = byte;
-					draw_screen();
-				}
+				set_tile();
 			}
+		}
+
+		if ( vdp_check_key_press( KEY_b ) && key_wait_ticks < clock() ) // block select
+		{
+			key_wait_ticks = clock() + key_wait;
+			if (bBlockSelect == false)
+			{
+				block_tx = cursor_tx;
+				block_ty = cursor_ty;
+				bBlockSelect = true;
+				draw_block();
+			}
+			else
+			{
+				bBlockSelect = false;
+				draw_screen();
+			}
+		}
+
+		if ( vdp_check_key_press( KEY_backspace ) && key_wait_ticks < clock() ) // delete overlay
+		{
+			key_wait_ticks = clock() + key_wait;
+			delete_tile(true);
+		}
+		if ( vdp_check_key_press( KEY_delete ) && key_wait_ticks < clock() ) // delete tile
+		{
+			key_wait_ticks = clock() + key_wait;
+			delete_tile(false);
 		}
 
 		if ( vdp_check_key_press( KEY_f ) ) // file dialog
@@ -450,12 +515,12 @@ void draw_screen()
 	if (bGridLines)
 	{
 		vdp_gcol(0,8);
-		for (int x=0; x<gMapTW*gTileSize; x+=gTileSize)
+		for (int x=0; x<(gMapTW+1)*gTileSize; x+=gTileSize)
 		{
 			vdp_move_to(x+gViewOffX,0+gViewOffY);
 			vdp_line_to(x+gViewOffX,gMapTH*gTileSize-1+gViewOffY);
 		}	
-		for (int y=0; y<gMapTH*gTileSize; y+=gTileSize)
+		for (int y=0; y<(gMapTH+1)*gTileSize; y+=gTileSize)
 		{
 			vdp_move_to(0+gViewOffX,y+gViewOffY);
 			vdp_line_to(gMapTW*gTileSize-1+gViewOffX,y+gViewOffY);
@@ -472,6 +537,68 @@ void draw_screen()
 		for (int ty=0; ty < gMapTH; ty++)
 		{
 			draw_number( ty+fac.ty, gViewOffX, (ty*gTileSize)+gViewOffY+6); 
+		}
+	}
+	if (bBlockSelect)
+	{
+		int startx = (block_tx - fac.tx)*gTileSize + gViewOffX;
+		int starty = (block_ty - fac.ty)*gTileSize + gViewOffY;
+		int sizex = (cursor_tx-block_tx+1) * gTileSize;
+		int sizey = (cursor_ty-block_ty+1) * gTileSize;
+		if (sizex > 0 && sizey > 0 )
+		{
+			draw_box( startx, starty, sizex, sizey, 14 );
+		} else {
+			bBlockSelect = false;
+		}
+		old_cursor_tx = cursor_tx;
+		old_cursor_ty = cursor_ty;
+	}
+}
+void draw_block()
+{
+	if (fac.mapWidth<0) return;
+
+	for (int i=block_ty; i < cursor_ty+1; i++) 
+	{
+		draw_horizontal(block_tx, i, (cursor_tx-block_tx)+1);
+	}
+	if (bGridLines)
+	{
+		vdp_gcol(0,8);
+		// vertical lines
+		for (int tx=block_tx-fac.tx; tx<MAX(cursor_tx,old_cursor_tx)+2-fac.tx; tx++)
+		{
+			vdp_move_to(
+					(tx*gTileSize) + gViewOffX,
+					(block_ty-fac.ty)*gTileSize + gViewOffY );
+			vdp_line_to(
+					(tx*gTileSize) + gViewOffX,
+					(MAX(cursor_ty,old_cursor_ty)-fac.ty+1)*gTileSize + gViewOffY );
+		}	
+		// horizontal lines
+		for (int ty=block_ty-fac.ty; ty<(MAX(cursor_ty,old_cursor_ty)+2)-fac.ty; ty++)
+		{
+			vdp_move_to(
+					(block_tx-fac.tx)*gTileSize + gViewOffX,
+					(ty*gTileSize) + gViewOffY);
+			vdp_line_to(
+					(MAX(cursor_tx,old_cursor_tx)-fac.tx+1)*gTileSize + gViewOffX,
+					(ty*gTileSize) + gViewOffY);
+		}	
+	}
+	if (bBlockSelect)
+	{
+		int startx = (block_tx - fac.tx)*gTileSize + gViewOffX;
+		int starty = (block_ty - fac.ty)*gTileSize + gViewOffY;
+		int sizex = (cursor_tx-block_tx+1) * gTileSize;
+		int sizey = (cursor_ty-block_ty+1) * gTileSize;
+		if (sizex > 0 && sizey > 0 )
+		{
+			draw_box( startx, starty, sizex, sizey, 14 );
+		} else {
+			bBlockSelect = false;
+			draw_screen();
 		}
 	}
 }
@@ -491,31 +618,47 @@ void draw_cursor()
 }
 
 /* 0=right, 1=left, 2=up, 3=down */
-void scroll_screen(int dir)
+void scroll_screen(int dir, int tiles)
 {
 	switch (dir) {
 		case SCROLL_RIGHT: // scroll screen to right, view moves left
-			if (fac.tx > 0)
+			if (fac.tx >= tiles)
 			{
-				fac.tx -= 1;
+				fac.tx -= tiles;
+			}
+			else
+			{
+				fac.tx = 0;
 			}
 			break;
 		case SCROLL_LEFT: // scroll screen to left, view moves right
-			if ((fac.tx + gMapTW ) < fac.mapWidth)
+			if ((fac.tx + gMapTW + tiles ) < fac.mapWidth)
 			{
-				fac.tx += 1;
+				fac.tx += tiles;
+			}
+			else
+			{
+				fac.tx = fac.mapWidth - gMapTW;
 			}
 			break;
 		case SCROLL_UP:
-			if (fac.ty > 0)
+			if (fac.ty >= tiles)
 			{
-				fac.ty -= 1;
+				fac.ty -= tiles;
+			}
+			else
+			{
+				fac.ty = 0;
 			}
 			break;
 		case SCROLL_DOWN:
-			if ((fac.ty + gMapTH ) < fac.mapHeight)
+			if ((fac.ty + gMapTH + tiles ) < fac.mapHeight)
 			{
-				fac.ty += 1;
+				fac.ty += tiles;
+			}
+			else
+			{
+				fac.ty = fac.mapHeight - gMapTH;
 			}
 			break;
 		default:
@@ -575,9 +718,9 @@ void draw_tile_menu()
 	
 	for (int bank = 0; bank <= total_bms/10; bank++)
 	{
-		draw_number_lj(bank+1, x+(gTileSize+1)*(bank+1)+6,ytop+8);
+		draw_number_lj(bank+1, x+(gTileSize+1)*(bank+1)+6,ytop);
 	}
-	ytop+=gTileSize;
+	ytop+=8;
 	y = ytop;
 	for (int tile = 0; tile < 10; tile++)
 	{
@@ -600,9 +743,103 @@ void draw_tile_menu()
 		y = ytop;
 	}
 
-	draw_box(xleft+gTileSize + bank*(gTileSize+1) -1, ytop-1, gTileSize+1, 10*(gTileSize+1), 7); 
+	//draw_box(xleft+gTileSize + bank*(gTileSize+1) -1, ytop-1, gTileSize+1, 10*(gTileSize+1), 7); 
 
 	draw_box(xleft+gTileSize + bank*(gTileSize+1) -1, ytop+tselect*(gTileSize+1)-1, gTileSize+1, gTileSize+1, 11); 
 }
 
+void delete_tile(bool bOverlayOnly)
+{
+	if (bBlockSelect)
+	{
+		for ( int y = block_ty; y < cursor_ty+1; y++ )
+		{
+			int offset = block_tx + y*fac.mapWidth;
+			for ( int x = block_tx; x < cursor_tx+1; x++ )
+			{
+				if (bOverlayOnly)
+				{
+					tilemap[ offset ] &= 0x0F;
+				} else {
+					tilemap[ offset ] = 0;
+				}
+				offset++;
+			}
+		}
+		draw_screen();
+	} else {
+		int offset = cursor_tx+cursor_ty*fac.mapWidth;
+		if (bOverlayOnly)
+		{
+			tilemap[ offset ] &= 0x0F;
+		} else {
+			tilemap[ offset ] = 0;
+		}
+		draw_tile_at_cursor();
+	}
+}
+
+void draw_tile_at_cursor()
+{
+	draw_tile(cursor_tx, cursor_ty, getTilePosInScreenX(cursor_tx), getTilePosInScreenY(cursor_ty));
+	if (bGridLines)
+	{
+		vdp_gcol(0,8);
+		// vertical lines
+		for (int x=cursor_tx*gTileSize; x<(cursor_tx+1)*gTileSize; x+=gTileSize)
+		{
+			vdp_move_to(x+gViewOffX, block_ty+gViewOffY);
+			vdp_line_to(x+gViewOffX, (cursor_ty+1)*gTileSize+gViewOffY);
+		}	
+		// horizontal lines
+		for (int y=cursor_ty*gTileSize; y<(cursor_ty+1)*gTileSize; y+=gTileSize)
+		{
+			vdp_move_to(block_tx+gViewOffX, y+gViewOffY);
+			vdp_line_to((cursor_tx+1)*gTileSize+gViewOffX, y+gViewOffY);
+		}	
+	}
+}
+
+void set_tile()
+{
+	int bm = bank*10+tselect;
+	if (bm < total_bms)
+	{
+		if (bBlockSelect)
+		{
+			for ( int y = block_ty; y < cursor_ty+1; y++ )
+			{
+				int offset = block_tx + y*fac.mapWidth;
+				for ( int x = block_tx; x < cursor_tx+1; x++ )
+				{
+					uint8_t byte = tilemap[ offset ];
+					if ( bm < NUM_BM_TERR16 )
+					{
+						byte &= 0xF0;
+						byte |= bm-BMOFF_TERR16;
+					} else {
+						byte &= 0x0F;
+						byte |= ( (bm-BMOFF_FEAT16+1) << 4 );
+					}
+					tilemap[ offset ] = byte;
+					offset++;
+				}
+			}
+			draw_screen();
+		} else {
+			int offset = cursor_tx+cursor_ty*fac.mapWidth;
+			uint8_t byte = tilemap[ offset ];
+			if ( bm < NUM_BM_TERR16 )
+			{
+				byte &= 0xF0;
+				byte |= bm-BMOFF_TERR16;
+			} else {
+				byte &= 0x0F;
+				byte |= ( (bm-BMOFF_FEAT16+1) << 4 );
+			}
+			tilemap[ offset ] = byte;
+			draw_tile_at_cursor();
+		}
+	}
+}
 

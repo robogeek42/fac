@@ -21,7 +21,7 @@ BSSHEAP_HIGH = 0AFFFF
 include $(shell cedev-config --makefile)
 
 check: bin/$(NAME).bin
-	@FILE_SIZE=$(shell stat -L -c %s bin/fac.bin)
+	@FILE_SIZE=$(shell stat -L -c %s bin/fed.bin)
 	@if [ $(shell stat -L -c %s $<) -gt 98303 ]; then echo "WARNING !! Executable is greater than 96k!"; fi;
 
 install: check bin/$(NAME).bin
