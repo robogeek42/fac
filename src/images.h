@@ -73,6 +73,8 @@
 
 #define CURSOR_SPRITE 8
 
+#define NUM_SPRITES ( CURSOR_SPRITE + 1 )
+
 bool load_images(bool progress);
 void create_sprites();
 int get_current_sprite();

@@ -52,13 +52,14 @@ int gViewOffX = 8;
 int gViewOffY = 8;
 
 typedef struct {
-	int tx;
-	int ty;		// Position of top-left of screen in world coords (pixel)
 	int mapWidth;
 	int mapHeight;
-} FacState;
+} FacInfo;
 
-FacState fac;
+FacInfo fac;
+
+int scr_tx;		// Position of top-left of screen in world coords (pixel)
+int scr_ty;
 
 // map - terrain and overlay (resources)
 uint8_t* tilemap;
@@ -79,19 +80,40 @@ bool bBlockSelect = false;
 int block_tx = 0;
 int block_ty = 0;
 
+// tilesets
+typedef struct {
+	int set[4];
+	int num;
+	bool bOverlay;
+} Tileset;
+
+Tileset tileset[6] = {
+	{ {1,2,3,4}, 4, false },
+	{ {13,18,23}, 3, true }, // stone
+	{ {14,19,24}, 3, true }, // Iron
+	{ {15,20,25}, 3, true }, // Copper
+	{ {16,21,26}, 3, true }, // Coal
+	{ {17,22,27}, 3, true }, // Trees
+};
+
+int ts = 0; // selected tileset
+
 clock_t key_wait_ticks;
 int key_wait = 14;
 clock_t move_wait_ticks;
 
 static volatile SYSVAR *sys_vars = NULL;
 
-int getTilePosInScreenX(int tx) { return ((tx - fac.tx) * gTileSize)+gViewOffX; }
-int getTilePosInScreenY(int ty) { return ((ty - fac.ty) * gTileSize)+gViewOffY; }
+int getTilePosInScreenX(int tx) { return ((tx - scr_tx) * gTileSize)+gViewOffX; }
+int getTilePosInScreenY(int ty) { return ((ty - scr_ty) * gTileSize)+gViewOffY; }
 void game_loop();
+void draw_all();
+void show_help();
 int getOverlayAtOffset( int tileoffset );
 int getOverlayAtCursor();
 void show_filedialog();
 int load_map( char *filename, int width, int height );
+int save_map( char *filename );
 void draw_cursor();
 void draw_tile(int tx, int ty, int tposx, int tposy);
 void draw_tile_at_cursor();
@@ -104,7 +126,10 @@ void draw_number(int n, int px, int py);
 void draw_number_lj(int n, int px, int py);
 void draw_tile_menu();
 void delete_tile(bool bOverlayOnly);
-void set_tile();
+void set_tile(bool bRandom);
+int newmap_dialog();
+void fill_random();
+void draw_mini_map();
 
 void wait()
 {
@@ -133,8 +158,8 @@ int main(/*int argc, char *argv[]*/)
 
 	fac.mapWidth = -1;
 	fac.mapHeight = -1;
-	fac.tx = 0;
-	fac.ty = 0;
+	scr_tx = 0;
+	scr_ty = 0;
 
 	load_map( "./maps/fmap.data", 45, 45 );
 	if ( ! load_images(true) )
@@ -152,6 +177,7 @@ int main(/*int argc, char *argv[]*/)
 
 	draw_screen();
 	draw_cursor();
+	draw_tile_menu();
 
 	game_loop();
 
@@ -163,13 +189,20 @@ my_exit2:
 	return 0;
 }
 
+void draw_all()
+{
+	draw_screen();
+	draw_tile_menu();
+	vdp_activate_sprites( NUM_SPRITES );
+	draw_cursor();
+}
+
 void game_loop()
 {
 	int exit=0;
 	key_wait_ticks = clock();
 	move_wait_ticks = clock();
 
-	draw_tile_menu();
 	do {
 		int dir=-1;
 		int cursor_dir=0;
@@ -198,21 +231,21 @@ void game_loop()
 			}
 		}
 		// keep cursor on screen
-		if ( cursor_tx < fac.tx ) { 
-			old_cursor_tx=cursor_tx; cursor_tx = fac.tx; 
+		if ( cursor_tx < scr_tx ) { 
+			old_cursor_tx=cursor_tx; cursor_tx = scr_tx; 
 			dir=SCROLL_RIGHT; bRedrawCursor=true;
 		}
-		if ( cursor_ty < fac.ty ) {
-			old_cursor_ty=cursor_ty; cursor_ty = fac.ty; 
+		if ( cursor_ty < scr_ty ) {
+			old_cursor_ty=cursor_ty; cursor_ty = scr_ty; 
 			dir=SCROLL_UP; bRedrawCursor=true;
 		}
-		if ( cursor_tx >= fac.tx + gMapTW ) {
-			old_cursor_tx=cursor_tx; cursor_tx = fac.tx + gMapTW-1;
+		if ( cursor_tx >= scr_tx + gMapTW ) {
+			old_cursor_tx=cursor_tx; cursor_tx = scr_tx + gMapTW-1;
 			dir=SCROLL_LEFT; bRedrawCursor=true;
 		}
 
-		if ( cursor_ty >= fac.ty + gMapTH ) {
-			old_cursor_ty=cursor_ty; cursor_ty = fac.ty + gMapTH-1;
+		if ( cursor_ty >= scr_ty + gMapTH ) {
+			old_cursor_ty=cursor_ty; cursor_ty = scr_ty + gMapTH-1;
 			dir=SCROLL_DOWN; bRedrawCursor=true;
 		}
 
@@ -244,92 +277,76 @@ void game_loop()
 		}
 
 
-		if ( vdp_check_key_press( KEY_g ) ) // toggle grid lines
+		if ( vdp_check_key_press( KEY_g ) && key_wait_ticks < clock() ) // toggle grid lines
 		{
-			if (key_wait_ticks < clock()) 
-			{
-				key_wait_ticks = clock() + key_wait;
+			key_wait_ticks = clock() + key_wait;
 
-				bGridLines = !bGridLines;
-				draw_screen();
-			}
+			bGridLines = !bGridLines;
+			draw_screen();
 		}
 
-		if ( vdp_check_key_press( KEY_d ) ) // change bank
+		if ( vdp_check_key_press( KEY_d ) && key_wait_ticks < clock() ) // WASD move tile select/bank
 		{
-			if (key_wait_ticks < clock()) 
+			key_wait_ticks = clock() + key_wait;
+			bank++; bank %= bankMax;
+			draw_tile_menu();
+		}
+		if ( vdp_check_key_press( KEY_a ) && key_wait_ticks < clock() ) // WASD move tile select/bank
+		{
+			key_wait_ticks = clock() + key_wait;
+			bank--; 
+			if (bank < 0) bank += bankMax;
+			draw_tile_menu();
+		}
+
+		if ( vdp_check_key_press( KEY_s ) && key_wait_ticks < clock() ) // WASD move tile select/bank
+		{
+			key_wait_ticks = clock() + key_wait;
+			if (tselect < 9)
 			{
-				key_wait_ticks = clock() + key_wait;
-				bank++; bank %= bankMax;
+				tselect++;
+			}
+			else
+			{
+				tselect=0;
+				bank++;
+			}
+			draw_tile_menu();
+		}
+		if ( vdp_check_key_press( KEY_w ) && key_wait_ticks < clock() ) // WASD move tile select/bank
+		{
+			key_wait_ticks = clock() + key_wait;
+			if ( tselect > 0 || bank > 0 )
+			{
+				tselect--;
+				if ( tselect < 0 )
+				{
+					tselect = 9;
+					bank--;
+				}
 				draw_tile_menu();
 			}
 		}
-		if ( vdp_check_key_press( KEY_a ) ) // change bank
-		{
-			if (key_wait_ticks < clock()) 
-			{
-				key_wait_ticks = clock() + key_wait;
-				bank--; 
-				if (bank < 0) bank += bankMax;
-				draw_tile_menu();
-			}
-		}
 
-		if ( vdp_check_key_press( KEY_s ) )
+		// number keys select a tile in a bank
+		if (key_wait_ticks < clock()) 
 		{
-			if (key_wait_ticks < clock()) 
+			for ( int k = KEY_0; k <= KEY_9; k++)
 			{
-				key_wait_ticks = clock() + key_wait;
-				if (tselect < 9)
+				if ( vdp_check_key_press( k ) )
 				{
-					tselect++;
-				}
-				else
-				{
-					tselect=0;
-					bank++;
-				}
-				draw_tile_menu();
-			}
-		}
-		if ( vdp_check_key_press( KEY_w ) )
-		{
-			if (key_wait_ticks < clock()) 
-			{
-				key_wait_ticks = clock() + key_wait;
-				if ( tselect > 0 || bank > 0 )
-				{
-					tselect--;
-					if ( tselect < 0 )
-					{
-						tselect = 9;
-						bank--;
-					}
-					draw_tile_menu();
+						key_wait_ticks = clock() + key_wait;
+						tselect = k - KEY_0;
+						draw_tile_menu();
+						break;
 				}
 			}
 		}
 
-		for ( int k = KEY_0; k <= KEY_9; k++)
+		if ( vdp_check_key_press( KEY_space ) && key_wait_ticks < clock() ) // set tile
 		{
-			if ( vdp_check_key_press( k ) )
-			{
-				if (key_wait_ticks < clock()) 
-				{
-					key_wait_ticks = clock() + key_wait;
-					tselect = k - KEY_0;
-					draw_tile_menu();
-				}
-			}
-		}
-
-		if ( vdp_check_key_press( KEY_space ) ) 
-		{
-			if (key_wait_ticks < clock()) 
-			{
-				key_wait_ticks = clock() + key_wait;
-				set_tile();
-			}
+			key_wait_ticks = clock() + key_wait;
+			set_tile( false );
 		}
 
 		if ( vdp_check_key_press( KEY_b ) && key_wait_ticks < clock() ) // block select
@@ -360,17 +377,50 @@ void game_loop()
 			delete_tile(false);
 		}
 
-		if ( vdp_check_key_press( KEY_f ) ) // file dialog
+		if ( vdp_check_key_press( KEY_t ) && key_wait_ticks < clock() ) // select tileset
 		{
-			if (key_wait_ticks < clock()) 
-			{
-				key_wait_ticks = clock() + key_wait;
+			key_wait_ticks = clock() + key_wait;
+			ts++; ts %= 6;
+			draw_tile_menu();
+		}
 
-				show_filedialog();
+		if ( vdp_check_key_press( KEY_r ) && key_wait_ticks < clock() ) // fill with random tiles from tileset
+		{
+			key_wait_ticks = clock() + key_wait;
+			set_tile( true );
+		}
+
+
+		if ( vdp_check_key_press( KEY_m ) && key_wait_ticks < clock() ) // show minimap
+		{
+			key_wait_ticks = clock() + key_wait;
+			draw_mini_map();
+		}
+
+
+		if ( vdp_check_key_press( KEY_n ) && key_wait_ticks < clock() ) // new map
+		{
+			key_wait_ticks = clock() + key_wait;
+			if (!newmap_dialog())
+			{
+				wait_for_any_key();
+				draw_all();
 			}
 		}
 
-		if ( vdp_check_key_press( KEY_x ) ) { // x - exit
+		if ( vdp_check_key_press( KEY_f ) && key_wait_ticks < clock() ) // file dialog
+		{
+			key_wait_ticks = clock() + key_wait;
+			show_filedialog();
+		}
+
+		if ( vdp_check_key_press( KEY_h ) && key_wait_ticks < clock() ) // help
+		{
+			key_wait_ticks = clock() + key_wait;
+			show_help();
+		}
+
+		if ( vdp_check_key_press( KEY_x ) && key_wait_ticks < clock() ) { // x - exit
 			TAB(6,8);printf("Are you sure?");
 			char k=getchar(); 
 			if (k=='y' || k=='Y') exit=1;
@@ -380,6 +430,52 @@ void game_loop()
 
 	} while (exit==0);
 
+}
+
+void help_line(int line, char *keystr, char* helpstr)
+{
+	TAB(2,line);
+	COL(11);
+	printf("%s",keystr);
+	TAB(13,line);
+	COL(13);
+	printf("%s",helpstr);
+}
+void show_help()
+{
+	vdp_activate_sprites(0);
+	draw_filled_box( 10, 10, 300, 220, 11, 0 );
+	COL(11);
+	TAB(3,2); printf("--------	FAC Editor HELP --------");
+	int line = 4;
+	help_line(line++, "WASD", "Select tile");
+	help_line(line++, "dir keys", "Move cursor");
+	help_line(line++, "page u/d", "Move view");
+	help_line(line++, "Home/End", "Move view");
+	line++;
+	help_line(line++, "H", "Show this help screen");
+	help_line(line++, "X", "Exit");
+	help_line(line++, "F", "File dialog");
+	help_line(line++, "N", "New map");
+	help_line(line++, "G", "Toggle grid lines");
+	line++;
+	help_line(line++, "B", "Block select start");
+	help_line(line++, "Space", "Place tile (block)");
+	help_line(line++, "Delete", "Delete tile (block)");
+	help_line(line++, "Backspace", "Delete overlay (block)");
+	line++;
+	help_line(line++, "T", "Select tileset");
+	help_line(line++, "R", "Place random tile (block)");
+
+	while( vdp_check_key_press( KEY_h ) )
+	{
+		vdp_update_key_state();
+	}
+	wait_for_any_key();
+	key_wait_ticks = clock() + key_wait;
+	vdp_cls();
+	draw_all();
+	COL(15);
 }
 
 int getOverlayAtOffset( int tileoffset )
@@ -392,8 +488,35 @@ int getOverlayAtCursor()
 	return (tilemap[cursor_ty*fac.mapWidth +  cursor_tx] & 0xF0) >> 4;
 }
 
+int load_map_info( char *filename)
+{
+	uint8_t ret = mos_load( filename, (uint24_t) &fac,  2 );
+	if ( ret != 0 )
+	{
+		printf("Failed to load map info\n");
+	}
+	return ret;
+}
+
+int save_map_info( char *filename)
+{
+	uint8_t ret = mos_save( filename, (uint24_t) &fac,  2 );
+	if ( ret != 0 )
+	{
+		printf("Failed to load map info\n");
+	}
+	return ret;
+}
+
 int load_map( char *filename, int width, int height )
 {
+	if (width <1 || height <1)
+	{
+		width = input_int_noclear(2,3,"Map Width:");
+		if (width<1) return -1;
+		height = input_int_noclear(2,4,"Map Height:");
+		if (height<1) return -1;
+	}
 	free(tilemap);
 	tilemap = (uint8_t *) malloc(sizeof(uint8_t) * width * height);
 	if (tilemap == NULL)
@@ -411,8 +534,14 @@ int load_map( char *filename, int width, int height )
 	return ret;
 }
 
-void save_map( char *filename )
+int save_map( char *filename )
 {
+	uint8_t ret = mos_save( filename, (uint24_t) tilemap,  fac.mapWidth * fac.mapHeight );
+	if ( ret != 0 )
+	{
+		printf("Failed to save map\n");
+	}
+	return ret;
 }
 
 // Show file dialog
@@ -436,12 +565,21 @@ void show_filedialog()
 	TAB(0,0);
 	if (fd_return)
 	{
+		char infofilename[85];
+		strcpy( infofilename, filename );
+		strcat( infofilename,".info" );
 		if ( isload )
 		{
-			printf("Loading %s ... \n",filename);
-			load_map( filename, 45, 45 );
+			printf("Loading %s ... ",infofilename);
+			load_map_info( infofilename );
+			printf("load %s %dx%d \n",filename,fac.mapWidth, fac.mapHeight);
+			load_map( filename, fac.mapWidth, fac.mapHeight );
+			scr_tx = 0; scr_ty = 0;
+			cursor_tx = 0; cursor_ty = 0;
 		} else {
-			printf("Saving %s ... \n",filename);
+			printf("Saving %s ... \n",infofilename);
+			save_map_info( infofilename );
+			printf("save %s ... \n",filename);
 			save_map( filename );
 		}
 
@@ -454,11 +592,14 @@ void show_filedialog()
 	vdp_logical_scr_dims( false );
 
 	draw_screen();
+	draw_tile_menu();
 
+	vdp_activate_sprites( NUM_SPRITES );
 	vdp_select_sprite( CURSOR_SPRITE );
 	vdp_show_sprite();
-
 	vdp_refresh_sprites();
+
+	draw_cursor();
 }
 
 
@@ -509,18 +650,18 @@ void draw_screen()
 
 	for (int i=0; i < gMapTH; i++) 
 	{
-		draw_horizontal(fac.tx, fac.ty+i, gMapTW);
+		draw_horizontal(scr_tx, scr_ty+i, gMapTW);
 	}
 
 	if (bGridLines)
 	{
 		vdp_gcol(0,8);
-		for (int x=0; x<(gMapTW+1)*gTileSize; x+=gTileSize)
+		for (int x=0; x<(gMapTW)*gTileSize; x+=gTileSize)
 		{
 			vdp_move_to(x+gViewOffX,0+gViewOffY);
 			vdp_line_to(x+gViewOffX,gMapTH*gTileSize-1+gViewOffY);
 		}	
-		for (int y=0; y<(gMapTH+1)*gTileSize; y+=gTileSize)
+		for (int y=0; y<(gMapTH)*gTileSize; y+=gTileSize)
 		{
 			vdp_move_to(0+gViewOffX,y+gViewOffY);
 			vdp_line_to(gMapTW*gTileSize-1+gViewOffX,y+gViewOffY);
@@ -531,18 +672,18 @@ void draw_screen()
 		draw_filled_box(0,0,gViewOffX+gMapTW*gTileSize,gViewOffY,0,0);
 		for (int tx=0; tx < gMapTW; tx++)
 		{
-			draw_number_lj( tx+fac.tx, (tx*gTileSize)+gViewOffX+4, gViewOffY-6); 
+			draw_number_lj( tx+scr_tx, (tx*gTileSize)+gViewOffX+4, gViewOffY-6); 
 		}
 		draw_filled_box(0,0,gViewOffX, gViewOffY+gMapTH*gTileSize,0,0);
 		for (int ty=0; ty < gMapTH; ty++)
 		{
-			draw_number( ty+fac.ty, gViewOffX, (ty*gTileSize)+gViewOffY+6); 
+			draw_number( ty+scr_ty, gViewOffX, (ty*gTileSize)+gViewOffY+6); 
 		}
 	}
 	if (bBlockSelect)
 	{
-		int startx = (block_tx - fac.tx)*gTileSize + gViewOffX;
-		int starty = (block_ty - fac.ty)*gTileSize + gViewOffY;
+		int startx = (block_tx - scr_tx)*gTileSize + gViewOffX;
+		int starty = (block_ty - scr_ty)*gTileSize + gViewOffY;
 		int sizex = (cursor_tx-block_tx+1) * gTileSize;
 		int sizey = (cursor_ty-block_ty+1) * gTileSize;
 		if (sizex > 0 && sizey > 0 )
@@ -566,31 +707,21 @@ void draw_block()
 	if (bGridLines)
 	{
 		vdp_gcol(0,8);
-		// vertical lines
-		for (int tx=block_tx-fac.tx; tx<MAX(cursor_tx,old_cursor_tx)+2-fac.tx; tx++)
+		for (int x=0; x<(gMapTW)*gTileSize; x+=gTileSize)
 		{
-			vdp_move_to(
-					(tx*gTileSize) + gViewOffX,
-					(block_ty-fac.ty)*gTileSize + gViewOffY );
-			vdp_line_to(
-					(tx*gTileSize) + gViewOffX,
-					(MAX(cursor_ty,old_cursor_ty)-fac.ty+1)*gTileSize + gViewOffY );
+			vdp_move_to(x+gViewOffX,0+gViewOffY);
+			vdp_line_to(x+gViewOffX,gMapTH*gTileSize-1+gViewOffY);
 		}	
-		// horizontal lines
-		for (int ty=block_ty-fac.ty; ty<(MAX(cursor_ty,old_cursor_ty)+2)-fac.ty; ty++)
+		for (int y=0; y<(gMapTH)*gTileSize; y+=gTileSize)
 		{
-			vdp_move_to(
-					(block_tx-fac.tx)*gTileSize + gViewOffX,
-					(ty*gTileSize) + gViewOffY);
-			vdp_line_to(
-					(MAX(cursor_tx,old_cursor_tx)-fac.tx+1)*gTileSize + gViewOffX,
-					(ty*gTileSize) + gViewOffY);
+			vdp_move_to(0+gViewOffX,y+gViewOffY);
+			vdp_line_to(gMapTW*gTileSize-1+gViewOffX,y+gViewOffY);
 		}	
 	}
 	if (bBlockSelect)
 	{
-		int startx = (block_tx - fac.tx)*gTileSize + gViewOffX;
-		int starty = (block_ty - fac.ty)*gTileSize + gViewOffY;
+		int startx = (block_tx - scr_tx)*gTileSize + gViewOffX;
+		int starty = (block_ty - scr_ty)*gTileSize + gViewOffY;
 		int sizex = (cursor_tx-block_tx+1) * gTileSize;
 		int sizey = (cursor_ty-block_ty+1) * gTileSize;
 		if (sizex > 0 && sizey > 0 )
@@ -622,43 +753,43 @@ void scroll_screen(int dir, int tiles)
 {
 	switch (dir) {
 		case SCROLL_RIGHT: // scroll screen to right, view moves left
-			if (fac.tx >= tiles)
+			if (scr_tx >= tiles)
 			{
-				fac.tx -= tiles;
+				scr_tx -= tiles;
 			}
 			else
 			{
-				fac.tx = 0;
+				scr_tx = 0;
 			}
 			break;
 		case SCROLL_LEFT: // scroll screen to left, view moves right
-			if ((fac.tx + gMapTW + tiles ) < fac.mapWidth)
+			if ((scr_tx + gMapTW + tiles ) < fac.mapWidth)
 			{
-				fac.tx += tiles;
+				scr_tx += tiles;
 			}
 			else
 			{
-				fac.tx = fac.mapWidth - gMapTW;
+				scr_tx = fac.mapWidth - gMapTW;
 			}
 			break;
 		case SCROLL_UP:
-			if (fac.ty >= tiles)
+			if (scr_ty >= tiles)
 			{
-				fac.ty -= tiles;
+				scr_ty -= tiles;
 			}
 			else
 			{
-				fac.ty = 0;
+				scr_ty = 0;
 			}
 			break;
 		case SCROLL_DOWN:
-			if ((fac.ty + gMapTH + tiles ) < fac.mapHeight)
+			if ((scr_ty + gMapTH + tiles ) < fac.mapHeight)
 			{
-				fac.ty += tiles;
+				scr_ty += tiles;
 			}
 			else
 			{
-				fac.ty = fac.mapHeight - gMapTH;
+				scr_ty = fac.mapHeight - gMapTH;
 			}
 			break;
 		default:
@@ -746,6 +877,16 @@ void draw_tile_menu()
 	//draw_box(xleft+gTileSize + bank*(gTileSize+1) -1, ytop-1, gTileSize+1, 10*(gTileSize+1), 7); 
 
 	draw_box(xleft+gTileSize + bank*(gTileSize+1) -1, ytop+tselect*(gTileSize+1)-1, gTileSize+1, gTileSize+1, 11); 
+
+	// draw selected tileset
+	ytop = 8+17*10+4;
+	draw_filled_box(xleft,ytop,190,16,0,0);
+	draw_number_lj(ts, xleft+8, ytop+4);
+	for (int i=0; i<tileset[ ts ].num; i++)
+	{
+		vdp_adv_select_bitmap( tileset[ts].set[i] );
+		vdp_draw_bitmap(xleft+i*(gTileSize+1)+12, ytop);
+	}
 }
 
 void delete_tile(bool bOverlayOnly)
@@ -786,21 +927,21 @@ void draw_tile_at_cursor()
 	{
 		vdp_gcol(0,8);
 		// vertical lines
-		for (int x=cursor_tx*gTileSize; x<(cursor_tx+1)*gTileSize; x+=gTileSize)
+		for (int x=(cursor_tx-scr_tx)*gTileSize; x<(cursor_tx-scr_tx+1)*gTileSize; x+=gTileSize)
 		{
-			vdp_move_to(x+gViewOffX, block_ty+gViewOffY);
-			vdp_line_to(x+gViewOffX, (cursor_ty+1)*gTileSize+gViewOffY);
+			vdp_move_to(x+gViewOffX, (block_ty-scr_ty)+gViewOffY);
+			vdp_line_to(x+gViewOffX, (cursor_ty-scr_ty+1)*gTileSize+gViewOffY);
 		}	
 		// horizontal lines
-		for (int y=cursor_ty*gTileSize; y<(cursor_ty+1)*gTileSize; y+=gTileSize)
+		for (int y=(cursor_ty-scr_ty)*gTileSize; y<(cursor_ty-scr_ty+1)*gTileSize; y+=gTileSize)
 		{
-			vdp_move_to(block_tx+gViewOffX, y+gViewOffY);
-			vdp_line_to((cursor_tx+1)*gTileSize+gViewOffX, y+gViewOffY);
+			vdp_move_to((block_tx-scr_tx)+gViewOffX, y+gViewOffY);
+			vdp_line_to((cursor_tx-scr_tx+1)*gTileSize+gViewOffX, y+gViewOffY);
 		}	
 	}
 }
 
-void set_tile()
+void set_tile(bool bRandom)
 {
 	int bm = bank*10+tselect;
 	if (bm < total_bms)
@@ -812,6 +953,11 @@ void set_tile()
 				int offset = block_tx + y*fac.mapWidth;
 				for ( int x = block_tx; x < cursor_tx+1; x++ )
 				{
+					if (bRandom)
+					{
+						int r = rand() % tileset[ts].num;
+						bm = tileset[ts].set[r];
+					}
 					uint8_t byte = tilemap[ offset ];
 					if ( bm < NUM_BM_TERR16 )
 					{
@@ -825,10 +971,16 @@ void set_tile()
 					offset++;
 				}
 			}
+			bBlockSelect = false;
 			draw_screen();
 		} else {
 			int offset = cursor_tx+cursor_ty*fac.mapWidth;
 			uint8_t byte = tilemap[ offset ];
+			if (bRandom)
+			{
+				int r = rand() % tileset[ts].num;
+				bm = tileset[ts].set[r];
+			}
 			if ( bm < NUM_BM_TERR16 )
 			{
 				byte &= 0xF0;
@@ -843,3 +995,140 @@ void set_tile()
 	}
 }
 
+int newmap_dialog()
+{
+	int width = 0; int height = 0;
+	int tile = 0;
+
+	vdp_cls();
+	COL(11);TAB(0,0); printf("New Map");
+	COL(2);TAB(0,1); printf("Enter 0 dimension to exit\n");
+	COL(15);
+	while (width < 15 || width > 255)
+	{
+		width = input_int_noclear(2,4,"Map Width (15-255)");
+		if (width == 0) return -1;
+	}
+	while (height < 15 || height > 255)
+	{
+		height = input_int_noclear(2,5,"Map Height (15-255)");
+		if (height == 0) return -1;
+	}
+
+	tile = input_int_noclear(2, 7, "Initial tile (0-27)");
+	if (tile < 0 || tile > 27) return -1;
+
+	free(tilemap);
+	tilemap = (uint8_t *) malloc(sizeof(uint8_t) * width * height);
+	if (tilemap == NULL)
+	{
+		printf("Out of memory\n");
+		return -1;
+	}
+	fac.mapWidth = width;
+	fac.mapHeight = height;
+
+	for (int y=0;y<height;y++)
+	{
+		for (int x=0;x<width;x++)
+		{
+			tilemap[ x + y*width ] = tile;
+		}
+	}
+
+	draw_all();
+
+	return 0;
+}
+
+void fill_random()
+{
+	if (bBlockSelect)
+	{
+	} else {
+		int r = rand() % tileset[ts].num;
+		int bm = tileset[ts].set[r];
+		int offset = cursor_tx+cursor_ty*fac.mapWidth;
+		uint8_t byte = tilemap[ offset ];
+		if ( bm < NUM_BM_TERR16 )
+		{
+			byte &= 0xF0;
+			byte |= bm-BMOFF_TERR16;
+		} else {
+			byte &= 0x0F;
+			byte |= ( (bm-BMOFF_FEAT16+1) << 4 );
+		}
+		tilemap[ offset ] = byte;
+		draw_tile_at_cursor();
+	}
+}
+
+void draw_mini_map()
+{
+	vdp_cls();
+	int offx = 8;
+	int offy = 8;
+	int scale = 2;
+
+	for( int ty=0; ty<fac.mapHeight; ty++)
+	{
+		for( int tx=0; tx<fac.mapWidth; tx++)
+		{
+			int offset = tx + ty * fac.mapWidth;
+			int col = 4; // dark blue
+			if ( ( tilemap[ offset ] & 0x0F ) > 0 )
+			{
+				col = 36; // green
+			}
+
+			uint8_t overlay = getOverlayAtOffset( offset );
+			if ( overlay > 0 ) 
+			{
+				int feat = overlay -1;
+				switch( feat )
+				{
+					case 0: // stone
+					case 5:
+					case 10:
+						col = 7; // grey
+						break;
+					case 1: // iron
+					case 6:
+					case 11:
+						col = 1; // dark red
+						break;
+					case 2: // copper
+					case 7:
+					case 12:
+						col = 54; // orange
+						break;
+					case 3: // coal
+					case 8:
+					case 13:
+						col = 0; // black
+						break;
+					case 4: // tree
+					case 9:
+					case 14:
+						col = 29; // dark green/brown
+						break;
+					default:
+						break;
+				}
+			}
+			vdp_gcol(0, col);
+			vdp_move_to( tx * scale + offx, ty * scale + offy );
+			vdp_filled_rect( tx * scale + offx + scale-1, ty * scale + offy + scale-1 );
+		}
+	}
+	
+	while( vdp_check_key_press( KEY_h ) )
+	{
+		vdp_update_key_state();
+	}
+	wait_for_any_key();
+	key_wait_ticks = clock() + key_wait;
+	vdp_cls();
+	draw_all();
+	COL(15);
+}
