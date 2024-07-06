@@ -51,6 +51,8 @@ int gMapTH = 14;
 int gViewOffX = 8;
 int gViewOffY = 8;
 
+int gMinimapScale = 2;
+
 typedef struct {
 	int mapWidth;
 	int mapHeight;
@@ -87,13 +89,17 @@ typedef struct {
 	bool bOverlay;
 } Tileset;
 
-Tileset tileset[6] = {
-	{ {1,2,3,4}, 4, false },
-	{ {13,18,23}, 3, true }, // stone
-	{ {14,19,24}, 3, true }, // Iron
-	{ {15,20,25}, 3, true }, // Copper
-	{ {16,21,26}, 3, true }, // Coal
-	{ {17,22,27}, 3, true }, // Trees
+#define NUM_TILESETS 8
+Tileset tileset[NUM_TILESETS] = {
+	//{ {1,2,3,4}, 4, false },
+	{ {0+BMOFF_FEAT16,5+BMOFF_FEAT16,10+BMOFF_FEAT16}, 3, true }, // stone
+	{ {1+BMOFF_FEAT16,6+BMOFF_FEAT16,11+BMOFF_FEAT16}, 3, true }, // Iron
+	{ {2+BMOFF_FEAT16,7+BMOFF_FEAT16,12+BMOFF_FEAT16}, 3, true }, // Copper
+	{ {3+BMOFF_FEAT16,8+BMOFF_FEAT16,13+BMOFF_FEAT16}, 3, true }, // Coal
+	{ {4+BMOFF_FEAT16,9+BMOFF_FEAT16,14+BMOFF_FEAT16}, 3, true }, // Trees
+	{ {1, 2, 3, 4},4,false }, // grass
+	{ {5, 6, 7, 8},4,false }, // desert
+	{ {9,10,11,12},4,false }, // mud
 };
 
 int ts = 0; // selected tileset
@@ -130,6 +136,8 @@ void set_tile(bool bRandom);
 int newmap_dialog();
 void fill_random();
 void draw_mini_map();
+void circle_random(bool bRandom);
+void new_mode();
 
 void wait()
 {
@@ -161,7 +169,7 @@ int main(/*int argc, char *argv[]*/)
 	scr_tx = 0;
 	scr_ty = 0;
 
-	load_map( "./maps/fmap.data", 45, 45 );
+	load_map( "./maps/newmap1", 45, 45 );
 	if ( ! load_images(true) )
 	{
 		printf("Failed to load images\n");
@@ -380,7 +388,7 @@ void game_loop()
 		if ( vdp_check_key_press( KEY_t ) && key_wait_ticks < clock() ) // select tileset
 		{
 			key_wait_ticks = clock() + key_wait;
-			ts++; ts %= 6;
+			ts++; ts %= NUM_TILESETS;
 			draw_tile_menu();
 		}
 
@@ -388,6 +396,12 @@ void game_loop()
 		{
 			key_wait_ticks = clock() + key_wait;
 			set_tile( true );
+		}
+
+		if ( vdp_check_key_press( KEY_o ) && key_wait_ticks < clock() ) // circle random
+		{
+			key_wait_ticks = clock() + key_wait;
+			circle_random( true );
 		}
 
 
@@ -406,6 +420,12 @@ void game_loop()
 				wait_for_any_key();
 				draw_all();
 			}
+		}
+
+		if ( vdp_check_key_press( KEY_f12 ) && key_wait_ticks < clock() ) // new map
+		{
+			key_wait_ticks = clock() + key_wait;
+			new_mode();
 		}
 
 		if ( vdp_check_key_press( KEY_f ) && key_wait_ticks < clock() ) // file dialog
@@ -490,7 +510,7 @@ int getOverlayAtCursor()
 
 int load_map_info( char *filename)
 {
-	uint8_t ret = mos_load( filename, (uint24_t) &fac,  2 );
+	uint8_t ret = mos_load( filename, (uint24_t) &fac,  2*sizeof(uint24_t) );
 	if ( ret != 0 )
 	{
 		printf("Failed to load map info\n");
@@ -500,7 +520,7 @@ int load_map_info( char *filename)
 
 int save_map_info( char *filename)
 {
-	uint8_t ret = mos_save( filename, (uint24_t) &fac,  2 );
+	uint8_t ret = mos_save( filename, (uint24_t) &fac,  2*sizeof(uint24_t) );
 	if ( ret != 0 )
 	{
 		printf("Failed to load map info\n");
@@ -1041,34 +1061,11 @@ int newmap_dialog()
 	return 0;
 }
 
-void fill_random()
-{
-	if (bBlockSelect)
-	{
-	} else {
-		int r = rand() % tileset[ts].num;
-		int bm = tileset[ts].set[r];
-		int offset = cursor_tx+cursor_ty*fac.mapWidth;
-		uint8_t byte = tilemap[ offset ];
-		if ( bm < NUM_BM_TERR16 )
-		{
-			byte &= 0xF0;
-			byte |= bm-BMOFF_TERR16;
-		} else {
-			byte &= 0x0F;
-			byte |= ( (bm-BMOFF_FEAT16+1) << 4 );
-		}
-		tilemap[ offset ] = byte;
-		draw_tile_at_cursor();
-	}
-}
-
 void draw_mini_map()
 {
 	vdp_cls();
 	int offx = 8;
 	int offy = 8;
-	int scale = 2;
 
 	for( int ty=0; ty<fac.mapHeight; ty++)
 	{
@@ -1076,9 +1073,42 @@ void draw_mini_map()
 		{
 			int offset = tx + ty * fac.mapWidth;
 			int col = 4; // dark blue
-			if ( ( tilemap[ offset ] & 0x0F ) > 0 )
+			int terr = tilemap[ offset ] & 0x0F;
+			if ( terr > 0 )
 			{
-				col = 36; // green
+				switch ( terr )
+				{
+					case 1: 
+					case 2: 
+					case 3: 
+					case 4: 
+						col = 10; // green
+						break;
+					case 5: 
+					case 6: 
+					case 7: 
+					case 8: 
+						col = 3; // yellow
+						break;
+					case 9: 
+					case 10: 
+					case 11: 
+					case 12: 
+						col = 1; //dark-red 
+						break;
+					case 13: 
+						col = 8; // dark grey
+						break;
+					case 14: 
+						col = 14; // cyan
+						break;
+					case 15: 
+						col = 15; // white
+						break;
+					default:
+						col = 4; // dark-blue
+						break;
+				}
 			}
 
 			uint8_t overlay = getOverlayAtOffset( offset );
@@ -1095,12 +1125,12 @@ void draw_mini_map()
 					case 1: // iron
 					case 6:
 					case 11:
-						col = 1; // dark red
+						col = 9; // red
 						break;
 					case 2: // copper
 					case 7:
 					case 12:
-						col = 54; // orange
+						col = 5; // dark-mag
 						break;
 					case 3: // coal
 					case 8:
@@ -1110,25 +1140,140 @@ void draw_mini_map()
 					case 4: // tree
 					case 9:
 					case 14:
-						col = 29; // dark green/brown
+						col = 2; // dark green
 						break;
 					default:
 						break;
 				}
 			}
+			if ( tx==cursor_tx && ty==cursor_ty) col=11;
 			vdp_gcol(0, col);
-			vdp_move_to( tx * scale + offx, ty * scale + offy );
-			vdp_filled_rect( tx * scale + offx + scale-1, ty * scale + offy + scale-1 );
+			vdp_move_to( tx * gMinimapScale + offx, ty * gMinimapScale + offy );
+			vdp_filled_rect( tx * gMinimapScale + offx + gMinimapScale-1, ty * gMinimapScale + offy + gMinimapScale-1 );
 		}
 	}
+	draw_box(scr_tx * gMinimapScale + offx, scr_ty * gMinimapScale + offy, gMapTW * gMinimapScale, gMapTH * gMinimapScale, 8 );
 	
 	while( vdp_check_key_press( KEY_h ) )
 	{
 		vdp_update_key_state();
 	}
+
 	wait_for_any_key();
 	key_wait_ticks = clock() + key_wait;
 	vdp_cls();
 	draw_all();
 	COL(15);
 }
+
+// do edging for whole map
+void do_edging()
+{
+	// find any non sea tiles, check for sea border and
+	// replace with correct edge tile
+	for( int ty=0; ty<fac.mapHeight; ty++)
+	{
+		for( int tx=0; tx<fac.mapWidth; tx++)
+		{
+			int offset = tx + ty * fac.mapWidth;
+			uint8_t terrain =  tilemap[ offset ] & 0x0F;
+			
+			if (terrain > 0)
+			{
+				int tilenbs[9] = {0};
+				for (int tn=0; tn<9; tn++)
+				{
+					int tnx = (tn % 3)-1 + tx;
+					int tny = (tn / 3)-1 + ty;
+					tilenbs[tn] = tilemap[ tnx + tny*fac.mapWidth ] & 0x0F;
+				}
+			}
+		}
+	}
+}
+
+void circle_random(bool bRandom)
+{
+	if (!bBlockSelect) return;
+printf("c");
+	int bw = cursor_tx - block_tx;
+	int bh = cursor_ty - block_ty;
+	int cx = block_tx + bw/2;
+	int cy = block_ty + bh/2;
+	for ( int y = block_ty; y < cursor_ty+1; y++ )
+	{
+		int offset = block_tx + y*fac.mapWidth;
+		for ( int x = block_tx; x < cursor_tx+1; x++ )
+		{
+			int a = (cx - x);
+			int b = (cy - y);
+			float dist = sqrt ( (a*a) + (b*b) );
+			float dist_adj = 3.0f * (dist / (cx-block_tx));
+			int r = MIN(MAX((int) dist_adj,0),3);
+			int bm = 0;
+		   	if ( r<3) 
+			{
+				bm= tileset[ts].set[r];
+				uint8_t byte = tilemap[ offset ];
+				byte &= 0x0F;
+				byte |= ( (bm - BMOFF_FEAT16+1) << 4 );
+				tilemap[ offset ] = byte;
+			}
+			offset++;
+		}
+	}
+	bBlockSelect = false;
+	draw_screen();
+}
+
+void new_mode()
+{
+
+	vdp_cls();
+	TAB(2,2);printf(" 0 - Mode 8 320x240 64 cols ");
+	TAB(2,3);printf(" 1 - Mode 0 640x480 16 cols ");
+	TAB(2,4);printf(" 2 - Mode 3 640x240 64 cols ");
+	int choice = input_int_noclear(2,6,"Enter choice 0-3");
+	switch (choice)
+	{
+		case 0:
+		default:
+			gMode = 8; 
+			gScreenWidth = 320;
+			gScreenHeight = 240;
+			gTileSize = 16;
+			gScreenWidthTiles = 20;
+			gScreenHeightTiles = 15;
+			gMapTW = 14;
+			gMapTH = 14;
+			gMinimapScale= 2;
+			break;
+		case 1:
+			gMode = 0; 
+			gScreenWidth = 640;
+			gScreenHeight = 480;
+			gTileSize = 16;
+			gScreenWidthTiles = 40;
+			gScreenHeightTiles = 30;
+			gMapTW = 35;
+			gMapTH = 29;
+			gMinimapScale= 4;
+			break;
+		case 2:
+			gMode = 3; 
+			gScreenWidth = 640;
+			gScreenHeight = 240;
+			gTileSize = 16;
+			gScreenWidthTiles = 40;
+			gScreenHeightTiles = 15;
+			gMapTW = 35;
+			gMapTH = 14;
+			gMinimapScale= 2;
+			break;
+	}
+	change_mode(gMode);
+	vdp_cursor_enable( false );
+	vdp_logical_scr_dims( false );
+	draw_all();
+}
+
