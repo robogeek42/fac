@@ -3,9 +3,9 @@
 
 #include "progbar.h"
 
-#define FN_TERR16 "img/terr16/tr%02d.rgb2"
+#define FN_TERR16 "img/trnew/tr%02d.rgb2"
 #define BMOFF_TERR16 0
-#define NUM_BM_TERR16 13
+#define NUM_BM_TERR16 16
 
 #define FN_FEAT16 "img/tf16/tf%02d.rgb2"
 #define BMOFF_FEAT16 ( BMOFF_TERR16 + NUM_BM_TERR16 )

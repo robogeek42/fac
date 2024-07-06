@@ -86,8 +86,6 @@ typedef struct {
 	int fuel_value;		
 } ItemType; 
 
-// FIXME: this needs to be an enum
-
 enum ItemTypesEnum {
 	IT_BELT,
 
