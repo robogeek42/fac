@@ -57,7 +57,11 @@
 #define BMOFF_INSERTERS ( BMOFF_PROD8 + NUM_BM_PROD8 )
 #define NUM_BM_INSERTERS 12
 
-#define TOTAL_BM ( BMOFF_INSERTERS + NUM_BM_INSERTERS)
+#define FN_ZAP "img/zap8x8.rgb2"
+#define BMOFF_ZAP ( BMOFF_INSERTERS + NUM_BM_INSERTERS )
+#define NUM_BM_ZAP 1
+
+#define TOTAL_BM ( BMOFF_ZAP + NUM_BM_ZAP)
 
 #define BOB_SPRITE_DOWN 0
 #define BOB_SPRITE_UP 1
@@ -214,6 +218,9 @@ bool load_images(bool progress)
 		if ( ret < 0 ) return false;
 		if (progress) update_bar(progbar, cnt++);
 	}
+	int ret = load_bitmap_file(FN_ZAP, 8, 8, BMOFF_ZAP );
+	if ( ret < 0 ) return false;
+
 #if 0
 	printf("TILES start %d count %d\n",BMOFF_TERR16,NUM_BM_TERR16);
 	printf("FEATS start %d count %d\n",BMOFF_FEAT16,NUM_BM_FEAT16);

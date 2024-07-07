@@ -66,6 +66,8 @@ bool debug = false;
 char sigref[4] = "FAC";
 #define SAVE_VERSION 1
 
+#define MACH_NEED_ENERGY
+
 //------------------------------------------------------------
 // status related variables
 // need to be saved / loaded
@@ -76,6 +78,7 @@ typedef struct {
 	int ypos;		// Position of top-left of screen in world coords (pixel)
 	int bobx;
 	int boby;		// Position of character in world coords (pixel)
+	int energy;
 } FacState;
 
 FacState fac;
@@ -167,7 +170,6 @@ int resourceMultiplier = 32;
 // Configuration vars
 int belt_speed = 7;
 int key_wait = 15;
-#define TILE_INFO_FILE "img/tileinfo.txt"
 //------------------------------------------------------------
 
 // counters
@@ -264,7 +266,7 @@ void check_items_on_machines();
 int getResourceCount(int tx, int ty);
 ItemNodePtr getResource(int tx, int ty);
 bool reduceResourceCount(int tx, int ty);
-int show_assembler_dialog();
+int show_assembler_dialog(bool bGenerator);
 
 static volatile SYSVAR *sys_vars = NULL;
 
@@ -351,6 +353,8 @@ int main(/*int argc, char *argv[]*/)
 		printf("Failed to load map\n");
 		goto my_exit2;
 	}
+
+	fac.energy = 0;
 
 	/* start bob and screen centred in map */
 	fac.bobx = (mapinfo.width * gTileSize / 2) & 0xFFFFF0;
@@ -503,11 +507,12 @@ void game_loop()
 			draw_layer(true);
 			draw_cursor(true);
 		}
+
 		if (debug)
 		{
 			COL(15);COL(128);
 			//TAB(0,29); printf("%d %d  ",frame_time_in_ticks,func_time[0]);
-			TAB(0,29); printf("%d %d i:%d   ",frame_time_in_ticks,func_time[0], numItems);
+			TAB(0,29); printf("%d %d i:%d E:%d  ",frame_time_in_ticks,func_time[0], numItems, fac.energy);
 		}
 			
 		if ( vdp_check_key_press( KEY_p ) ) { // do place - get ready to place an item from inventory
@@ -648,7 +653,7 @@ void game_loop()
 			draw_horizontal_layer( tx, ty+1, message_len+1, true, true, true );
 		}
 
-		if ( machine_anim_timeout_ticks < clock() )
+		if ( fac.energy > 0 &&  machine_anim_timeout_ticks < clock() )
 		{
 			machine_anim_timeout_ticks = clock() + machine_anim_speed;
 			machine_frame = (machine_frame +1) % 3;
@@ -677,9 +682,13 @@ void game_loop()
 				// miners reduce the resource count that they are mining
 				if ( mach->machine_type == IT_MINER )
 				{
-					if ( getResourceCount( mach->tx, mach->ty ) > 0 )
+					if ( getResourceCount( mach->tx, mach->ty ) > 0 
+#if defined MACH_NEED_ENERGY
+							&& fac.energy > 0
+#endif
+					)
 					{
-						if ( minerProduce( mach) )
+						if ( minerProduce( mach, &fac.energy ) )
 						{
 							reduceResourceCount( mach->tx, mach->ty );
 						}
@@ -687,14 +696,28 @@ void game_loop()
 				}
 
 				// call producer for each of these
-				if ( mach->machine_type == IT_FURNACE )
+				if ( mach->machine_type == IT_FURNACE
+#if defined MACH_NEED_ENERGY
+						&& fac.energy > 0
+#endif
+				)
 				{
-					furnaceProduce( mach );
+					furnaceProduce( mach, &fac.energy );
 				}
-				if ( mach->machine_type == IT_ASSEMBLER )
+				if ( mach->machine_type == IT_ASSEMBLER
+#if defined MACH_NEED_ENERGY
+						&& fac.energy > 0
+#endif
+				)
 				{
-					assemblerProduce( mach );
+					assemblerProduce( mach, &fac.energy );
 				}
+
+				if ( mach->machine_type == IT_GENERATOR )
+				{
+					generatorProduce( mach, &fac.energy );
+				}
+
 				tlistp = tlistp->next;
 			}
 		}
@@ -807,6 +830,11 @@ void draw_machines(int tx, int ty, int tposx, int tposy)
 		int bmid = getMachineBMIDmh(mh);
 		vdp_adv_select_bitmap( bmid );
 		vdp_draw_bitmap( tposx, tposy );
+		if (fac.energy == 0 && ( mh->machine_type < IT_INSERTER ))
+		{
+			vdp_adv_select_bitmap( BMOFF_ZAP );
+			vdp_draw_bitmap( tposx, tposy );
+		}
 	}
 }
 
@@ -1490,7 +1518,7 @@ void do_place()
 			} else 
 			if ( item_selected == IT_ASSEMBLER )
 			{
-				int recipe = show_assembler_dialog();
+				int recipe = show_assembler_dialog(false);
 				if (inventory_remove_item( inventory, item_selected, 1 ))
 				{
 					Machine *mach = addAssembler( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
@@ -1505,10 +1533,19 @@ void do_place()
 					objectmap[tileoffset] = insp;
 				}
 			} else 
+			if ( item_selected == IT_GENERATOR )
+			{
+				int recipe = show_assembler_dialog(true);
+				if (inventory_remove_item( inventory, item_selected, 1 ))
+				{
+					Machine *mach = addGenerator( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
+					objectmap[tileoffset] = mach;
+				}
+			} else 
 			if ( inventory_remove_item( inventory, item_selected, 1 ) )
 			{
 				// generic machine ... e.g. Box
-				objectmap[tileoffset] = addMachine( &machinelist, item_selected, cursor_tx, cursor_ty, 0, 100, 0);
+				objectmap[tileoffset] = addMachine( &machinelist, item_selected, cursor_tx, cursor_ty, 0, 100, 0, 0);
 			}
 		}
 	}
@@ -1523,7 +1560,7 @@ void drop_item(int item)
 	if (mh && mh->machine_type > 0)
 	{
 		int machine_itemtype = mh->machine_type;
-		if ( machine_itemtype == IT_FURNACE || machine_itemtype == IT_BOX || machine_itemtype == IT_ASSEMBLER )
+		if ( machine_itemtype == IT_FURNACE || machine_itemtype == IT_BOX || machine_itemtype == IT_ASSEMBLER || machine_itemtype == IT_GENERATOR )
 		{
 			insertItemIntoMachine( machine_itemtype, cursor_tx, cursor_ty, item );
 			return;
@@ -1585,6 +1622,7 @@ void move_items(bool bDraw)
 				{
 					// pop item off global itemlist and put into inserter's own list
 					ItemNodePtr ip = popItem( &itemlist, currPtr );
+					numItems--;
 					ip->next = insp->itemlist;
 					insp->itemlist = ip;
 					insp->itemcnt++;
@@ -1803,6 +1841,7 @@ void move_items_on_inserters(bool bDraw)
 					it->next = itemlist;
 					itemlist = it;
 					insp->itemcnt--;
+					numItems++;
 				}
 			}
 			currPtr = nextPtr;
@@ -1887,9 +1926,10 @@ void move_items_on_machines(bool bDraw)
 				ItemNodePtr it = popItem( &mach->itemlist, currPtr );
 				if ( it )
 				{
-					// add to front of itemlist;
+					// add to front of global itemlist;
 					it->next = itemlist;
 					itemlist = it;
+					numItems++;
 				}
 			}
 			currPtr = nextPtr;
@@ -2234,7 +2274,7 @@ void show_info()
 		vdp_adv_select_bitmap( info_item_bmid );
 		vdp_draw_bitmap( infox+4, infoy+4 );
 		putch(0x05); // print at graphics cursor
-		if ( info_item_type == IT_FURNACE || info_item_type == IT_ASSEMBLER )
+		if ( info_item_type == IT_FURNACE || info_item_type == IT_ASSEMBLER || info_item_type == IT_GENERATOR )
 		{
 			Machine* mach = findMachine(&machinelist, cursor_tx, cursor_ty);
 			int ptype = mach->ptype;
@@ -2248,6 +2288,10 @@ void show_info()
 			   	if ( info_item_type == IT_ASSEMBLER )
 				{
 					pt = &assemblerProcessTypes[ptype];
+				}
+			   	if ( info_item_type == IT_GENERATOR )
+				{
+					pt = &generatorProcessTypes[ptype];
 				}
 				for (int it = 0; it < pt->innum; it++)
 				{
@@ -2999,6 +3043,24 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 			}
 		}
 	}
+	if ( machine_type == IT_GENERATOR )
+	{
+		Machine* mach = findMachine(&machinelist, tx, ty);
+		int ptype = mach->ptype;
+		if ( ptype >= 0 )
+		{
+			// find which of the inputs matches this item
+			for (int k=0; k < generatorProcessTypes[ptype].innum; k++)
+			{
+				if ( generatorProcessTypes[ptype].in[k] == item )
+				{
+					// increment count of that item in the assembler
+					mach->countIn[k]++;
+					break;
+				}
+			}
+		}
+	}
 }
 
 void check_items_on_machines()
@@ -3018,7 +3080,7 @@ void check_items_on_machines()
 		if (mh && mh->machine_type > 0)
 		{
 			int machine_itemtype = mh->machine_type;
-			if ( machine_itemtype == IT_FURNACE || machine_itemtype == IT_BOX ||  machine_itemtype == IT_ASSEMBLER )
+			if ( machine_itemtype == IT_FURNACE || machine_itemtype == IT_BOX ||  machine_itemtype == IT_ASSEMBLER || machine_itemtype == IT_GENERATOR )
 			{
 				int item = currPtr->item;
 				insertItemIntoMachine( machine_itemtype, tx, ty, item );
@@ -3037,7 +3099,7 @@ void check_items_on_machines()
 #define RECIPE_BOX_WIDTH 120
 #define RECIPE_SELECT_HEIGHT 24
 #define RECIPE_TITLE_HEIGHT 10
-int show_assembler_dialog()
+int show_assembler_dialog(bool bGenerator)
 {
 	int offx = 10;
 	int offy = 20;
@@ -3089,16 +3151,22 @@ int show_assembler_dialog()
 				vdp_gcol(0, 11);
 				int xx = offx + RECIPE_EXT_BORDER + 2;
 				int yy = box_offsetsY[j] + 2;
-				for (int i=0; i < assemblerProcessTypes[j].innum; i++ )
+
+				ProcessType * processType = assemblerProcessTypes;
+				if ( bGenerator )
 				{
-					int itemBMID = itemtypes[ assemblerProcessTypes[j].in[i] ].bmID;
-					for (int k=0; k<assemblerProcessTypes[j].incnt[i]; k++)
+					processType = generatorProcessTypes;
+				}
+				for (int i=0; i < processType[j].innum; i++ )
+				{
+					int itemBMID = itemtypes[ processType[j].in[i] ].bmID;
+					for (int k=0; k<processType[j].incnt[i]; k++)
 					{
 						vdp_adv_select_bitmap( itemBMID );
 						vdp_draw_bitmap( xx, yy );
 						xx += 10;
 					}
-					if ( i <  assemblerProcessTypes[j].innum -1 )
+					if ( i <  processType[j].innum -1 )
 					{
 						vdp_move_to( xx, yy ); printf("+");
 						xx += 10;
@@ -3106,12 +3174,18 @@ int show_assembler_dialog()
 				}
 				vdp_move_to( xx, yy ); printf("%c",CHAR_RIGHTARROW);
 				xx += 10;
-				int itemBMID = itemtypes[ assemblerProcessTypes[j].out ].bmID;
-				for (int k=0; k<assemblerProcessTypes[j].outcnt; k++)
+				int itemBMID = itemtypes[ processType[j].out ].bmID;
+				if ( bGenerator )
 				{
-					vdp_adv_select_bitmap( itemBMID );
-					vdp_draw_bitmap( xx, yy );
+					vdp_move_to( xx, yy ); printf("%dE",processType[j].outcnt);
 					xx += 10;
+				} else {
+					for (int k=0; k<processType[j].outcnt; k++)
+					{
+						vdp_adv_select_bitmap( itemBMID );
+						vdp_draw_bitmap( xx, yy );
+						xx += 10;
+					}
 				}
 			}
 		}
