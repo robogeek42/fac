@@ -400,6 +400,7 @@ int main(/*int argc, char *argv[]*/)
 	inventory_add_item(inventory, IT_WIRE, 20);
 	inventory_add_item(inventory, IT_CIRCUIT, 20);
 	inventory_add_item(inventory, IT_IRON_PLATE, 40);
+	inventory_add_item(inventory, IT_PAVING, 22);
 
 	inv_selected = 0; // belts
 	item_selected = 0; // belts
@@ -1484,10 +1485,28 @@ void do_place()
 		}
 	}
 	if ( isResource(item_selected) || isProduct(item_selected) ) {
-		int ret = inventory_remove_item( inventory, item_selected, 1 );
-		if ( ret >= 0 )
+		bool placed=false;
+		if ( item_selected == IT_PAVING )
 		{
-			drop_item(item_selected);
+			// no features or machine or anything here?
+			uint8_t overlay = (tilemap[tileoffset] & 0xF0) >> 4;
+			if ( objectmap[ tileoffset ] == NULL && overlay == 0 && layer_belts[tileoffset] < 0 )
+			{
+				int ret = inventory_remove_item( inventory, item_selected, 1 );
+				if (ret >= 0)
+				{
+					tilemap[ tileoffset ] = 13; // paving terrain
+					placed=true;
+				}
+			}
+		} 
+		if (!placed)
+		{
+			int ret = inventory_remove_item( inventory, item_selected, 1 );
+			if ( ret >= 0 )
+			{
+				drop_item(item_selected);
+			}
 		}
 	}
 	if ( isMachine(item_selected) ) {
