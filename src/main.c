@@ -3141,41 +3141,48 @@ int show_assembler_dialog(bool bGenerator)
 	vdp_hide_sprite();
 	vdp_refresh_sprites();
 
-	// dark-blue filled box with yellow line border
-	draw_filled_box( offx, offy, boxw, boxh, 11, 16 );
 	vdp_write_at_graphics_cursor();
-	vdp_move_to( offx + RECIPE_EXT_BORDER, offy + RECIPE_EXT_BORDER);
-	COL(2); printf("Select Recipe");
+
 	// game loop for interacting with inventory
 	clock_t key_wait_ticks = clock() + 20;
 	bool finish = false;
 	bool redisplay_cursor = true;
 	bool redisplay_recipes = true;
+	int num_processes = bGenerator?NUM_GENERATOR_PROCESSES:NUM_ASM_PROCESSES;
+	int from_process = 0;
+	int to_process = MIN(RECIPE_NUM_SELECTIONS, num_processes);
 	do {
 
 		if ( redisplay_recipes )
 		{
+			// dark-blue filled box with yellow line border
+			draw_filled_box( offx, offy, boxw, boxh, 11, 16 );
+			vdp_move_to( offx + RECIPE_EXT_BORDER, offy + RECIPE_EXT_BORDER);
+			COL(2); printf("Select Recipe");
+
 			redisplay_recipes = false;
-			for (int j=0; j< MIN(RECIPE_NUM_SELECTIONS, NUM_ASM_PROCESSES); j++)
+			for (int j = from_process; j < to_process; j++)
 			{
-				box_offsetsY[j] = offy + RECIPE_EXT_BORDER + RECIPE_TITLE_HEIGHT + 
-					j*(RECIPE_SELECT_HEIGHT+RECIPE_INT_BORDER);
+				box_offsetsY[j-from_process] = offy + RECIPE_EXT_BORDER + RECIPE_TITLE_HEIGHT + 
+					(j-from_process)*(RECIPE_SELECT_HEIGHT+RECIPE_INT_BORDER);
 
 				// cells with dark grey fill with (cursor_border_off=black) border
 				draw_filled_box(
 						offx + RECIPE_EXT_BORDER,
-						box_offsetsY[j],
+						box_offsetsY[j-from_process],
 						RECIPE_BOX_WIDTH, RECIPE_SELECT_HEIGHT, cursor_border_off, 8);
 
 				vdp_gcol(0, 11);
 				int xx = offx + RECIPE_EXT_BORDER + 2;
-				int yy = box_offsetsY[j] + 2;
+				int yy = box_offsetsY[j-from_process] + 2;
 
 				ProcessType * processType = assemblerProcessTypes;
 				if ( bGenerator )
 				{
 					processType = generatorProcessTypes;
 				}
+				draw_number_lj( j, xx, yy+2 );
+				xx+=5;
 				for (int i=0; i < processType[j].innum; i++ )
 				{
 					int itemBMID = itemtypes[ processType[j].in[i] ].bmID;
@@ -3214,14 +3221,14 @@ int show_assembler_dialog(bool bGenerator)
 			// clear old cursor
 			draw_box( 
 				offx + RECIPE_EXT_BORDER, 
-				box_offsetsY[old_recipe_selected], 
+				box_offsetsY[old_recipe_selected-from_process], 
 				RECIPE_BOX_WIDTH, 
 				RECIPE_SELECT_HEIGHT,
 				cursor_border_off);
 			// cursor
 			draw_box( 
 				offx + RECIPE_EXT_BORDER, 
-				box_offsetsY[recipe_selected], 
+				box_offsetsY[recipe_selected-from_process], 
 				RECIPE_BOX_WIDTH, 
 				RECIPE_SELECT_HEIGHT,
 				cursor_border_on);
@@ -3239,16 +3246,32 @@ int show_assembler_dialog(bool bGenerator)
 		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_UP ) )
 		{
 			key_wait_ticks = clock() + key_wait;
+			if ( recipe_selected > from_process )
+			{
+				recipe_selected--;
+				redisplay_cursor = true;
+			} else 
 			if ( recipe_selected > 0 ) {
 				recipe_selected--;
 				redisplay_cursor = true;
+				from_process--;
+				to_process--;
+				redisplay_recipes=true;
 			}
 		}
 		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_DOWN ) )
 		{
 			key_wait_ticks = clock() + key_wait;
-			if ( recipe_selected < MIN(RECIPE_NUM_SELECTIONS, NUM_ASM_PROCESSES)-1 ) {
+			if ( recipe_selected < MIN(RECIPE_NUM_SELECTIONS+from_process, num_processes)-1 ) {
 				recipe_selected++;
+				redisplay_cursor = true;
+			} else 
+			if ( recipe_selected < num_processes-1 )
+			{
+				recipe_selected++;
+				from_process += 1;
+				to_process = MIN(RECIPE_NUM_SELECTIONS+from_process, num_processes);
+				redisplay_recipes = true;
 				redisplay_cursor = true;
 			}
 		}
