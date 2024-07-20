@@ -568,7 +568,7 @@ bool wait_for_any_key_with_exit(uint8_t exit_key)
 	} while(key_pressed_code == 0);
 	int key = key_pressed_code;
 	while( vdp_check_key_press(key)) vdp_update_key_state();
-	if ( key_pressed_code == exit_key) return false;
+	if ( key == exit_key) return false;
 	return true;
 }
 

@@ -165,6 +165,7 @@ int machine_update_rate = 10;
 int resourceMultiplier = 32;
 
 //------------------------------------------------------------
+int target_circuit_boards = 20;
 
 //------------------------------------------------------------
 // Configuration vars
@@ -253,6 +254,7 @@ void do_mining();
 bool check_can_mine();
 void removeAtCursor();
 void pickupItemsAtTile(int tx, int ty);
+void message(char *message, int timeout);
 void message_with_bm8(char *message, int bmID, int timeout);
 void show_filedialog();
 bool isValid( int machine_byte );
@@ -576,11 +578,16 @@ void game_loop()
 		}
 
 		if ( vdp_check_key_press( KEY_x ) ) { // x - exit
+			vdp_activate_sprites(0);
 			draw_filled_box( 70, 84, 180, 30, 11, 0 );
 			COL(128+0);COL(15);TAB(10,12);printf("EXIT: Are you sure?");
 			char k=getchar(); 
 			if (k=='y' || k=='Y') exit=1;
 			draw_screen();
+			vdp_activate_sprites( NUM_SPRITES );
+			vdp_select_sprite( CURSOR_SPRITE );
+			vdp_show_sprite();
+			vdp_refresh_sprites();
 		}
 
 		if ( vdp_check_key_press( KEY_e ) ) // Brung up inventory
@@ -604,16 +611,20 @@ void game_loop()
 			if (key_wait_ticks < clock()) 
 			{
 				key_wait_ticks = clock() + key_wait;
-				if ( ! bIsMining && check_can_mine() )
+				if ( ! bIsMining )
 				{
-					mining_time_ticks = clock() + mining_time;;
-					bob_mining_anim_ticks = clock() + bob_mining_anim_time;;
-					bIsMining = true;
-					select_bob_sprite( BOB_SPRITE_ACT_DOWN+bob_facing );
-					vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
-					vdp_refresh_sprites();
+					if ( check_can_mine() )
+					{
+						mining_time_ticks = clock() + mining_time;;
+						bob_mining_anim_ticks = clock() + bob_mining_anim_time;;
+						bIsMining = true;
+						select_bob_sprite( BOB_SPRITE_ACT_DOWN+bob_facing );
+						vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
+						vdp_refresh_sprites();
+					} else {
+						message("can't mine",100);
+					}
 				}
-
 			}
 		}
 
@@ -2549,6 +2560,23 @@ void pickupItemsAtTile(int tx, int ty)
 	}
 }
 
+
+void message(char *message, int timeout)
+{
+	int sx = fac.bobx-fac.xpos +8;
+	int sy = fac.boby-fac.ypos -8;
+	message_posx = sx + fac.xpos;
+	message_posy = sy + fac.ypos;
+
+	TAB((sx/8),(sy/8)); 
+	COL(15);COL(8+128);
+	printf("%s",message);
+	COL(15);COL(128);
+
+	bMessage = true;
+	message_len = strlen(message)+1;
+	message_timeout_ticks = clock()+timeout;
+}
 void message_with_bm8(char *message, int bmID, int timeout)
 {
 	//int sx = gScreenWidth - 8*(strlen(message)+1);
@@ -3304,7 +3332,9 @@ void help_line(int line, char *keystr, char* helpstr)
 	TAB(2,line);
 	COL(11);
 	printf("%s",keystr);
-	TAB(13,line);
+	COL(8);
+	for(int i=strlen(keystr);i<7;i++) printf(".");
+	TAB(8,line);
 	COL(13);
 	printf("%s",helpstr);
 }
@@ -3420,24 +3450,32 @@ void show_help()
 	COL(3);TAB(3,2); printf("--------  F A C   HELP   --------");
 	int line = 4;
 	help_line(line++, "WASD", "Move Bob");
-	help_line(line++, "dir keys", "Move cursor");
+	help_line(line++, "Curs", "Move cursor");
 	line++;
 	help_line(line++, "H", "Show this help screen");
 	help_line(line++, "X", "Exit");
 	help_line(line++, "F", "File dialog");
 	line++;
 	help_line(line++, "E", "Show Inventory");
-	help_line(line++, "P", "Place selected item");
+	help_line(line++, "Enter", "Place selected item");
+	help_line(line++, "P", "Reselect item to place");
 	help_line(line++, "R", "Rotate selected item");
-	help_line(line++, "Delete", "Delete item");
+	help_line(line++, "Del", "Delete item");
+	help_line(line++, "Z", "Pickup items under cursor");
+	line++;
+	help_line(line++, "M", "Mine. Facing resource & cursor");
 
-	line+=2;
-	COL(15);TAB(2,line++);printf("Lost ... but not out ... yet ... ");
+	line+=1;
+	//COL(15);TAB(2,line++);printf("Lost ... but not out ... yet ... ");
 
 	COL(6);TAB(2,line++);printf("     Explore for resources.");
 	COL(6);TAB(2,line++);printf("  Mine them by hand or machine.");
 	COL(6);TAB(2,line++);printf("Process using furnaces and assemble");
 	COL(6);TAB(2,line++);printf("    into items and machines.");
+
+	line++;
+	COL(15);TAB(2,line++);printf("WIN: Make %d Circuit Boards.", target_circuit_boards);
+
 
 	COL(3);TAB(5,27);printf("Next: any key     X: Exit help");
 
