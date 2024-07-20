@@ -256,6 +256,7 @@ void removeAtCursor();
 void pickupItemsAtTile(int tx, int ty);
 void message(char *message, int timeout);
 void message_with_bm8(char *message, int bmID, int timeout);
+void message_with_bm16(char *message, int bmID, int timeout);
 void show_filedialog();
 bool isValid( int machine_byte );
 int getMachineBMID(int tx, int ty);
@@ -657,6 +658,54 @@ void game_loop()
 			}
 		}
 
+		if ( vdp_check_key_press( KEY_g ) ) // g - generate
+		{
+			if (key_wait_ticks < clock()) 
+			{
+				int recipe = show_assembler_dialog(false);
+				if ( recipe >= 0 )
+				{
+					bool bInputsSatisfied = true;
+					for (int i=0; i<assemblerProcessTypes[recipe].innum;i++)
+					{
+						int index = inventory_find_item(inventory, assemblerProcessTypes[recipe].in[i]);
+						if (index >= 0)
+						{
+							if ( inventory[index].count < assemblerProcessTypes[recipe].incnt[i] )
+							{
+								bInputsSatisfied = false;
+								break;
+							}
+						} else {
+							bInputsSatisfied = false;
+							break;
+						}
+					}
+					if ( bInputsSatisfied )
+					{
+						for (int i=0; i<assemblerProcessTypes[recipe].innum;i++)
+						{
+							int index = inventory_find_item(inventory, assemblerProcessTypes[recipe].in[i]);
+							if (index >= 0)
+							{
+								inventory[index].count -=  assemblerProcessTypes[recipe].incnt[i];
+							}
+						}
+						int outitem = assemblerProcessTypes[recipe].out;
+						int outitemcnt = assemblerProcessTypes[recipe].outcnt;
+
+						char buf[20]; snprintf(buf,20,"generate +%d",outitemcnt);
+						if (itemtypes[outitem].size == 0)
+							message_with_bm16(buf,itemtypes[outitem].bmID, 300);
+						else
+							message_with_bm8(buf,itemtypes[outitem].bmID, 300);
+						inventory_add_item( inventory,  outitem, outitemcnt );
+						delay(300);
+					}
+				}
+				key_wait_ticks = clock() + key_wait;
+			}
+		}
 		if ( bMessage && message_timeout_ticks < clock() )
 		{
 			bMessage = false;
@@ -2598,6 +2647,27 @@ void message_with_bm8(char *message, int bmID, int timeout)
 	message_len = strlen(message)+1;
 	message_timeout_ticks = clock()+timeout;
 }
+void message_with_bm16(char *message, int bmID, int timeout)
+{
+	int sx = fac.bobx-fac.xpos +16;
+	int sy = fac.boby-fac.ypos -16;
+	message_posx = sx + fac.xpos;
+	message_posy = sy + fac.ypos;
+
+	TAB((sx/8),(sy/8)); 
+	COL(15);COL(8+128);
+	printf("  %s",message);
+	TAB((sx/8),(sy/8)+1); 
+	for(unsigned int i=0; i<strlen(message)+2; i++) printf(" ");
+	COL(15);COL(128);
+
+	vdp_adv_select_bitmap( bmID );
+	vdp_draw_bitmap( sx, sy );
+
+	bMessage = true;
+	message_len = strlen(message)+1;
+	message_timeout_ticks = clock()+timeout;
+}
 
 bool save_game( char *filepath )
 {
@@ -3183,6 +3253,7 @@ int show_assembler_dialog(bool bGenerator)
 	// game loop for interacting with inventory
 	clock_t key_wait_ticks = clock() + 20;
 	bool finish = false;
+	bool finish_exit = false;
 	bool redisplay_cursor = true;
 	bool redisplay_recipes = true;
 	int num_processes = bGenerator?NUM_GENERATOR_PROCESSES:NUM_ASM_PROCESSES;
@@ -3275,6 +3346,7 @@ int show_assembler_dialog(bool bGenerator)
 		if ( key_wait_ticks < clock() && 
 				( vdp_check_key_press( KEY_x ) || vdp_check_key_press( KEY_enter ) ) )
 		{
+			if ( vdp_check_key_press( KEY_x ) ) finish_exit = true;
 			finish=true;
 			// delay otherwise x will cause exit from program
 			while ( vdp_check_key_press( KEY_x ) || vdp_check_key_press( KEY_enter ) ) vdp_update_key_state();
@@ -3324,7 +3396,7 @@ int show_assembler_dialog(bool bGenerator)
 	vdp_show_sprite();
 	vdp_refresh_sprites();
 
-	return recipe_selected;
+	return finish_exit?-1:recipe_selected;
 }
 
 void help_line(int line, char *keystr, char* helpstr)
@@ -3462,8 +3534,9 @@ void show_help()
 	help_line(line++, "R", "Rotate selected item");
 	help_line(line++, "Del", "Delete item");
 	help_line(line++, "Z", "Pickup items under cursor");
-	line++;
+	help_line(line++, "I", "Show info");
 	help_line(line++, "M", "Mine. Facing resource & cursor");
+	help_line(line++, "G", "Manually assemble item.");
 
 	line+=1;
 	//COL(15);TAB(2,line++);printf("Lost ... but not out ... yet ... ");
@@ -3473,7 +3546,6 @@ void show_help()
 	COL(6);TAB(2,line++);printf("Process using furnaces and assemble");
 	COL(6);TAB(2,line++);printf("    into items and machines.");
 
-	line++;
 	COL(15);TAB(2,line++);printf("WIN: Make %d Circuit Boards.", target_circuit_boards);
 
 
