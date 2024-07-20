@@ -15,7 +15,7 @@
 #include <math.h>
 #include <time.h>
 #include <stdbool.h>
-#include "../../agon_ccode/common/util.h"
+#include "util.h"
 
 #define DIR_UP 0
 #define DIR_RIGHT 1
@@ -267,6 +267,8 @@ int getResourceCount(int tx, int ty);
 ItemNodePtr getResource(int tx, int ty);
 bool reduceResourceCount(int tx, int ty);
 int show_assembler_dialog(bool bGenerator);
+void help_line(int line, char *keystr, char* helpstr);
+void show_help();
 
 static volatile SYSVAR *sys_vars = NULL;
 
@@ -574,7 +576,8 @@ void game_loop()
 		}
 
 		if ( vdp_check_key_press( KEY_x ) ) { // x - exit
-			TAB(6,8);printf("Are you sure?");
+			draw_filled_box( 70, 84, 180, 30, 11, 0 );
+			COL(128+0);COL(15);TAB(10,12);printf("EXIT: Are you sure?");
 			char k=getchar(); 
 			if (k=='y' || k=='Y') exit=1;
 			draw_screen();
@@ -669,6 +672,12 @@ void game_loop()
 				show_filedialog();
 			}
 			
+		}
+
+		if ( vdp_check_key_press( KEY_h ) ) // help dialog
+		{
+			while ( vdp_check_key_press( KEY_h ) );
+			show_help();
 		}
 
 		if ( machine_update_ticks < clock() )
@@ -3288,4 +3297,181 @@ int show_assembler_dialog(bool bGenerator)
 	vdp_refresh_sprites();
 
 	return recipe_selected;
+}
+
+void help_line(int line, char *keystr, char* helpstr)
+{
+	TAB(2,line);
+	COL(11);
+	printf("%s",keystr);
+	TAB(13,line);
+	COL(13);
+	printf("%s",helpstr);
+}
+
+void help_clear(int col)
+{
+	draw_filled_box( 10, 10, 300, 220, 11, 0 );
+	if (col > 0)
+	{
+		draw_filled_box( 16, 26, 284, 184, 11, col );
+	}
+	COL(11);
+}
+
+void help_feature(int x, int y, int itype, int col)
+{
+	int textoff = 4*(1 - itemtypes[itype].size);
+	vdp_adv_select_bitmap(itemtypes[itype].bmID);
+	vdp_draw_bitmap( x*8, y*8 ); x+=2;
+	vdp_adv_select_bitmap(itemtypes[itype].bmID+5);
+	vdp_draw_bitmap( x*8, y*8 ); x+=2;
+	vdp_adv_select_bitmap(itemtypes[itype].bmID+10);
+	vdp_draw_bitmap( x*8, y*8 ); x+=2;
+	vdp_write_at_graphics_cursor();
+	vdp_move_to(x*8, y*8 + textoff);
+	vdp_gcol(0, col);
+	printf("%s",itemtypes[itype].desc);
+	vdp_write_at_text_cursor();
+}
+void help_item(int x, int y, int itype, int col)
+{
+	int off = 4*(1 - itemtypes[itype].size);
+	vdp_adv_select_bitmap(itemtypes[itype].bmID);
+	vdp_draw_bitmap( x*8, y*8 ); x+=2 + (1-itemtypes[itype].size);
+	vdp_write_at_graphics_cursor();
+	vdp_move_to(x*8, y*8 + off);
+	vdp_gcol(0, col);
+	printf("%s%s",itemtypes[itype].desc,itype==IT_BELT?" move items around the map":"");
+	vdp_write_at_text_cursor();
+}
+
+void help_items()
+{
+	int line = 4; int column = 3;
+	help_clear(32);
+	COL(128);
+	COL(3);TAB(3,2); printf("------  F A C  HELP ");COL(1);printf(" Items");COL(3);printf(" ------");
+	COL(128+32);
+	COL(11); TAB(column,line++); printf("Features");
+	for (int it=IT_TYPES_FEATURES; it<IT_TYPES_PRODUCT; it++)
+	{
+		help_feature(column,line,it,0); line+=2;
+	}
+	line++;
+	COL(11); TAB(column,line++); printf("Raw (Mined)");
+	for (int it=IT_TYPES_RAW; it<IT_TYPES_PROCESSED; it++)
+	{
+		help_item(column,line++,it,0);
+	}
+
+	line=4; column=20;
+	COL(11); TAB(column,line); printf("Processed");
+	vdp_adv_select_bitmap(itemtypes[IT_FURNACE].bmID);
+	vdp_draw_bitmap( (column+11)*8, line*8-4 ); 
+	line+=2;
+	for (int it=IT_TYPES_PROCESSED; it<IT_TYPES_MACHINE; it++)
+	{
+		help_item(column,line++,it,0);
+	}
+	line++;
+	COL(11); TAB(column,line); printf("Product");
+	vdp_adv_select_bitmap(itemtypes[IT_ASSEMBLER].bmID);
+	vdp_draw_bitmap( (column+11)*8, line*8-4 ); 
+	line+=2;
+	for (int it=IT_TYPES_PRODUCT; it<NUM_ITEMTYPES; it++)
+	{
+		help_item(column,line++,it,0);
+	}
+}
+void help_machines()
+{
+	char *text[] = {
+		"Mined raw -> Processed items",
+		"Auto mine Features",
+		"Produce items using Recipes",
+		"Move items",
+		"Items move to Inventory",
+   		"Generate Power for machines" };
+	int line = 4; int column = 3;
+	help_clear(32);
+	COL(128);
+	COL(3);TAB(3,2); printf("-----  F A C  HELP ");COL(1);printf(" Machines");COL(3);printf(" -----");
+	COL(128+32);
+	help_item(column,line,IT_BELT,11); 
+	line+=2;
+	COL(11); TAB(column,line++); printf("Machines");
+	COL(4);
+	for (int it=IT_TYPES_MACHINE; it<IT_TYPES_FEATURES; it++)
+	{
+		help_item(column,line,it,0); 
+		line+=2;
+		TAB(8, line);printf("%s",text[it-IT_TYPES_MACHINE]);
+		line++;
+	}
+
+}
+
+void show_help()
+{
+	vdp_activate_sprites(0);
+	help_clear(0);
+	COL(128);
+	COL(3);TAB(3,2); printf("--------  F A C   HELP   --------");
+	int line = 4;
+	help_line(line++, "WASD", "Move Bob");
+	help_line(line++, "dir keys", "Move cursor");
+	line++;
+	help_line(line++, "H", "Show this help screen");
+	help_line(line++, "X", "Exit");
+	help_line(line++, "F", "File dialog");
+	line++;
+	help_line(line++, "E", "Show Inventory");
+	help_line(line++, "P", "Place selected item");
+	help_line(line++, "R", "Rotate selected item");
+	help_line(line++, "Delete", "Delete item");
+
+	line+=2;
+	COL(15);TAB(2,line++);printf("Lost ... but not out ... yet ... ");
+
+	COL(6);TAB(2,line++);printf("     Explore for resources.");
+	COL(6);TAB(2,line++);printf("  Mine them by hand or machine.");
+	COL(6);TAB(2,line++);printf("Process using furnaces and assemble");
+	COL(6);TAB(2,line++);printf("    into items and machines.");
+
+	COL(3);TAB(5,27);printf("Next: any key     X: Exit help");
+
+	while( vdp_check_key_press( KEY_h ) )
+	{
+		vdp_update_key_state();
+	}
+
+	if (!wait_for_any_key_with_exit(KEY_x)) goto leave_help;
+	delay(5);
+
+	help_items();
+	COL(128);
+	COL(3);TAB(5,27);printf("Next: any key     X: Exit help");
+
+	if (!wait_for_any_key_with_exit(KEY_x)) goto leave_help;
+	delay(5);
+
+	help_machines();
+	COL(128);
+	COL(3);TAB(5,27);printf("Next: any key     X: Exit help");
+
+	if (!wait_for_any_key_with_exit(KEY_x)) goto leave_help;
+
+leave_help:
+	delay(5);
+	key_wait_ticks = clock() + key_wait;
+	vdp_cls();
+	
+	draw_screen();
+	COL(15);
+
+	vdp_activate_sprites( NUM_SPRITES );
+	vdp_select_sprite( CURSOR_SPRITE );
+	vdp_show_sprite();
+	vdp_refresh_sprites();
 }

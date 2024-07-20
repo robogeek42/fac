@@ -9,7 +9,7 @@ LDHAS_ARG_PROCESSING = 1
 
 CFLAGS = -Wall -Wextra -Oz
 CXXFLAGS = -Wall -Wextra -Oz
-EXTRA_C_SOURCES = ../agon_ccode/common/util.c
+#EXTRA_C_SOURCES = ../agon_ccode/common/util.c
 
 # Heap size to 352k allowing a 96k program
 INIT_LOC = 040000
