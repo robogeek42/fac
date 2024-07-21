@@ -270,7 +270,6 @@ int getResourceCount(int tx, int ty);
 ItemNodePtr getResource(int tx, int ty);
 bool reduceResourceCount(int tx, int ty);
 int show_assembler_dialog(bool bGenerator);
-void help_line(int line, char *keystr, char* helpstr);
 void show_help();
 
 static volatile SYSVAR *sys_vars = NULL;
@@ -3399,24 +3398,12 @@ int show_assembler_dialog(bool bGenerator)
 	return finish_exit?-1:recipe_selected;
 }
 
-void help_line(int line, char *keystr, char* helpstr)
-{
-	TAB(2,line);
-	COL(11);
-	printf("%s",keystr);
-	COL(8);
-	for(int i=strlen(keystr);i<7;i++) printf(".");
-	TAB(8,line);
-	COL(13);
-	printf("%s",helpstr);
-}
-
 void help_clear(int col)
 {
 	draw_filled_box( 10, 10, 300, 220, 11, 0 );
 	if (col > 0)
 	{
-		draw_filled_box( 16, 26, 284, 184, 11, col );
+		draw_filled_box( 16, 26, 288, 184, 11, col );
 	}
 	COL(11);
 }
@@ -3436,7 +3423,7 @@ void help_feature(int x, int y, int itype, int col)
 	printf("%s",itemtypes[itype].desc);
 	vdp_write_at_text_cursor();
 }
-void help_item(int x, int y, int itype, int col)
+void help_item(int x, int y, int itype, int col, char *desc, int desccol)
 {
 	int off = 4*(1 - itemtypes[itype].size);
 	vdp_adv_select_bitmap(itemtypes[itype].bmID);
@@ -3444,7 +3431,10 @@ void help_item(int x, int y, int itype, int col)
 	vdp_write_at_graphics_cursor();
 	vdp_move_to(x*8, y*8 + off);
 	vdp_gcol(0, col);
-	printf("%s%s",itemtypes[itype].desc,itype==IT_BELT?" move items around the map":"");
+	printf("%s",itemtypes[itype].desc);
+	vdp_gcol(0,desccol);
+	vdp_move_to((x+strlen(itemtypes[itype].desc)+1)*8, y*8 + off);
+	printf("%s",desc);
 	vdp_write_at_text_cursor();
 }
 
@@ -3453,7 +3443,7 @@ void help_items()
 	int line = 4; int column = 3;
 	help_clear(32);
 	COL(128);
-	COL(3);TAB(3,2); printf("------  F A C  HELP ");COL(1);printf(" Items");COL(3);printf(" ------");
+	COL(3);TAB(3,2); printf("------  F A C  HELP ");COL(9);printf(" Items");COL(3);printf(" ------");
 	COL(128+32);
 	COL(11); TAB(column,line++); printf("Features");
 	for (int it=IT_TYPES_FEATURES; it<IT_TYPES_PRODUCT; it++)
@@ -3464,7 +3454,7 @@ void help_items()
 	COL(11); TAB(column,line++); printf("Raw (Mined)");
 	for (int it=IT_TYPES_RAW; it<IT_TYPES_PROCESSED; it++)
 	{
-		help_item(column,line++,it,0);
+		help_item(column,line++,it,0,"",0);
 	}
 
 	line=4; column=20;
@@ -3474,7 +3464,7 @@ void help_items()
 	line+=2;
 	for (int it=IT_TYPES_PROCESSED; it<IT_TYPES_MACHINE; it++)
 	{
-		help_item(column,line++,it,0);
+		help_item(column,line++,it,0,"",0);
 	}
 	line++;
 	COL(11); TAB(column,line); printf("Product");
@@ -3483,35 +3473,49 @@ void help_items()
 	line+=2;
 	for (int it=IT_TYPES_PRODUCT; it<NUM_ITEMTYPES; it++)
 	{
-		help_item(column,line++,it,0);
+		help_item(column,line++,it,0,"",0);
 	}
 }
 void help_machines()
 {
 	char *text[] = {
-		"Mined raw -> Processed items",
-		"Auto mine Features",
-		"Produce items using Recipes",
-		"Move items",
-		"Items move to Inventory",
-   		"Generate Power for machines" };
+		"Process raw items",
+		"Auto miner",
+		"Produce using Recipes",
+		"Grab and move items",
+		"Items go to Inventory",
+   		"Power machines" };
 	int line = 4; int column = 3;
 	help_clear(32);
 	COL(128);
-	COL(3);TAB(3,2); printf("-----  F A C  HELP ");COL(1);printf(" Machines");COL(3);printf(" -----");
+	COL(3);TAB(3,2); printf("-----  F A C  HELP ");COL(9);printf(" Machines");COL(3);printf(" -----");
 	COL(128+32);
-	help_item(column,line,IT_BELT,11); 
+
+	COL(11); TAB(column,line++); printf("Belts");
+
+	help_item(column,line,IT_BELT,0, "move items around map", 4); 
 	line+=2;
+
 	COL(11); TAB(column,line++); printf("Machines");
 	COL(4);
 	for (int it=IT_TYPES_MACHINE; it<IT_TYPES_FEATURES; it++)
 	{
-		help_item(column,line,it,0); 
+		help_item(column,line,it,0, text[it-IT_TYPES_MACHINE], 4); 
 		line+=2;
-		TAB(8, line);printf("%s",text[it-IT_TYPES_MACHINE]);
-		line++;
 	}
 
+}
+
+void help_line(int line, int column, int keywidth, char *keystr, char* helpstr)
+{
+	TAB(column,line);
+	COL(11);
+	printf("%s",keystr);
+	COL(8);
+	for(int i=strlen(keystr);i<=keywidth;i++) printf(".");
+	TAB(column+keywidth,line);
+	COL(13);
+	printf("%s",helpstr);
 }
 
 void show_help()
@@ -3521,22 +3525,22 @@ void show_help()
 	COL(128);
 	COL(3);TAB(3,2); printf("--------  F A C   HELP   --------");
 	int line = 4;
-	help_line(line++, "WASD", "Move Bob");
-	help_line(line++, "Curs", "Move cursor");
+	help_line(line, 2, 6, "WASD", "Move Bob");
+	help_line(line++, 18, 9, "Dir keys", "Move cursor");
 	line++;
-	help_line(line++, "H", "Show this help screen");
-	help_line(line++, "X", "Exit");
-	help_line(line++, "F", "File dialog");
+	help_line(line++, 2, 6, "H", "Show this help screen");
+	help_line(line++, 2, 6, "X", "Exit");
+	help_line(line++, 2, 6, "F", "File dialog");
 	line++;
-	help_line(line++, "E", "Show Inventory");
-	help_line(line++, "Enter", "Place selected item");
-	help_line(line++, "P", "Reselect item to place");
-	help_line(line++, "R", "Rotate selected item");
-	help_line(line++, "Del", "Delete item");
-	help_line(line++, "Z", "Pickup items under cursor");
-	help_line(line++, "I", "Show info");
-	help_line(line++, "M", "Mine. Facing resource & cursor");
-	help_line(line++, "G", "Manually assemble item.");
+	help_line(line++, 2, 6, "E", "Show Inventory");
+	help_line(line++, 2, 6, "Enter", "Place selected item");
+	help_line(line++, 2, 6, "P", "Reselect item to place");
+	help_line(line++, 2, 6, "R", "Rotate selected item");
+	help_line(line++, 2, 6, "Del", "Delete item");
+	help_line(line++, 2, 6, "Z", "Pickup items under cursor");
+	help_line(line++, 2, 6, "I", "Show info");
+	help_line(line++, 2, 6, "M", "Mine. Facing resource & cursor");
+	help_line(line++, 2, 6, "G", "Manually assemble item.");
 
 	line+=1;
 	//COL(15);TAB(2,line++);printf("Lost ... but not out ... yet ... ");
@@ -3546,7 +3550,7 @@ void show_help()
 	COL(6);TAB(2,line++);printf("Process using furnaces and assemble");
 	COL(6);TAB(2,line++);printf("    into items and machines.");
 
-	COL(15);TAB(2,line++);printf("WIN: Make %d Circuit Boards.", target_circuit_boards);
+	COL(15);TAB(2,line++);printf("  WIN: Make %d Circuit Boards.", target_circuit_boards);
 
 
 	COL(3);TAB(5,27);printf("Next: any key     X: Exit help");
