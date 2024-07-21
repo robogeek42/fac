@@ -87,6 +87,10 @@ int inventory_add_item(INV_ITEM *inv, uint8_t item, int count)
 	inv[index].count += count;
 	//printf("add item %d at ind %d: bm %d\n",item, index, itemtypes[item].bmID);
 
+	if ( item == target_item_type ) 
+	{
+		target_item_count += count;
+	}
 	return index;
 }
 
@@ -100,6 +104,10 @@ int inventory_remove_item(INV_ITEM *inv, uint8_t item, int count)
 		return index;
 	}
 	inv[index].count -= count;
+	if ( item == target_item_type ) 
+	{
+		target_item_count -= count;
+	}
 	if ( inv[index].count == 0 )
 	{
 		inv[index].item = 255;

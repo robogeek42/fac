@@ -81,7 +81,7 @@ ProcessType furnaceProcessTypes[NUM_FURNACE_PROCESSES] = {
 	{ {IT_COPPER_ORE,	0,	0}, IT_COPPER_PLATE,{1,0,0},1,1},
 };
 
-#define NUM_ASM_PROCESSES 10
+#define NUM_ASM_PROCESSES 11
 ProcessType assemblerProcessTypes[NUM_ASM_PROCESSES] = {
 	{ {IT_STONE,			IT_WOOD,		0			}, IT_FURNACE,		{2, 1, 0}, 1, 2 },
 	{ {IT_IRON_PLATE,		0,				0			}, IT_GEARWHEEL,	{1, 0, 0}, 2, 1 },
@@ -93,6 +93,7 @@ ProcessType assemblerProcessTypes[NUM_ASM_PROCESSES] = {
 	{ {IT_GEARWHEEL,		IT_WOOD, 		0			}, IT_BELT,			{1, 1, 0}, 1, 2 },
 	{ {IT_STONE_BRICK,		0,				0			}, IT_PAVING,		{4, 0, 0}, 1, 1 },
 	{ {IT_GEARWHEEL,		IT_WOOD,		IT_CIRCUIT	}, IT_INSERTER,		{2, 2, 1}, 1, 3 },
+	{ {IT_GEARWHEEL,		IT_WIRE,		IT_CIRCUIT	}, IT_COMPUTER,		{2, 2, 2}, 1, 3 },
 };
 
 #define NUM_GENERATOR_PROCESSES 2

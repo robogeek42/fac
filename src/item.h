@@ -121,6 +121,7 @@ enum ItemTypesEnum {
 	IT_WIRE,
 	IT_CIRCUIT,
 	IT_PAVING,
+	IT_COMPUTER,
 
 	NUM_ITEMTYPES
 };
@@ -157,6 +158,7 @@ static ItemType itemtypes[] = {
     {IT_WIRE,			"Copper Wire",	false, false, false, false, BMOFF_PROD8+1, BM_SIZE8, 0 },
     {IT_CIRCUIT,		"Circuit Board",false, false, false, false, BMOFF_PROD8+2, BM_SIZE8, 0 },
     {IT_PAVING,			"Paving",		false, false, false, false, BMOFF_PROD8+3, BM_SIZE8, 0 },
+    {IT_COMPUTER,		"Computer",		false, false, false, false, BMOFF_PROD8+4, BM_SIZE8, 0 },
 
 };
 

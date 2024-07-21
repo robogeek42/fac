@@ -51,7 +51,7 @@
 
 #define FN_PROD8 "img/tp8/tp%02d.rgb2"
 #define BMOFF_PROD8 ( BMOFF_ASSEMBLERS + NUM_BM_ASSEMBLERS)
-#define NUM_BM_PROD8 4
+#define NUM_BM_PROD8 5
 
 #define FN_INSERTERS "img/ins/ins%02d.rgb2"
 #define BMOFF_INSERTERS ( BMOFF_PROD8 + NUM_BM_PROD8 )

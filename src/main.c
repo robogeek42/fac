@@ -22,6 +22,12 @@
 #define DIR_DOWN 2
 #define DIR_LEFT 3
 
+//------------------------------------------------------------
+int target_item_type = -1;
+int target_items = 0;
+int target_item_count = 0;
+//------------------------------------------------------------
+
 #include "item.h"
 #include "thinglist.h"
 
@@ -165,9 +171,6 @@ int machine_update_rate = 10;
 int resourceMultiplier = 32;
 
 //------------------------------------------------------------
-int target_circuit_boards = 20;
-
-//------------------------------------------------------------
 // Configuration vars
 int belt_speed = 7;
 int key_wait = 15;
@@ -182,6 +185,7 @@ clock_t layer_wait_ticks;
 // message
 bool bMessage = false;
 int message_len = 0;
+int message_height = 0;
 int message_posx = 0;
 int message_posy = 0;
 clock_t message_timeout_ticks;
@@ -340,7 +344,7 @@ int main(/*int argc, char *argv[]*/)
 		goto my_exit2;
 	}
 
-	if ( load_map_info("maps/newmap1.info") != 0 )
+	if ( load_map_info("maps/newmap2.info") != 0 )
 	{
 		printf("Failed to load map info");
 		goto my_exit2;
@@ -352,11 +356,15 @@ int main(/*int argc, char *argv[]*/)
 		return -1;
 	}
 
-	if (load_map("maps/newmap1") != 0)
+	if (load_map("maps/newmap2") != 0)
 	{
 		printf("Failed to load map\n");
 		goto my_exit2;
 	}
+
+	target_item_type = IT_COMPUTER;
+	target_items = 20;
+	target_item_count = 0;
 
 	fac.energy = 0;
 
@@ -390,7 +398,9 @@ int main(/*int argc, char *argv[]*/)
 
 	inventory_init(inventory);
 	// for test add some items
-	inventory_add_item(inventory, IT_BELT, 112); // belt
+	inventory_add_item(inventory, IT_BELT, 100); // belt
+	inventory_add_item(inventory, IT_GENERATOR, 1);
+	/*
 	inventory_add_item(inventory, IT_IRON_ORE, 12);
 	inventory_add_item(inventory, IT_COAL, 7);
 	inventory_add_item(inventory, IT_COPPER_PLATE, 100);
@@ -405,6 +415,7 @@ int main(/*int argc, char *argv[]*/)
 	inventory_add_item(inventory, IT_CIRCUIT, 20);
 	inventory_add_item(inventory, IT_IRON_PLATE, 40);
 	inventory_add_item(inventory, IT_PAVING, 22);
+	*/
 
 	inv_selected = 0; // belts
 	item_selected = 0; // belts
@@ -699,7 +710,9 @@ void game_loop()
 						else
 							message_with_bm8(buf,itemtypes[outitem].bmID, 300);
 						inventory_add_item( inventory,  outitem, outitemcnt );
-						delay(300);
+						//delay(300);
+					} else {
+						message("Inputs?",150);
 					}
 				}
 				key_wait_ticks = clock() + key_wait;
@@ -710,6 +723,11 @@ void game_loop()
 			bMessage = false;
 			int tx=getTileX(message_posx);
 			int ty=getTileY(message_posy);
+			if (message_height==2)
+			{
+				draw_horizontal( tx, ty-1, message_len+1 );
+				draw_horizontal_layer( tx-1, ty, message_len+1, true, true, true );
+			}
 			draw_horizontal( tx, ty, message_len+1 );
 			draw_horizontal_layer( tx, ty, message_len+1, true, true, true );
 			draw_horizontal( tx, ty+1, message_len+1 );
@@ -788,6 +806,20 @@ void game_loop()
 				}
 
 				tlistp = tlistp->next;
+			}
+
+			if ( target_item_count == target_items )
+			{
+				vdp_activate_sprites(0);
+				draw_filled_box( 70, 84, 180, 30, 11, 25 );
+				COL(128+25);COL(9);TAB(10,12);printf("  !!! You Win !!! ");
+				target_item_count=0;
+				wait_for_any_key();
+				draw_screen();
+				vdp_activate_sprites( NUM_SPRITES );
+				vdp_select_sprite( CURSOR_SPRITE );
+				vdp_show_sprite();
+				vdp_refresh_sprites();
 			}
 		}
 		vdp_update_key_state();
@@ -1686,9 +1718,8 @@ void move_items(bool bDraw)
 		while (thptr != NULL)
 		{
 			Inserter *insp = (Inserter*) thptr->thing;
-			if ( ( (insp->start_tx == tx && insp->start_ty == ty) || 
-			       (insp->tx == tx && insp->ty == ty))
-			 && insp->itemcnt < insp->maxitemcnt)
+			if ( ( (insp->start_tx == tx && insp->start_ty == ty) )
+				 && insp->itemcnt < insp->maxitemcnt)
 			{
 				bool pop = false;
 				switch (insp->dir)
@@ -2623,6 +2654,7 @@ void message(char *message, int timeout)
 
 	bMessage = true;
 	message_len = strlen(message)+1;
+	message_height = 1;
 	message_timeout_ticks = clock()+timeout;
 }
 void message_with_bm8(char *message, int bmID, int timeout)
@@ -2640,10 +2672,11 @@ void message_with_bm8(char *message, int bmID, int timeout)
 	COL(15);COL(128);
 
 	vdp_adv_select_bitmap( bmID );
-	vdp_draw_bitmap( sx, sy );
+	vdp_draw_bitmap( (sx/8)*8, (sy/8)*8 );
 
 	bMessage = true;
 	message_len = strlen(message)+1;
+	message_height = 1;
 	message_timeout_ticks = clock()+timeout;
 }
 void message_with_bm16(char *message, int bmID, int timeout)
@@ -2665,6 +2698,7 @@ void message_with_bm16(char *message, int bmID, int timeout)
 
 	bMessage = true;
 	message_len = strlen(message)+1;
+	message_height = 2;
 	message_timeout_ticks = clock()+timeout;
 }
 
@@ -3119,11 +3153,13 @@ void show_filedialog()
 
 void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 {
+	bool bInserted = false;
 	// Box is a kind of machine which transfers all items entering it
 	// to the inventory
 	if ( machine_type == IT_BOX )
 	{
 		inventory_add_item(inventory, item, 1);
+		bInserted = true;
 	}
 	if ( machine_type == IT_FURNACE )
 	{
@@ -3144,7 +3180,12 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 		}
 		if ( ptype >= 0 )
 		{
-			mach->countIn[0] += 1;
+			if ( furnaceProcessTypes[ptype].in[0] == item )
+			{
+				mach->countIn[0] += 1;
+				bInserted = true;
+			} 
+				
 		}
 	}
 	if ( machine_type == IT_ASSEMBLER )
@@ -3163,6 +3204,7 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 				{
 					// increment count of that item in the assembler
 					mach->countIn[k]++;
+					bInserted = true;
 					break;
 				}
 			}
@@ -3181,10 +3223,16 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 				{
 					// increment count of that item in the assembler
 					mach->countIn[k]++;
+					bInserted = true;
 					break;
 				}
 			}
 		}
+	}
+	if (!bInserted)
+	{
+		// machine didn't accept it, bung the item into the inventory
+		inventory_add_item(inventory, item, 1);
 	}
 }
 
@@ -3220,7 +3268,7 @@ void check_items_on_machines()
 
 #define RECIPE_EXT_BORDER 5
 #define RECIPE_INT_BORDER 2
-#define RECIPE_NUM_SELECTIONS 4
+#define RECIPE_NUM_SELECTIONS 6
 #define RECIPE_BOX_WIDTH 120
 #define RECIPE_SELECT_HEIGHT 24
 #define RECIPE_TITLE_HEIGHT 10
@@ -3241,6 +3289,7 @@ int show_assembler_dialog(bool bGenerator)
 	int boxw = RECIPE_EXT_BORDER + RECIPE_BOX_WIDTH + RECIPE_EXT_BORDER;
 	int boxh = RECIPE_EXT_BORDER + RECIPE_TITLE_HEIGHT + 
 		(RECIPE_SELECT_HEIGHT + RECIPE_INT_BORDER) * MIN(RECIPE_NUM_SELECTIONS,NUM_ASM_PROCESSES) 
+		+ 8
 		- RECIPE_INT_BORDER + RECIPE_EXT_BORDER;
 
 	vdp_select_sprite( CURSOR_SPRITE );
@@ -3266,6 +3315,8 @@ int show_assembler_dialog(bool bGenerator)
 			draw_filled_box( offx, offy, boxw, boxh, 11, 16 );
 			vdp_move_to( offx + RECIPE_EXT_BORDER, offy + RECIPE_EXT_BORDER);
 			COL(2); printf("Select Recipe");
+			vdp_move_to( offx + RECIPE_EXT_BORDER, boxh+8);
+			COL(2); printf("Enter or X:Exit");
 
 			redisplay_recipes = false;
 			for (int j = from_process; j < to_process; j++)
@@ -3289,7 +3340,7 @@ int show_assembler_dialog(bool bGenerator)
 					processType = generatorProcessTypes;
 				}
 				draw_number_lj( j, xx, yy+2 );
-				xx+=5;
+				xx+=8;
 				for (int i=0; i < processType[j].innum; i++ )
 				{
 					int itemBMID = itemtypes[ processType[j].in[i] ].bmID;
@@ -3550,7 +3601,7 @@ void show_help()
 	COL(6);TAB(2,line++);printf("Process using furnaces and assemble");
 	COL(6);TAB(2,line++);printf("    into items and machines.");
 
-	COL(15);TAB(2,line++);printf("  WIN: Make %d Circuit Boards.", target_circuit_boards);
+	COL(15);TAB(2,line++);printf("    WIN: Make %d %ss.", target_items, itemtypes[target_item_type].desc);
 
 
 	COL(3);TAB(5,27);printf("Next: any key     X: Exit help");
