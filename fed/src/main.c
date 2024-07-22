@@ -486,6 +486,7 @@ void show_help()
 	line++;
 	help_line(line++, "T", "Select tileset");
 	help_line(line++, "R", "Place random tile (block)");
+	help_line(line++, "O", "Circle random in block");
 
 	while( vdp_check_key_press( KEY_h ) )
 	{
