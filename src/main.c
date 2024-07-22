@@ -186,8 +186,8 @@ clock_t layer_wait_ticks;
 bool bMessage = false;
 int message_len = 0;
 int message_height = 0;
-int message_posx = 0;
-int message_posy = 0;
+int message_tx = 0;
+int message_ty = 0;
 clock_t message_timeout_ticks;
 
 // FPS 
@@ -223,7 +223,6 @@ bool check_dir_exists(char *path);
 int load_map(char *mapname);
 int load_map_info( char *filename);
 void load_resource_data();
-void place_feature_overlay(uint8_t *data, int sx, int sy, int tile, int tx, int ty);
 
 int readTileInfoFile(char *path, TileInfoFile *tif, int items);
 
@@ -261,6 +260,7 @@ void pickupItemsAtTile(int tx, int ty);
 void message(char *message, int timeout);
 void message_with_bm8(char *message, int bmID, int timeout);
 void message_with_bm16(char *message, int bmID, int timeout);
+void message_clear();
 void show_filedialog();
 bool isValid( int machine_byte );
 int getMachineBMID(int tx, int ty);
@@ -344,11 +344,14 @@ int main(/*int argc, char *argv[]*/)
 		goto my_exit2;
 	}
 
-	if ( load_map_info("maps/newmap2.info") != 0 )
+	if ( load_map_info("maps/m4.info") != 0 )
 	{
 		printf("Failed to load map info");
 		goto my_exit2;
 	}
+
+	// resource multiplier could be encoded in .info?
+	resourceMultiplier = 16;
 
 	if ( !alloc_map() ) 
 	{
@@ -356,12 +359,13 @@ int main(/*int argc, char *argv[]*/)
 		return -1;
 	}
 
-	if (load_map("maps/newmap2") != 0)
+	if (load_map("maps/m4") != 0)
 	{
 		printf("Failed to load map\n");
 		goto my_exit2;
 	}
 
+	// simple mission
 	target_item_type = IT_COMPUTER;
 	target_items = 20;
 	target_item_count = 0;
@@ -400,6 +404,8 @@ int main(/*int argc, char *argv[]*/)
 	// for test add some items
 	inventory_add_item(inventory, IT_BELT, 100); // belt
 	inventory_add_item(inventory, IT_GENERATOR, 1);
+	//inventory_add_item(inventory, IT_STONE, 12);
+	//inventory_add_item(inventory, IT_WOOD, 12);
 	/*
 	inventory_add_item(inventory, IT_IRON_ORE, 12);
 	inventory_add_item(inventory, IT_COAL, 7);
@@ -633,6 +639,7 @@ void game_loop()
 						vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
 						vdp_refresh_sprites();
 					} else {
+						if (bMessage) message_clear();
 						message("can't mine",100);
 					}
 				}
@@ -718,22 +725,14 @@ void game_loop()
 				key_wait_ticks = clock() + key_wait;
 			}
 		}
+
+		// clear messages when they timeout
 		if ( bMessage && message_timeout_ticks < clock() )
 		{
-			bMessage = false;
-			int tx=getTileX(message_posx);
-			int ty=getTileY(message_posy);
-			if (message_height==2)
-			{
-				draw_horizontal( tx, ty-1, message_len+1 );
-				draw_horizontal_layer( tx-1, ty, message_len+1, true, true, true );
-			}
-			draw_horizontal( tx, ty, message_len+1 );
-			draw_horizontal_layer( tx, ty, message_len+1, true, true, true );
-			draw_horizontal( tx, ty+1, message_len+1 );
-			draw_horizontal_layer( tx, ty+1, message_len+1, true, true, true );
+			message_clear();
 		}
 
+		// only animate machines if there is active energy
 		if ( fac.energy > 0 &&  machine_anim_timeout_ticks < clock() )
 		{
 			machine_anim_timeout_ticks = clock() + machine_anim_speed;
@@ -755,6 +754,12 @@ void game_loop()
 		{
 			while ( vdp_check_key_press( KEY_h ) );
 			show_help();
+		}
+
+		if ( vdp_check_key_press( KEY_l ) ) // refresh screen
+		{
+			while ( vdp_check_key_press( KEY_l ) );
+			draw_screen();
 		}
 
 		if ( machine_update_ticks < clock() )
@@ -2458,16 +2463,16 @@ bool check_can_mine()
 	switch ( bob_facing )
 	{
 		case BOB_LEFT:
-			if ( cursor_tx == bx - 1 ) bNext=true;
+			if ( cursor_tx == bx - 1 && (cursor_ty == by || cursor_ty == by -1 || cursor_ty == by +1) ) bNext=true;
 			break;
 		case BOB_RIGHT:
-			if ( cursor_tx == bx + 1 ) bNext=true;
+			if ( cursor_tx == bx + 1 && (cursor_ty == by || cursor_ty == by -1 || cursor_ty == by +1) ) bNext=true;
 			break;
 		case BOB_UP:
-			if ( cursor_ty == by - 1 ) bNext=true;
+			if ( cursor_ty == by - 1 && (cursor_tx == bx || cursor_tx == bx -1 || cursor_tx == bx +1) ) bNext=true;
 			break;
 		case BOB_DOWN:
-			if ( cursor_ty == by + 1 ) bNext=true;
+			if ( cursor_ty == by + 1 && (cursor_tx == bx || cursor_tx == bx -1 || cursor_tx == bx +1) ) bNext=true;
 			break;
 		default:
 			break;
@@ -2639,66 +2644,92 @@ void pickupItemsAtTile(int tx, int ty)
 	}
 }
 
+void message_clear()
+{
+	draw_horizontal( message_tx-2, message_ty-1, message_len+2 );
+	draw_horizontal_layer( message_tx-2, message_ty-1, message_len+2, true, true, true );
+	draw_horizontal( message_tx-2, message_ty, message_len+2 );
+	draw_horizontal_layer( message_tx-2, message_ty, message_len+2, true, true, true );
+	draw_horizontal( message_tx-2, message_ty+1, message_len+2 );
+	draw_horizontal_layer( message_tx-2, message_ty+1, message_len+2, true, true, true );
+	
+	if (message_height==2)
+	{
+		draw_horizontal( message_tx-1, message_ty+2, message_len+1 );
+		draw_horizontal_layer( message_tx-1, message_ty+2, message_len+1, true, true, true );
+	}
+
+	bMessage = false;
+
+}
 
 void message(char *message, int timeout)
 {
-	int sx = fac.bobx-fac.xpos +8;
-	int sy = fac.boby-fac.ypos -8;
-	message_posx = sx + fac.xpos;
-	message_posy = sy + fac.ypos;
+	// place message above and to right of bob
+	message_tx = fac.bobx/gTileSize + 1;
+	message_ty = fac.boby/gTileSize - 1;
+	int sx = message_tx*gTileSize - (fac.xpos/gTileSize)*gTileSize;
+	int sy = message_ty*gTileSize - (fac.ypos/gTileSize)*gTileSize;
 
-	TAB((sx/8),(sy/8)); 
-	COL(15);COL(8+128);
-	printf("%s",message);
-	COL(15);COL(128);
-
-	bMessage = true;
 	message_len = strlen(message)+1;
 	message_height = 1;
+
+	vdp_write_at_graphics_cursor();
+	draw_filled_box(sx-4, sy-4, (message_len+1)*8, (message_height+1)*8, 11, 17);
+	vdp_move_to(sx, sy);
+	vdp_gcol(0,15);
+	printf("%s",message);
+	vdp_write_at_text_cursor();
+
+	bMessage = true;
 	message_timeout_ticks = clock()+timeout;
 }
 void message_with_bm8(char *message, int bmID, int timeout)
 {
-	//int sx = gScreenWidth - 8*(strlen(message)+1);
-	//int sy = 0;
-	int sx = fac.bobx-fac.xpos +8;
-	int sy = fac.boby-fac.ypos -8;
-	message_posx = sx + fac.xpos;
-	message_posy = sy + fac.ypos;
+	// place message above and to right of bob
+	message_tx = fac.bobx/gTileSize + 1;
+	message_ty = fac.boby/gTileSize - 1;
+	int sx = message_tx*gTileSize - (fac.xpos/gTileSize)*gTileSize;
+	int sy = message_ty*gTileSize - (fac.ypos/gTileSize)*gTileSize;
 
-	TAB((sx/8),(sy/8)); 
-	COL(15);COL(8+128);
-	printf("  %s",message);
-	COL(15);COL(128);
-
-	vdp_adv_select_bitmap( bmID );
-	vdp_draw_bitmap( (sx/8)*8, (sy/8)*8 );
-
-	bMessage = true;
-	message_len = strlen(message)+1;
+	message_len = strlen(message)+2;
 	message_height = 1;
-	message_timeout_ticks = clock()+timeout;
-}
-void message_with_bm16(char *message, int bmID, int timeout)
-{
-	int sx = fac.bobx-fac.xpos +16;
-	int sy = fac.boby-fac.ypos -16;
-	message_posx = sx + fac.xpos;
-	message_posy = sy + fac.ypos;
 
-	TAB((sx/8),(sy/8)); 
-	COL(15);COL(8+128);
-	printf("  %s",message);
-	TAB((sx/8),(sy/8)+1); 
-	for(unsigned int i=0; i<strlen(message)+2; i++) printf(" ");
-	COL(15);COL(128);
+	vdp_write_at_graphics_cursor();
+	draw_filled_box(sx-4, sy-4, (message_len+1)*8, (message_height+1)*8, 11, 17);
+	vdp_move_to(sx+12, sy);
+	vdp_gcol(0,15);
+	printf("%s",message);
+	vdp_write_at_text_cursor();
 
 	vdp_adv_select_bitmap( bmID );
 	vdp_draw_bitmap( sx, sy );
 
 	bMessage = true;
-	message_len = strlen(message)+1;
+	message_timeout_ticks = clock()+timeout;
+}
+void message_with_bm16(char *message, int bmID, int timeout)
+{
+	// place message above and to right of bob
+	message_tx = fac.bobx/gTileSize + 1;
+	message_ty = fac.boby/gTileSize - 1;
+	int sx = message_tx*gTileSize - (fac.xpos/gTileSize)*gTileSize;
+	int sy = message_ty*gTileSize - (fac.ypos/gTileSize)*gTileSize;
+
+	message_len = strlen(message)+3;
 	message_height = 2;
+
+	vdp_write_at_graphics_cursor();
+	draw_filled_box(sx-4, sy-4, (message_len+1)*8, (message_height+1)*8, 11, 17);
+	vdp_move_to(sx+20, sy+4);
+	vdp_gcol(0,15);
+	printf("%s",message);
+	vdp_write_at_text_cursor();
+
+	vdp_adv_select_bitmap( bmID );
+	vdp_draw_bitmap( sx, sy );
+
+	bMessage = true;
 	message_timeout_ticks = clock()+timeout;
 }
 
@@ -3589,19 +3620,18 @@ void show_help()
 	help_line(line++, 2, 6, "R", "Rotate selected item");
 	help_line(line++, 2, 6, "Del", "Delete item");
 	help_line(line++, 2, 6, "Z", "Pickup items under cursor");
-	help_line(line++, 2, 6, "I", "Show info");
 	help_line(line++, 2, 6, "M", "Mine. Facing resource & cursor");
 	help_line(line++, 2, 6, "G", "Manually assemble item.");
+	help_line(line++, 2, 6, "I", "Show info");
+	help_line(line++, 2, 6, "L", "Refresh screen.");
 
 	line+=1;
-	//COL(15);TAB(2,line++);printf("Lost ... but not out ... yet ... ");
 
-	COL(6);TAB(2,line++);printf("     Explore for resources.");
-	COL(6);TAB(2,line++);printf("  Mine them by hand or machine.");
+	COL(6);TAB(2,line++);printf("   Explore and mine resources.");
 	COL(6);TAB(2,line++);printf("Process using furnaces and assemble");
-	COL(6);TAB(2,line++);printf("    into items and machines.");
+	COL(6);TAB(2,line++);printf("  into items and more machines.");
 
-	COL(15);TAB(2,line++);printf("    WIN: Make %d %ss.", target_items, itemtypes[target_item_type].desc);
+	COL(15);TAB(2,line++);printf("     WIN: Make %d %ss.", target_items, itemtypes[target_item_type].desc);
 
 
 	COL(3);TAB(5,27);printf("Next: any key     X: Exit help");
