@@ -257,9 +257,9 @@ void do_mining();
 bool check_can_mine();
 void removeAtCursor();
 void pickupItemsAtTile(int tx, int ty);
-void message(char *message, int timeout);
-void message_with_bm8(char *message, int bmID, int timeout);
-void message_with_bm16(char *message, int bmID, int timeout);
+void message(char *message, int timeout, int bgcol);
+void message_with_bm8(char *message, int bmID, int timeout, int bgcol);
+void message_with_bm16(char *message, int bmID, int timeout, int bgcol);
 void message_clear();
 void show_filedialog();
 bool isValid( int machine_byte );
@@ -273,7 +273,7 @@ void check_items_on_machines();
 int getResourceCount(int tx, int ty);
 ItemNodePtr getResource(int tx, int ty);
 bool reduceResourceCount(int tx, int ty);
-int show_assembler_dialog(bool bGenerator);
+int show_assembler_dialog(int machine_type, bool bManual);
 void show_help();
 
 static volatile SYSVAR *sys_vars = NULL;
@@ -404,8 +404,9 @@ int main(/*int argc, char *argv[]*/)
 	// for test add some items
 	inventory_add_item(inventory, IT_BELT, 100); // belt
 	inventory_add_item(inventory, IT_GENERATOR, 1);
-	//inventory_add_item(inventory, IT_STONE, 12);
-	//inventory_add_item(inventory, IT_WOOD, 12);
+	inventory_add_item(inventory, IT_STONE, 12);
+	inventory_add_item(inventory, IT_WOOD, 12);
+	inventory_add_item(inventory, IT_ASSEMBLER, 10);
 	/*
 	inventory_add_item(inventory, IT_IRON_ORE, 12);
 	inventory_add_item(inventory, IT_COAL, 7);
@@ -640,7 +641,7 @@ void game_loop()
 						vdp_refresh_sprites();
 					} else {
 						if (bMessage) message_clear();
-						message("can't mine",100);
+						message("can't mine",100,25);
 					}
 				}
 			}
@@ -679,47 +680,52 @@ void game_loop()
 		{
 			if (key_wait_ticks < clock()) 
 			{
-				int recipe = show_assembler_dialog(false);
+				int recipe = show_assembler_dialog(IT_ASSEMBLER, true);
 				if ( recipe >= 0 )
 				{
-					bool bInputsSatisfied = true;
-					for (int i=0; i<assemblerProcessTypes[recipe].innum;i++)
+					if (assemblerProcessTypes[recipe].manual)
 					{
-						int index = inventory_find_item(inventory, assemblerProcessTypes[recipe].in[i]);
-						if (index >= 0)
-						{
-							if ( inventory[index].count < assemblerProcessTypes[recipe].incnt[i] )
-							{
-								bInputsSatisfied = false;
-								break;
-							}
-						} else {
-							bInputsSatisfied = false;
-							break;
-						}
-					}
-					if ( bInputsSatisfied )
-					{
+						bool bInputsSatisfied = true;
 						for (int i=0; i<assemblerProcessTypes[recipe].innum;i++)
 						{
 							int index = inventory_find_item(inventory, assemblerProcessTypes[recipe].in[i]);
 							if (index >= 0)
 							{
-								inventory[index].count -=  assemblerProcessTypes[recipe].incnt[i];
+								if ( inventory[index].count < assemblerProcessTypes[recipe].incnt[i] )
+								{
+									bInputsSatisfied = false;
+									break;
+								}
+							} else {
+								bInputsSatisfied = false;
+								break;
 							}
 						}
-						int outitem = assemblerProcessTypes[recipe].out;
-						int outitemcnt = assemblerProcessTypes[recipe].outcnt;
+						if ( bInputsSatisfied )
+						{
+							for (int i=0; i<assemblerProcessTypes[recipe].innum;i++)
+							{
+								int index = inventory_find_item(inventory, assemblerProcessTypes[recipe].in[i]);
+								if (index >= 0)
+								{
+									inventory[index].count -=  assemblerProcessTypes[recipe].incnt[i];
+								}
+							}
+							int outitem = assemblerProcessTypes[recipe].out;
+							int outitemcnt = assemblerProcessTypes[recipe].outcnt;
 
-						char buf[20]; snprintf(buf,20,"generate +%d",outitemcnt);
-						if (itemtypes[outitem].size == 0)
-							message_with_bm16(buf,itemtypes[outitem].bmID, 300);
-						else
-							message_with_bm8(buf,itemtypes[outitem].bmID, 300);
-						inventory_add_item( inventory,  outitem, outitemcnt );
-						//delay(300);
+							char buf[20]; snprintf(buf,20,"generate +%d",outitemcnt);
+							if (itemtypes[outitem].size == 0)
+								message_with_bm16(buf,itemtypes[outitem].bmID, 300, 17);
+							else
+								message_with_bm8(buf,itemtypes[outitem].bmID, 300, 17);
+							inventory_add_item( inventory,  outitem, outitemcnt );
+							//delay(300);
+						} else {
+							message("Inputs?",150,25);
+						}
 					} else {
-						message("Inputs?",150);
+						message("Need assembler",150,25);
 					}
 				}
 				key_wait_ticks = clock() + key_wait;
@@ -1642,7 +1648,7 @@ void do_place()
 			} else 
 			if ( item_selected == IT_ASSEMBLER )
 			{
-				int recipe = show_assembler_dialog(false);
+				int recipe = show_assembler_dialog(IT_ASSEMBLER, false);
 				if (inventory_remove_item( inventory, item_selected, 1 ))
 				{
 					Machine *mach = addAssembler( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
@@ -1659,7 +1665,7 @@ void do_place()
 			} else 
 			if ( item_selected == IT_GENERATOR )
 			{
-				int recipe = show_assembler_dialog(true);
+				int recipe = show_assembler_dialog(IT_GENERATOR, false);
 				if (inventory_remove_item( inventory, item_selected, 1 ))
 				{
 					Machine *mach = addGenerator( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
@@ -2569,7 +2575,7 @@ void do_mining()
 			// add to inventory
 			/* int ret = */inventory_add_item(inventory, raw_item, 1);
 			// not doing anything if inventory is full ...
-			message_with_bm8("+1",itemtypes[raw_item].bmID, 100);
+			message_with_bm8("+1",itemtypes[raw_item].bmID, 100, 17);
 		}
 	}
 }
@@ -2663,7 +2669,7 @@ void message_clear()
 
 }
 
-void message(char *message, int timeout)
+void message(char *message, int timeout, int bgcol)
 {
 	// place message above and to right of bob
 	message_tx = fac.bobx/gTileSize + 1;
@@ -2675,7 +2681,7 @@ void message(char *message, int timeout)
 	message_height = 1;
 
 	vdp_write_at_graphics_cursor();
-	draw_filled_box(sx-4, sy-4, (message_len+1)*8, (message_height+1)*8, 11, 17);
+	draw_filled_box(sx-4, sy-4, (message_len+1)*8, (message_height+1)*8, 11, bgcol);
 	vdp_move_to(sx, sy);
 	vdp_gcol(0,15);
 	printf("%s",message);
@@ -2684,7 +2690,7 @@ void message(char *message, int timeout)
 	bMessage = true;
 	message_timeout_ticks = clock()+timeout;
 }
-void message_with_bm8(char *message, int bmID, int timeout)
+void message_with_bm8(char *message, int bmID, int timeout, int bgcol)
 {
 	// place message above and to right of bob
 	message_tx = fac.bobx/gTileSize + 1;
@@ -2696,7 +2702,7 @@ void message_with_bm8(char *message, int bmID, int timeout)
 	message_height = 1;
 
 	vdp_write_at_graphics_cursor();
-	draw_filled_box(sx-4, sy-4, (message_len+1)*8, (message_height+1)*8, 11, 17);
+	draw_filled_box(sx-4, sy-4, (message_len+1)*8, (message_height+1)*8, 11, bgcol);
 	vdp_move_to(sx+12, sy);
 	vdp_gcol(0,15);
 	printf("%s",message);
@@ -2708,7 +2714,7 @@ void message_with_bm8(char *message, int bmID, int timeout)
 	bMessage = true;
 	message_timeout_ticks = clock()+timeout;
 }
-void message_with_bm16(char *message, int bmID, int timeout)
+void message_with_bm16(char *message, int bmID, int timeout, int bgcol)
 {
 	// place message above and to right of bob
 	message_tx = fac.bobx/gTileSize + 1;
@@ -2720,7 +2726,7 @@ void message_with_bm16(char *message, int bmID, int timeout)
 	message_height = 2;
 
 	vdp_write_at_graphics_cursor();
-	draw_filled_box(sx-4, sy-4, (message_len+1)*8, (message_height+1)*8, 11, 17);
+	draw_filled_box(sx-4, sy-4, (message_len+1)*8, (message_height+1)*8, 11, bgcol);
 	vdp_move_to(sx+20, sy+4);
 	vdp_gcol(0,15);
 	printf("%s",message);
@@ -3303,11 +3309,11 @@ void check_items_on_machines()
 #define RECIPE_BOX_WIDTH 120
 #define RECIPE_SELECT_HEIGHT 24
 #define RECIPE_TITLE_HEIGHT 10
-int show_assembler_dialog(bool bGenerator)
+int show_assembler_dialog(int machine_type, bool bManual)
 {
 	int offx = 10;
 	int offy = 20;
-	if ( cursorx > 160 ) offx = 170;
+	if ( cursorx > 160 ) offx = 180;
 
 	int box_offsetsY[20] = {0};
 	int cursor_border_on = 15; // white
@@ -3335,7 +3341,20 @@ int show_assembler_dialog(bool bGenerator)
 	bool finish_exit = false;
 	bool redisplay_cursor = true;
 	bool redisplay_recipes = true;
-	int num_processes = bGenerator?NUM_GENERATOR_PROCESSES:NUM_ASM_PROCESSES;
+	int num_processes = 0;
+    switch (machine_type)
+	{
+		case IT_GENERATOR:
+			num_processes = NUM_GENERATOR_PROCESSES;
+			break;
+		case IT_ASSEMBLER:
+			num_processes = NUM_ASM_PROCESSES;
+			break;
+		default:
+			finish_exit = true;
+			goto show_assembler_dialog_exit;
+			break;
+	}
 	int from_process = 0;
 	int to_process = MIN(RECIPE_NUM_SELECTIONS, num_processes);
 	do {
@@ -3347,7 +3366,12 @@ int show_assembler_dialog(bool bGenerator)
 			vdp_move_to( offx + RECIPE_EXT_BORDER, offy + RECIPE_EXT_BORDER);
 			COL(2); printf("Select Recipe");
 			vdp_move_to( offx + RECIPE_EXT_BORDER, boxh+8);
-			COL(2); printf("Enter or X:Exit");
+			if (bManual)
+			{
+				COL(2); printf("Enter or X:Exit");
+			} else {
+				COL(2); printf("Enter to select");
+			}
 
 			redisplay_recipes = false;
 			for (int j = from_process; j < to_process; j++)
@@ -3366,7 +3390,7 @@ int show_assembler_dialog(bool bGenerator)
 				int yy = box_offsetsY[j-from_process] + 2;
 
 				ProcessType * processType = assemblerProcessTypes;
-				if ( bGenerator )
+				if ( machine_type == IT_GENERATOR )
 				{
 					processType = generatorProcessTypes;
 				}
@@ -3390,7 +3414,7 @@ int show_assembler_dialog(bool bGenerator)
 				vdp_move_to( xx, yy ); printf("%c",CHAR_RIGHTARROW);
 				xx += 10;
 				int itemBMID = itemtypes[ processType[j].out ].bmID;
-				if ( bGenerator )
+				if ( machine_type == IT_GENERATOR )
 				{
 					vdp_move_to( xx, yy ); printf("%dE",processType[j].outcnt);
 					xx += 10;
@@ -3424,13 +3448,23 @@ int show_assembler_dialog(bool bGenerator)
 			old_recipe_selected = recipe_selected;
 		}
 
-		if ( key_wait_ticks < clock() && 
-				( vdp_check_key_press( KEY_x ) || vdp_check_key_press( KEY_enter ) ) )
+		if (bManual)
 		{
-			if ( vdp_check_key_press( KEY_x ) ) finish_exit = true;
-			finish=true;
-			// delay otherwise x will cause exit from program
-			while ( vdp_check_key_press( KEY_x ) || vdp_check_key_press( KEY_enter ) ) vdp_update_key_state();
+			if ( key_wait_ticks < clock() && 
+					( vdp_check_key_press( KEY_g ) || vdp_check_key_press( KEY_x ) || vdp_check_key_press( KEY_enter ) ) )
+			{
+				if ( vdp_check_key_press( KEY_g ) || vdp_check_key_press( KEY_x ) ) finish_exit = true;
+				finish=true;
+				// delay otherwise x will cause exit from program
+				while ( vdp_check_key_press( KEY_g ) || vdp_check_key_press( KEY_x ) || vdp_check_key_press( KEY_enter ) ) vdp_update_key_state();
+			}
+		} else {
+			if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_enter ) )
+			{
+				finish=true;
+				// delay otherwise x will cause exit from program
+				while ( vdp_check_key_press( KEY_enter ) ) vdp_update_key_state();
+			}
 		}
 
 		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_UP ) )
@@ -3469,6 +3503,7 @@ int show_assembler_dialog(bool bGenerator)
 		vdp_update_key_state();
 	} while (finish==false);
 
+show_assembler_dialog_exit:
 	vdp_write_at_text_cursor();
 	draw_screen();
 	COL(15);

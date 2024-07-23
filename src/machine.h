@@ -60,46 +60,44 @@ typedef struct {
 	uint8_t incnt[3];	// how many of each input is required
 	uint8_t outcnt;		// how many of each output is produced
 	uint8_t innum;		// number of valid inputs 
+	bool manual;		// can be made manually
 } ProcessType;
-
-// use furnaceProcessTypes[ rawtype - IT_TYPES_RAW ]
-// to get the correct process type
 
 #define NUM_MINER_PROCESSES 5
 ProcessType minerProcessTypes[NUM_MINER_PROCESSES] = {
-	{ {0, 0, 0}, IT_STONE,	{0,0,0},1,1},
-	{ {0, 0, 0}, IT_IRON_ORE,	{0,0,0},1,1},
-	{ {0, 0, 0}, IT_COPPER_ORE,	{0,0,0},1,1},
-	{ {0, 0, 0}, IT_COAL,	{0,0,0},1,1},
-	{ {0, 0, 0}, IT_WOOD,	{0,0,0},1,1},
+	{ {0, 0, 0}, IT_STONE,	{0,0,0},1,1, false},
+	{ {0, 0, 0}, IT_IRON_ORE,	{0,0,0},1,1, false},
+	{ {0, 0, 0}, IT_COPPER_ORE,	{0,0,0},1,1, false},
+	{ {0, 0, 0}, IT_COAL,	{0,0,0},1,1, false},
+	{ {0, 0, 0}, IT_WOOD,	{0,0,0},1,1, false},
 };
 
 #define NUM_FURNACE_PROCESSES 3
 ProcessType furnaceProcessTypes[NUM_FURNACE_PROCESSES] = {
-	{ {IT_STONE,		0,	0}, IT_STONE_BRICK,	{1,0,0},1,1},
-	{ {IT_IRON_ORE,		0,	0}, IT_IRON_PLATE,	{1,0,0},1,1},
-	{ {IT_COPPER_ORE,	0,	0}, IT_COPPER_PLATE,{1,0,0},1,1},
+	{ {IT_STONE,		0,	0}, IT_STONE_BRICK,	{1,0,0},1,1, false},
+	{ {IT_IRON_ORE,		0,	0}, IT_IRON_PLATE,	{1,0,0},1,1, false},
+	{ {IT_COPPER_ORE,	0,	0}, IT_COPPER_PLATE,{1,0,0},1,1, false},
 };
 
 #define NUM_ASM_PROCESSES 11
 ProcessType assemblerProcessTypes[NUM_ASM_PROCESSES] = {
-	{ {IT_STONE,			IT_WOOD,		0			}, IT_FURNACE,		{2, 1, 0}, 1, 2 },
-	{ {IT_IRON_PLATE,		0,				0			}, IT_GEARWHEEL,	{1, 0, 0}, 2, 1 },
-	{ {IT_COPPER_PLATE,		0, 				0			}, IT_WIRE,			{1, 0, 0}, 2, 1 },
-	{ {IT_IRON_PLATE,		IT_WIRE, 		0			}, IT_CIRCUIT,		{1, 2, 0}, 1, 2 },
-	{ {IT_IRON_PLATE,		IT_STONE_BRICK,	0			}, IT_MINER,		{1, 1, 0}, 1, 2 },
-	{ {IT_IRON_PLATE,		IT_GEARWHEEL,	IT_CIRCUIT	}, IT_ASSEMBLER,	{2, 2, 1}, 1, 3 },
-	{ {IT_IRON_PLATE,		IT_STONE_BRICK,	IT_WIRE		}, IT_GENERATOR,	{2, 2, 2}, 1, 3 },
-	{ {IT_GEARWHEEL,		IT_WOOD, 		0			}, IT_BELT,			{1, 1, 0}, 1, 2 },
-	{ {IT_STONE_BRICK,		0,				0			}, IT_PAVING,		{4, 0, 0}, 1, 1 },
-	{ {IT_GEARWHEEL,		IT_WOOD,		IT_CIRCUIT	}, IT_INSERTER,		{2, 2, 1}, 1, 3 },
-	{ {IT_GEARWHEEL,		IT_WIRE,		IT_CIRCUIT	}, IT_COMPUTER,		{2, 2, 2}, 1, 3 },
+	{ {IT_STONE,			IT_WOOD,		0			}, IT_FURNACE,		{2, 1, 0}, 1, 2, true },
+	{ {IT_IRON_PLATE,		0,				0			}, IT_GEARWHEEL,	{1, 0, 0}, 2, 1, true },
+	{ {IT_COPPER_PLATE,		0, 				0			}, IT_WIRE,			{1, 0, 0}, 2, 1, true },
+	{ {IT_IRON_PLATE,		IT_WIRE, 		0			}, IT_CIRCUIT,		{1, 2, 0}, 1, 2, true },
+	{ {IT_IRON_PLATE,		IT_STONE_BRICK,	0			}, IT_MINER,		{1, 1, 0}, 1, 2, true },
+	{ {IT_IRON_PLATE,		IT_GEARWHEEL,	IT_CIRCUIT	}, IT_ASSEMBLER,	{2, 2, 1}, 1, 3, true },
+	{ {IT_IRON_PLATE,		IT_STONE_BRICK,	IT_WIRE		}, IT_GENERATOR,	{2, 2, 2}, 1, 3, true },
+	{ {IT_GEARWHEEL,		IT_WOOD, 		0			}, IT_BELT,			{1, 1, 0}, 1, 2, true },
+	{ {IT_STONE_BRICK,		0,				0			}, IT_PAVING,		{4, 0, 0}, 1, 1, false },
+	{ {IT_GEARWHEEL,		IT_WOOD,		IT_CIRCUIT	}, IT_INSERTER,		{2, 2, 1}, 1, 3, false },
+	{ {IT_GEARWHEEL,		IT_WIRE,		IT_CIRCUIT	}, IT_COMPUTER,		{2, 2, 2}, 1, 3, false },
 };
 
 #define NUM_GENERATOR_PROCESSES 2
 ProcessType generatorProcessTypes[NUM_GENERATOR_PROCESSES] = {
-	{ {IT_WOOD, 0, 0}, 0,	{1,0,0},20,1},
-	{ {IT_COAL, 0, 0}, 0,	{1,0,0},100,1},
+	{ {IT_WOOD, 0, 0}, 0,	{1,0,0},20,1, false},
+	{ {IT_COAL, 0, 0}, 0,	{1,0,0},100,1, false},
 };
 
 #endif
