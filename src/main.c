@@ -344,6 +344,17 @@ bool alloc_map()
 	return true;
 }
 
+void reset_cursor()
+{
+	cursor_tx = getTileX(fac.bobx+gTileSize/2);
+	cursor_ty = getTileY(fac.boby+gTileSize/2)+1;
+	cursorx = getTilePosInScreenX(cursor_tx);
+	cursory = getTilePosInScreenY(cursor_ty);
+	old_cursorx=cursorx;
+	old_cursory=cursory;
+	oldcursor_tx = cursor_tx;
+	oldcursor_ty = cursor_ty;
+}
 int main(int argc, char *argv[])
 {
 	vdp_vdu_init();
@@ -384,14 +395,7 @@ int main(int argc, char *argv[])
 	fac.xpos = fac.bobx - gScreenWidth/2;
 	fac.ypos = fac.boby - gScreenHeight/2;
 
-	cursor_tx = getTileX(fac.bobx+gTileSize/2);
-	cursor_ty = getTileY(fac.boby+gTileSize/2)+1;
-	cursorx = getTilePosInScreenX(cursor_tx);
-	cursory = getTilePosInScreenY(cursor_ty);
-	old_cursorx=cursorx;
-	old_cursory=cursory;
-	oldcursor_tx = cursor_tx;
-	oldcursor_ty = cursor_ty;
+	reset_cursor();
 
 	// setup complete
 	change_mode(gMode);
@@ -433,14 +437,7 @@ int main(int argc, char *argv[])
 	fac.xpos = fac.bobx - gScreenWidth/2;
 	fac.ypos = fac.boby - gScreenHeight/2;
 
-	cursor_tx = getTileX(fac.bobx+gTileSize/2);
-	cursor_ty = getTileY(fac.boby+gTileSize/2)+1;
-	cursorx = getTilePosInScreenX(cursor_tx);
-	cursory = getTilePosInScreenY(cursor_ty);
-	old_cursorx=cursorx;
-	old_cursory=cursory;
-	oldcursor_tx = cursor_tx;
-	oldcursor_ty = cursor_ty;
+	reset_cursor();
 
 	// Turn on sprites and move bob to the centre
 	vdp_activate_sprites( NUM_SPRITES );
@@ -857,6 +854,8 @@ void game_loop()
 				{
 					generatorProduce( mach, &fac.energy );
 				}
+
+				pushOutputs( mach );
 
 				tlistp = tlistp->next;
 			}
@@ -2456,7 +2455,7 @@ void show_info()
 	if ( info_item_bmid >= 0 )
 	{
 		char * text = itemtypes[ info_item_type ].desc;
-		int textlen = MAX(strlen(text) * 8, 64);
+		int textlen = MAX(strlen(text) * 8, 100);
 		draw_filled_box( infox, infoy, textlen+4, boxh, 11, 8);
 		vdp_adv_select_bitmap( info_item_bmid );
 		vdp_draw_bitmap( infox+4, infoy+4 );
@@ -2480,26 +2479,43 @@ void show_info()
 				{
 					pt = &generatorProcessTypes[ptype];
 				}
+				int x=infox+4+20;
+				int leftx = x;
+				int maxx = 0;
 				for (int it = 0; it < pt->innum; it++)
 				{
+					x = leftx;
 					if ( pt->in[it] > 0 )
 					{
 						int itemBMID = itemtypes[ pt->in[it] ].bmID;
 						vdp_adv_select_bitmap( itemBMID );
-						vdp_draw_bitmap( infox+4+20, infoy+4 + 8*it );
+						vdp_draw_bitmap( x, infoy+4 + 8*it );
 					} else {
-						vdp_move_to( infox+4+20, infoy+4 + 8*it );
+						vdp_move_to( x, infoy+4 + 8*it );
 						printf("?");
 					}
-					vdp_move_to( infox+4+32, infoy+4 + 8*it );
+					x+=10;
+					vdp_move_to( x, infoy+4 + 8*it );
 					printf("%d",mach->countIn[it]);
+					x+=8;
+					if (mach->countIn[it]>9) x += 8;
+					if (mach->countIn[it]>99) x += 8;
+					if (x > maxx) maxx = x;
 				}
+				x = maxx;
 				if ( pt->out > 0 )
 				{
-					vdp_move_to( infox+4+44, infoy+4 + 4 ); putch(CHAR_RIGHTARROW);
+					vdp_move_to( x, infoy+4 + 4 ); putch(CHAR_RIGHTARROW);
+					x += 10;
 					int itemBMID = itemtypes[ pt->out ].bmID;
 					vdp_adv_select_bitmap( itemBMID );
-					vdp_draw_bitmap( infox+4+44+8, infoy+4 + 4 );
+					for (int it = 0; it < pt->outcnt; it++)
+					{
+						vdp_draw_bitmap( x, infoy+4 + 4 );
+						x+= itemtypes[ pt->out ].size==0?18:10;
+					}
+					vdp_move_to( x, infoy+4 + 4 );
+					printf("%d",mach->countOut);
 				}
 			}
 		}
@@ -3236,6 +3252,7 @@ void show_filedialog()
 	vdp_cursor_enable( false );
 	vdp_logical_scr_dims( false );
 
+	reset_cursor();
 	vdp_activate_sprites( NUM_BOB_SPRITES + 1 );
 	vdp_select_sprite( CURSOR_SPRITE );
 	vdp_show_sprite();

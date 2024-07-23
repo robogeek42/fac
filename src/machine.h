@@ -292,6 +292,9 @@ bool minerProduce( Machine* mach, int *energy)
 bool furnaceProduce( Machine *mach, int *energy )
 {
 	if ( mach->machine_type == 0 ) return true;
+
+	ProcessType *pt = &furnaceProcessTypes[mach->ptype];
+
 	if ( mach->ticksTillProduce == 0 && 
 			mach->countIn[0] > 0 )
 #if defined MACH_NEED_ENERGY
@@ -307,26 +310,8 @@ bool furnaceProduce( Machine *mach, int *energy )
 		 mach->ticksTillProduce < clock() )
 	{
 		mach->ticksTillProduce = 0;
-		if ( ! isAnythingAtXY(&mach->itemlist, 
-					mach->tx*gTileSize+4, mach->ty*gTileSize+4) )
-		{
-			int  outx = mach->tx*gTileSize+4;
-			int  outy = mach->ty*gTileSize+4;
-			/*
-			switch ( mach->dir )
-			{
-				case DIR_UP: outy-=8; break;
-				case DIR_RIGHT: outx+=8; break;
-				case DIR_DOWN: outy+=8; break;
-				case DIR_LEFT: outx-=8; break;
-				default: break;
-			}
-			*/
-
-			insertAtFrontItemList(&mach->itemlist, 
-					furnaceProcessTypes[mach->ptype].out, outx, outy);
-			return true;
-		}
+		mach->countOut += pt->outcnt; 
+		return true;
 	}
 	return false;
 }
@@ -372,26 +357,8 @@ bool assemblerProduce( Machine *mach, int *energy )
 	{
 		// reset timer
 		mach->ticksTillProduce = 0;
-		mach->countOut += pt->outcnt; // usually 1
-
-		int  outx = mach->tx*gTileSize+4;
-		int  outy = mach->ty*gTileSize+4;
-		switch ( mach->dir )
-		{
-			case DIR_UP: outy-=8; break;
-			case DIR_RIGHT: outx+=8; break;
-			case DIR_DOWN: outy+=8; break;
-			case DIR_LEFT: outx-=8; break;
-			default: break;
-		}
-		//TAB(0,1+m);printf("m%d:d%d %d,%d\nprod %d,%d ",m, mach->dir, mach->tx*gTileSize,  mach->ty*gTileSize, outx,outy);
-		if ( ! isAnythingAtXY(&mach->itemlist, outx, outy) )
-		{
-			mach->countOut -= 1;
-			insertAtFrontItemList(&mach->itemlist, 
-					assemblerProcessTypes[ptype].out, outx, outy);
-			return true;
-		}
+		mach->countOut += pt->outcnt; 
+		return true;
 	}
 	return false;
 }
@@ -400,8 +367,7 @@ bool generatorProduce( Machine *mach, int *energy )
 {
 	if ( mach->machine_type == 0 ) return true;
 
-	int ptype = mach->ptype;
-	ProcessType *pt = &generatorProcessTypes[ptype];
+	ProcessType *pt = &generatorProcessTypes[mach->ptype];
 	if ( mach->ticksTillProduce == 0 )
 	{
 		// check to see if recipe inputs are satisfied
@@ -438,4 +404,38 @@ bool generatorProduce( Machine *mach, int *energy )
 	return false;
 }
 
+void pushOutputs(Machine *mach )
+{
+	if (mach->countOut > 0)
+	{
+		ProcessType *pt;
+		switch (mach->machine_type)
+		{
+			case IT_FURNACE:
+				pt = &furnaceProcessTypes[mach->ptype];
+				break;
+			case IT_ASSEMBLER:
+				pt = &assemblerProcessTypes[mach->ptype];
+				break;
+			default:
+				break;
+		}
+		int  outx = mach->tx*gTileSize+4;
+		int  outy = mach->ty*gTileSize+4;
+		switch ( mach->dir )
+		{
+			case DIR_UP: outy-=8; break;
+			case DIR_RIGHT: outx+=8; break;
+			case DIR_DOWN: outy+=8; break;
+			case DIR_LEFT: outx-=8; break;
+			default: break;
+		}
+
+		if ( ! isAnythingAtXY(&mach->itemlist, outx, outy) )
+		{
+			mach->countOut -= 1;
+			insertAtFrontItemList(&mach->itemlist, pt->out, outx, outy);
+		}
+	}
+}
 #endif
