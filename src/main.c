@@ -73,6 +73,7 @@ char sigref[4] = "FAC";
 #define SAVE_VERSION 1
 
 #define MACH_NEED_ENERGY
+#define CURSOR_RANGE
 
 //------------------------------------------------------------
 // status related variables
@@ -126,7 +127,7 @@ int cursorx=0, cursory=0;
 // cursor position in tile coords
 int cursor_tx=0, cursor_ty=0;
 
-// previous cursor position position in world coords
+// previous cursor position position in screen pixel coords
 int old_cursorx=0, old_cursory=0;
 // previous cursor position in tile coords
 int oldcursor_tx=0, oldcursor_ty=0;
@@ -174,6 +175,7 @@ int resourceMultiplier = 32;
 // Configuration vars
 int belt_speed = 7;
 int key_wait = 15;
+int cursor_range = 4;
 //------------------------------------------------------------
 
 // counters
@@ -204,6 +206,10 @@ clock_t generate_timeout_ticks;
 int generating_item;
 int generating_item_count;
 
+bool bIsTest = false;
+
+//------------------------------------------------------------
+//Function defs
 void wait();
 void change_mode(int mode);
 
@@ -217,6 +223,7 @@ int getTileY(int sy) { return (sy/gTileSize); }
 int getTilePosInScreenX(int tx) { return ((tx * gTileSize) - fac.xpos); }
 int getTilePosInScreenY(int ty) { return ((ty * gTileSize) - fac.ypos); }
 
+bool cursor_in_range();
 void draw_tile(int tx, int ty, int tposx, int tposy);
 void draw_machines(int tx, int ty, int tposx, int tposy);
 void draw_screen();
@@ -337,7 +344,7 @@ bool alloc_map()
 	return true;
 }
 
-int main(/*int argc, char *argv[]*/)
+int main(int argc, char *argv[])
 {
 	vdp_vdu_init();
 	sys_vars = (SYSVAR *)mos_sysvars();
@@ -345,6 +352,14 @@ int main(/*int argc, char *argv[]*/)
 	if ( vdp_key_init() == -1 ) return 1;
 	vdp_set_key_event_handler( key_event_handler );
 
+	bIsTest = false;
+	if (argc > 1)
+	{
+		if (strcmp("test",argv[1]) == 0)
+		{
+			bIsTest = true;
+		}
+	}
 	fac.version = SAVE_VERSION;
 
 	load_custom_chars();
@@ -359,11 +374,6 @@ int main(/*int argc, char *argv[]*/)
 	{
 		goto my_exit2;
 	}
-
-	// simple mission
-	target_item_type = IT_COMPUTER;
-	target_items = 20;
-	target_item_count = 0;
 
 	fac.energy = 0;
 	bGenerating = false;
@@ -396,31 +406,6 @@ int main(/*int argc, char *argv[]*/)
 	}
 	create_sprites();
 
-
-	inventory_init(inventory);
-	// for test add some items
-	inventory_add_item(inventory, IT_BELT, 100); // belt
-	inventory_add_item(inventory, IT_GENERATOR, 1);
-	inventory_add_item(inventory, IT_STONE, 12);
-	inventory_add_item(inventory, IT_WOOD, 12);
-	inventory_add_item(inventory, IT_ASSEMBLER, 10);
-	/*
-	inventory_add_item(inventory, IT_IRON_ORE, 12);
-	inventory_add_item(inventory, IT_COAL, 7);
-	inventory_add_item(inventory, IT_COPPER_PLATE, 100);
-	inventory_add_item(inventory, IT_FURNACE, 20);
-	inventory_add_item(inventory, IT_MINER, 20);
-	inventory_add_item(inventory, IT_ASSEMBLER, 10);
-	inventory_add_item(inventory, IT_INSERTER, 25);
-	inventory_add_item(inventory, IT_BOX, 8);
-	inventory_add_item(inventory, IT_GENERATOR, 4);
-	inventory_add_item(inventory, IT_GEARWHEEL, 20);
-	inventory_add_item(inventory, IT_WIRE, 20);
-	inventory_add_item(inventory, IT_CIRCUIT, 20);
-	inventory_add_item(inventory, IT_IRON_PLATE, 40);
-	inventory_add_item(inventory, IT_PAVING, 22);
-	*/
-
 	inv_selected = 0; // belts
 	item_selected = 0; // belts
 
@@ -437,6 +422,11 @@ int main(/*int argc, char *argv[]*/)
 
 	load_game_map("maps/m4");
 
+	// simple mission
+	target_item_type = IT_COMPUTER;
+	target_items = 20;
+	target_item_count = 0;
+
 	/* start bob and screen centred in map */
 	fac.bobx = (mapinfo.width * gTileSize / 2) & 0xFFFFF0;
 	fac.boby = (mapinfo.height * gTileSize / 2) & 0xFFFFF0;
@@ -452,12 +442,25 @@ int main(/*int argc, char *argv[]*/)
 	oldcursor_tx = cursor_tx;
 	oldcursor_ty = cursor_ty;
 
+	// Turn on sprites and move bob to the centre
 	vdp_activate_sprites( NUM_SPRITES );
 	vdp_select_sprite( CURSOR_SPRITE );
 	vdp_show_sprite();
 	select_bob_sprite( bob_facing );
 	vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
 	vdp_refresh_sprites();
+
+	// Add some default items 
+	inventory_init(inventory);
+	// for test add some items
+	inventory_add_item(inventory, IT_BELT, 100); // belt
+	inventory_add_item(inventory, IT_GENERATOR, 1);
+	if (bIsTest)
+	{
+		inventory_add_item(inventory, IT_STONE, 12);
+		inventory_add_item(inventory, IT_WOOD, 12);
+		inventory_add_item(inventory, IT_ASSEMBLER, 10);
+	}
 
 	game_loop();
 
@@ -571,7 +574,7 @@ void game_loop()
 		}
 			
 		if ( vdp_check_key_press( KEY_p ) ) { // do place - get ready to place an item from inventory
-			if (key_wait_ticks < clock()) 
+			if (key_wait_ticks < clock() && cursor_in_range() ) 
 			{
 				key_wait_ticks = clock() + key_wait;
 				if ( !bPlace ) {
@@ -608,12 +611,12 @@ void game_loop()
 				draw_cursor(true);
 			}
 		}
-		if (  key_wait_ticks<clock() &&vdp_check_key_press( KEY_enter ) ) // ENTER - start placement state
+		if (  key_wait_ticks<clock() &&vdp_check_key_press( KEY_enter ) && cursor_in_range()  ) // ENTER - start placement state
 		{
 			do_place();
 		}
 
-		if ( key_wait_ticks<clock() && vdp_check_key_press( KEY_delete ) ) // DELETE - delete item at cursor
+		if ( key_wait_ticks<clock() && vdp_check_key_press( KEY_delete ) && cursor_in_range()  ) // DELETE - delete item at cursor
 		{
 			key_wait_ticks = clock() + key_wait;
 			removeAtCursor();
@@ -658,7 +661,7 @@ void game_loop()
 		}
 		if ( vdp_check_key_press( KEY_m ) )  // m for MINE
 		{
-			if (key_wait_ticks < clock()) 
+			if (key_wait_ticks < clock() && cursor_in_range() ) 
 			{
 				key_wait_ticks = clock() + key_wait;
 				if ( ! bIsMining )
@@ -697,7 +700,7 @@ void game_loop()
 			}
 		}
 
-		if ( vdp_check_key_press( KEY_z ) )  // z - pick-up items under cursor
+		if ( vdp_check_key_press( KEY_z ) && cursor_in_range()  )  // z - pick-up items under cursor
 		{
 			if (key_wait_ticks < clock()) 
 			{
@@ -879,6 +882,21 @@ void game_loop()
 
 }
 
+bool cursor_in_range()
+{
+#ifndef CURSOR_RANGE
+	return true;
+#else
+	int bob_tx = getTileX(fac.bobx+gTileSize/2);
+	int bob_ty = getTileY(fac.boby+gTileSize/2)+1;
+	if ( cursor_tx >= ( bob_tx - cursor_range ) && cursor_tx <= ( bob_tx + cursor_range ) && 
+	     cursor_ty >= ( bob_ty -1 - cursor_range ) && cursor_ty <= ( bob_ty -1 + cursor_range ) )
+	{
+		return true;
+	}
+	return false;
+#endif
+}
 inline bool isValid( int byte )
 {
 	return ( byte & 0x80 ) == 0;
