@@ -267,6 +267,8 @@ void message(char *message, int timeout, int bgcol);
 void message_with_bm8(char *message, int bmID, int timeout, int bgcol);
 void message_with_bm16(char *message, int bmID, int timeout, int bgcol);
 void message_clear();
+bool save_game( char *filepath );
+bool load_game( char *filepath, bool bQuiet );
 void show_filedialog();
 bool isValid( int machine_byte );
 int getMachineBMID(int tx, int ty);
@@ -281,6 +283,9 @@ ItemNodePtr getResource(int tx, int ty);
 bool reduceResourceCount(int tx, int ty);
 int show_assembler_dialog(int machine_type, bool bManual);
 void show_help();
+bool splash_screen();
+bool splash_loop();
+bool load_game_map( char * game_map_name );
 
 static volatile SYSVAR *sys_vars = NULL;
 
@@ -350,24 +355,8 @@ int main(/*int argc, char *argv[]*/)
 		goto my_exit2;
 	}
 
-	if ( load_map_info("maps/m4.info") != 0 )
+	if ( !splash_screen() )
 	{
-		printf("Failed to load map info");
-		goto my_exit2;
-	}
-
-	// resource multiplier could be encoded in .info?
-	resourceMultiplier = 16;
-
-	if ( !alloc_map() ) 
-	{
-		printf("Failed to alloc map layers\n");
-		return -1;
-	}
-
-	if (load_map("maps/m4") != 0)
-	{
-		printf("Failed to load map\n");
 		goto my_exit2;
 	}
 
@@ -407,6 +396,7 @@ int main(/*int argc, char *argv[]*/)
 	}
 	create_sprites();
 
+
 	inventory_init(inventory);
 	// for test add some items
 	inventory_add_item(inventory, IT_BELT, 100); // belt
@@ -434,6 +424,41 @@ int main(/*int argc, char *argv[]*/)
 	inv_selected = 0; // belts
 	item_selected = 0; // belts
 
+	vdp_activate_sprites(0);
+	draw_screen();
+
+	load_game("maps/splash_save.data", true);
+	COL(15);COL(128+4);
+	TAB(4,22);printf("Press H for Help, Enter to start");
+	if (!splash_loop())
+	{
+		goto my_exit2;
+	}
+
+	load_game_map("maps/m4");
+
+	/* start bob and screen centred in map */
+	fac.bobx = (mapinfo.width * gTileSize / 2) & 0xFFFFF0;
+	fac.boby = (mapinfo.height * gTileSize / 2) & 0xFFFFF0;
+	fac.xpos = fac.bobx - gScreenWidth/2;
+	fac.ypos = fac.boby - gScreenHeight/2;
+
+	cursor_tx = getTileX(fac.bobx+gTileSize/2);
+	cursor_ty = getTileY(fac.boby+gTileSize/2)+1;
+	cursorx = getTilePosInScreenX(cursor_tx);
+	cursory = getTilePosInScreenY(cursor_ty);
+	old_cursorx=cursorx;
+	old_cursory=cursory;
+	oldcursor_tx = cursor_tx;
+	oldcursor_ty = cursor_ty;
+
+	vdp_activate_sprites( NUM_SPRITES );
+	vdp_select_sprite( CURSOR_SPRITE );
+	vdp_show_sprite();
+	select_bob_sprite( bob_facing );
+	vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
+	vdp_refresh_sprites();
+
 	game_loop();
 
 	change_mode(0);
@@ -446,7 +471,7 @@ my_exit2:
 
 void game_loop()
 {
-	int exit=0;
+	int loopexit=0;
 
 	draw_screen();
 	draw_layer(true);
@@ -607,7 +632,7 @@ void game_loop()
 			draw_filled_box( 70, 84, 180, 30, 11, 0 );
 			COL(128+0);COL(15);TAB(10,12);printf("EXIT: Are you sure?");
 			char k=getchar(); 
-			if (k=='y' || k=='Y') exit=1;
+			if (k=='y' || k=='Y') loopexit=1;
 			draw_screen();
 			vdp_activate_sprites( NUM_SPRITES );
 			vdp_select_sprite( CURSOR_SPRITE );
@@ -850,7 +875,7 @@ void game_loop()
 		vdp_update_key_state();
 
 		frame_time_in_ticks = clock() - ticks_start;
-	} while (exit==0);
+	} while (loopexit==0);
 
 }
 
@@ -2919,7 +2944,7 @@ save_game_errexit:
 	return false;
 
 }
-bool load_game( char *filepath )
+bool load_game( char *filepath, bool bQuiet )
 {
 	// 0. write file signature to 1st 3 bytes "FAC"	
 	// 1. write the fac state
@@ -2944,7 +2969,7 @@ bool load_game( char *filepath )
 	char sig[4];
 
 	// 0. read file signature to 1st 3 bytes "FAC"	
-	printf("Load: signature\n");
+	if (!bQuiet) printf("Load: signature\n");
 	fgets( sig, 4, fp );
 
 	for (int i=0; i<3; i++)
@@ -2958,7 +2983,7 @@ bool load_game( char *filepath )
 	}
 
 	// 1. read the fac state
-	printf("Load: fac state\n");
+	if (!bQuiet) printf("Load: fac state\n");
 	objs_read = fread( &fac, sizeof(FacState), 1, fp );
 	if ( objs_read != 1 || fac.version != SAVE_VERSION )
 	{
@@ -2976,13 +3001,13 @@ bool load_game( char *filepath )
 	if ( ! alloc_map() ) return false;
 
 	// read the tilemap
-	printf("Load: tilemap\n");
+	if (!bQuiet) printf("Load: tilemap\n");
 	objs_read = fread( tilemap, sizeof(uint8_t) * mapinfo.width * mapinfo.height, 1, fp );
 	if ( objs_read != 1 ) {
 		msg = "Fail read tilemap\n"; goto load_game_errexit;
 	}
 	// read the layer_belts
-	printf("Load: layer_belts\n");
+	if (!bQuiet) printf("Load: layer_belts\n");
 	objs_read = fread( layer_belts, sizeof(uint8_t) * mapinfo.width * mapinfo.height, 1, fp );
 	if ( objs_read != 1 ) {
 		msg = "Fail read layer_belts\n"; goto load_game_errexit;
@@ -3006,7 +3031,7 @@ bool load_game( char *filepath )
 	// read number of items in list
 	int num_items = 0;
 
-	printf("Load: items ");
+	if (!bQuiet) printf("Load: items ");
 	objs_read = fread( &num_items, sizeof(int), 1, fp );
 	if ( objs_read != 1 ) {
 		msg = "Fail read num items\n"; goto load_game_errexit;
@@ -3027,7 +3052,7 @@ bool load_game( char *filepath )
 	}
 
 	// 4. write the inventory
-	printf("Load: inventory\n");
+	if (!bQuiet) printf("Load: inventory\n");
 	for ( int i=0;i<MAX_INVENTORY_ITEMS; i++)
 	{
 		objs_read = fread( &inventory[i], sizeof(INV_ITEM), 1, fp );
@@ -3037,17 +3062,17 @@ bool load_game( char *filepath )
 	}
 
 	// 5. read machine data
-	printf("Load: Machines. clear ... ");
+	if (!bQuiet) printf("Load: Machines. clear ... ");
 	clearMachines(&machinelist);
 
 	int num_machs = 0;
 
-	printf("num ");
+	if (!bQuiet) printf("num ");
 	objs_read = fread( &num_machs, sizeof(int), 1, fp );
 	if ( objs_read != 1 ) {
 		msg = "Fail read num machines\n"; goto load_game_errexit;
 	}
-	printf("%d ",num_machs);
+	if (!bQuiet) printf("%d ",num_machs);
 	while (num_machs > 0 && !feof( fp ) )
 	{
 		Machine* newmachp = malloc(sizeof(Machine));
@@ -3066,11 +3091,11 @@ bool load_game( char *filepath )
 		objectmap[newmachp->tx + newmachp->ty * mapinfo.width] = newmachp;
 		num_machs--;
 	}
-	printf("done.\n");
+	if (!bQuiet) printf("done.\n");
 
 	// 6. read the resource data
 	
-	printf("Load: resources. Clear ... ");
+	if (!bQuiet) printf("Load: resources. Clear ... ");
 	// clear out resources list
 	currPtr = resourcelist;
 	nextPtr = NULL;
@@ -3086,12 +3111,12 @@ bool load_game( char *filepath )
 	// read number of resources in list
 	num_items = 0;
 
-	printf("num_items ");
+	if (!bQuiet) printf("num_items ");
 	objs_read = fread( &num_items, sizeof(int), 1, fp );
 	if ( objs_read != 1 ) {
 		msg = "Fail read num resources\n"; goto load_game_errexit;
 	}
-	printf("%d ",num_items);
+	if (!bQuiet) printf("%d ",num_items);
 
 	// add items in one by one
 	while (num_items > 0 && !feof( fp ) )
@@ -3105,21 +3130,21 @@ bool load_game( char *filepath )
 		insertAtBackItemList( &resourcelist, newitem.item, newitem.x, newitem.y );
 		num_items--;
 	}
-	printf("done.\n");
+	if (!bQuiet) printf("done.\n");
 
 	// 7. read the Inserter objects
 
-	printf("Load: Inserters. clear ... ");
+	if (!bQuiet) printf("Load: Inserters. clear ... ");
 	clearInserters(&inserterlist);
 
 	int num_ins = 0;
 
-	printf("num ");
+	if (!bQuiet) printf("num ");
 	objs_read = fread( &num_ins, sizeof(int), 1, fp );
 	if ( objs_read != 1 ) {
 		msg = "Fail read num inserters\n"; goto load_game_errexit;
 	}
-	printf("%d ",num_ins);
+	if (!bQuiet) printf("%d ",num_ins);
 	while (num_ins > 0 && !feof( fp ) )
 	{
 		Inserter* newinsp = malloc(sizeof(Inserter));
@@ -3139,9 +3164,9 @@ bool load_game( char *filepath )
 		objectmap[newinsp->tx + newinsp->ty * mapinfo.width] = newinsp;
 		num_ins--;
 	}
-	printf("done.\n");
+	if (!bQuiet) printf("done.\n");
 
-	printf("\nDone.\n");
+	if (!bQuiet) printf("\nDone.\n");
 	fclose(fp);
 	return ret;
 
@@ -3178,7 +3203,7 @@ void show_filedialog()
 		if ( isload )
 		{
 			printf("Loading %s ... \n",filename);
-			load_game( filename );
+			load_game( filename, false );
 		} else {
 			printf("Saving %s ... \n",filename);
 			save_game( filename );
@@ -3718,4 +3743,108 @@ leave_help:
 	vdp_select_sprite( CURSOR_SPRITE );
 	vdp_show_sprite();
 	vdp_refresh_sprites();
+}
+
+bool load_game_map( char * game_map_name )
+{
+	char buf[20];
+	sprintf(buf,"%s.info",game_map_name);
+	if ( load_map_info(buf) != 0 )
+	{
+		printf("Failed to load map info");
+		return false;
+	}
+
+	// resource multiplier could be encoded in .info?
+	resourceMultiplier = 16;
+
+	if ( !alloc_map() ) 
+	{
+		printf("Failed to alloc map layers\n");
+		return false;
+	}
+
+	if (load_map(game_map_name) != 0)
+	{
+		printf("Failed to load map\n");
+		return false;
+	}
+
+	return true;
+}
+bool splash_screen()
+{
+	if ( load_map_info("maps/splash.info") != 0 )
+	{
+		printf("Failed to load map info");
+		return false;
+	}
+
+	// resource multiplier could be encoded in .info?
+	resourceMultiplier = 16;
+
+	if ( !alloc_map() ) 
+	{
+		printf("Failed to alloc map layers\n");
+		return false;
+	}
+
+	if (load_map("maps/splash") != 0)
+	{
+		printf("Failed to load map\n");
+		return false;
+	}
+
+	return true;
+}
+
+bool splash_loop()
+{
+	int loopexit=0;
+
+	draw_screen();
+	draw_layer(true);
+	COL(15);COL(128+4);
+	TAB(4,25);printf("Press H for Help, Enter to start");
+
+	layer_wait_ticks = clock();
+	key_wait_ticks = clock();
+
+	//insertAtFrontItemList(&itemlist, IT_COPPER_PLATE, (4)*gTileSize + 4, (1)*gTileSize + 4);
+	do {
+		if (layer_wait_ticks < clock()) 
+		{
+			layer_wait_ticks = clock() + belt_speed; // belt anim speed
+			//draw_cursor(false);
+			move_items(false);
+			move_items_on_inserters(true);
+			draw_layer(true);
+		}
+		if ( vdp_check_key_press( KEY_h ) ) // help dialog
+		{
+			while ( vdp_check_key_press( KEY_h ) );
+			show_help();
+			vdp_activate_sprites(0);
+			draw_screen();
+			draw_layer(true);
+			COL(15);COL(128+4);
+			TAB(4,25);printf("Press H for Help, Enter to start");
+		}
+		if ( vdp_check_key_press( KEY_x ) )
+		{
+			while ( vdp_check_key_press( KEY_x ) );
+			return false;
+		}
+		if ( vdp_check_key_press( KEY_enter ) )
+		{
+			while ( vdp_check_key_press( KEY_enter ) );
+			loopexit = true;
+		}
+
+		vdp_update_key_state();
+
+		frame_time_in_ticks = clock() - ticks_start;
+	} while (loopexit==0);
+
+	return true;
 }
