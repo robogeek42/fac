@@ -244,9 +244,9 @@ Machine* addMiner( ThingNodePtr *machinelist, int tx, int ty, uint8_t rawtype, u
 	return mach;
 }
 
-Machine* addFurnace( ThingNodePtr *machinelist, int tx, int ty, uint8_t direction )
+Machine* addFurnace( ThingNodePtr *machinelist, int tx, int ty, uint8_t direction, int ptype )
 {
-	return addMachine( machinelist, IT_FURNACE, tx, ty, direction, 200, -1, 10);
+	return addMachine( machinelist, IT_FURNACE, tx, ty, direction, 200, ptype, 10 );
 }
 
 Machine* addAssembler( ThingNodePtr *machinelist, int tx, int ty, uint8_t direction, int ptype )

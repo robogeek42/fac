@@ -288,7 +288,7 @@ void check_items_on_machines();
 int getResourceCount(int tx, int ty);
 ItemNodePtr getResource(int tx, int ty);
 bool reduceResourceCount(int tx, int ty);
-int show_assembler_dialog(int machine_type, bool bManual);
+int show_recipe_dialog(int machine_type, bool bManual);
 void show_help();
 bool splash_screen();
 bool splash_loop();
@@ -715,7 +715,7 @@ void game_loop()
 		{
 			if (key_wait_ticks < clock() && !bGenerating) 
 			{
-				int recipe = show_assembler_dialog(IT_ASSEMBLER, true);
+				int recipe = show_recipe_dialog(IT_ASSEMBLER, true);
 				if ( recipe >= 0 )
 				{
 					if (assemblerProcessTypes[recipe].manual)
@@ -1697,15 +1697,16 @@ void do_place()
 			} else 
 			if ( item_selected == IT_FURNACE )
 			{
+				int recipe = show_recipe_dialog(IT_FURNACE, false);
 				if (inventory_remove_item( inventory, item_selected, 1 ))
 				{
-					Machine *mach = addFurnace( &machinelist, cursor_tx, cursor_ty, place_belt_index );
+					Machine *mach = addFurnace( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
 					objectmap[tileoffset] = mach;
 				}
 			} else 
 			if ( item_selected == IT_ASSEMBLER )
 			{
-				int recipe = show_assembler_dialog(IT_ASSEMBLER, false);
+				int recipe = show_recipe_dialog(IT_ASSEMBLER, false);
 				if (inventory_remove_item( inventory, item_selected, 1 ))
 				{
 					Machine *mach = addAssembler( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
@@ -1722,7 +1723,7 @@ void do_place()
 			} else 
 			if ( item_selected == IT_GENERATOR )
 			{
-				int recipe = show_assembler_dialog(IT_GENERATOR, false);
+				int recipe = show_recipe_dialog(IT_GENERATOR, false);
 				if (inventory_remove_item( inventory, item_selected, 1 ))
 				{
 					Machine *mach = addGenerator( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
@@ -3259,19 +3260,6 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 	{
 		Machine* mach = findMachine(&machinelist, tx, ty);
 		int ptype = mach->ptype;
-		// if the furnace recipe is not set, set it based on the item inserted
-		if ( ptype < 0 )
-		{
-			// find the correct furnace recipe
-			for (int i=0; i<NUM_FURNACE_PROCESSES; i++)
-			{
-				if ( furnaceProcessTypes[i].in[0] == item )
-				{
-					mach->ptype = i;
-					ptype=i; break;
-				}
-			}
-		}
 		if ( ptype >= 0 )
 		{
 			if ( furnaceProcessTypes[ptype].in[0] == item )
@@ -3287,7 +3275,6 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 		//TAB(0,0);
 		Machine* mach = findMachine(&machinelist, tx, ty);
 		int ptype = mach->ptype;
-		//printf("it=%d, mach=%d innum %d : ", item, m, mach->process_type.innum);
 
 		if ( ptype >= 0 )
 		{
@@ -3366,7 +3353,7 @@ void check_items_on_machines()
 #define RECIPE_BOX_WIDTH 120
 #define RECIPE_SELECT_HEIGHT 24
 #define RECIPE_TITLE_HEIGHT 10
-int show_assembler_dialog(int machine_type, bool bManual)
+int show_recipe_dialog(int machine_type, bool bManual)
 {
 	int offx = 10;
 	int offy = 20;
@@ -3399,13 +3386,20 @@ int show_assembler_dialog(int machine_type, bool bManual)
 	bool redisplay_cursor = true;
 	bool redisplay_recipes = true;
 	int num_processes = 0;
+	ProcessType *processType;
     switch (machine_type)
 	{
 		case IT_GENERATOR:
 			num_processes = NUM_GENERATOR_PROCESSES;
+			processType = generatorProcessTypes;
 			break;
 		case IT_ASSEMBLER:
 			num_processes = NUM_ASM_PROCESSES;
+			processType = assemblerProcessTypes;
+			break;
+		case IT_FURNACE:
+			num_processes = NUM_FURNACE_PROCESSES;
+			processType = furnaceProcessTypes;
 			break;
 		default:
 			finish_exit = true;
@@ -3446,11 +3440,6 @@ int show_assembler_dialog(int machine_type, bool bManual)
 				int xx = offx + RECIPE_EXT_BORDER + 2;
 				int yy = box_offsetsY[j-from_process] + 2;
 
-				ProcessType * processType = assemblerProcessTypes;
-				if ( machine_type == IT_GENERATOR )
-				{
-					processType = generatorProcessTypes;
-				}
 				draw_number_lj( j, xx, yy+2 );
 				xx+=8;
 				for (int i=0; i < processType[j].innum; i++ )
