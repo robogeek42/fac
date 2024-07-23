@@ -198,6 +198,12 @@ clock_t display_fps_ticks;
 clock_t func_start;
 int func_time[4] = { 0 };
 
+// generator
+bool bGenerating;
+clock_t generate_timeout_ticks;
+int generating_item;
+int generating_item_count;
+
 void wait();
 void change_mode(int mode);
 
@@ -371,6 +377,7 @@ int main(/*int argc, char *argv[]*/)
 	target_item_count = 0;
 
 	fac.energy = 0;
+	bGenerating = false;
 
 	/* start bob and screen centred in map */
 	fac.bobx = (mapinfo.width * gTileSize / 2) & 0xFFFFF0;
@@ -678,7 +685,7 @@ void game_loop()
 
 		if ( vdp_check_key_press( KEY_g ) ) // g - generate
 		{
-			if (key_wait_ticks < clock()) 
+			if (key_wait_ticks < clock() && !bGenerating) 
 			{
 				int recipe = show_assembler_dialog(IT_ASSEMBLER, true);
 				if ( recipe >= 0 )
@@ -711,16 +718,16 @@ void game_loop()
 									inventory[index].count -=  assemblerProcessTypes[recipe].incnt[i];
 								}
 							}
-							int outitem = assemblerProcessTypes[recipe].out;
-							int outitemcnt = assemblerProcessTypes[recipe].outcnt;
+							generating_item = assemblerProcessTypes[recipe].out;
+							generating_item_count = assemblerProcessTypes[recipe].outcnt;
 
-							char buf[20]; snprintf(buf,20,"generate +%d",outitemcnt);
-							if (itemtypes[outitem].size == 0)
-								message_with_bm16(buf,itemtypes[outitem].bmID, 300, 17);
+							char buf[20]; snprintf(buf,20,"generate +%d",generating_item_count);
+							if (itemtypes[generating_item].size == 0)
+								message_with_bm16(buf,itemtypes[generating_item].bmID, 290, 17);
 							else
-								message_with_bm8(buf,itemtypes[outitem].bmID, 300, 17);
-							inventory_add_item( inventory,  outitem, outitemcnt );
-							//delay(300);
+								message_with_bm8(buf,itemtypes[generating_item].bmID, 290, 17);
+							generate_timeout_ticks = clock() + 300;
+							bGenerating = true;
 						} else {
 							message("Inputs?",150,25);
 						}
@@ -736,6 +743,13 @@ void game_loop()
 		if ( bMessage && message_timeout_ticks < clock() )
 		{
 			message_clear();
+		}
+
+		if (bGenerating && generate_timeout_ticks < clock() )
+		{
+			inventory_add_item( inventory,  generating_item, generating_item_count );
+			message("done",80,17);
+			bGenerating = false;
 		}
 
 		// only animate machines if there is active energy
