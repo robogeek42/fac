@@ -778,7 +778,11 @@ void game_loop()
 		}
 
 		// only animate machines if there is active energy
-		if ( fac.energy > 0 &&  machine_anim_timeout_ticks < clock() )
+		if ( 
+#if defined MACH_NEED_ENERGY
+				fac.energy > 0 &&  
+#endif
+				machine_anim_timeout_ticks < clock() )
 		{
 			machine_anim_timeout_ticks = clock() + machine_anim_speed;
 			machine_frame = (machine_frame +1) % 3;
@@ -998,11 +1002,13 @@ void draw_machines(int tx, int ty, int tposx, int tposy)
 		int bmid = getMachineBMIDmh(mh);
 		vdp_adv_select_bitmap( bmid );
 		vdp_draw_bitmap( tposx, tposy );
-		if (fac.energy == 0 && ( mh->machine_type < IT_INSERTER ))
+#ifdef MACH_NEED_ENERGY
+		if (fac.energy <= 0 && ( mh->machine_type < IT_INSERTER ))
 		{
 			vdp_adv_select_bitmap( BMOFF_ZAP );
 			vdp_draw_bitmap( tposx, tposy );
 		}
+#endif
 	}
 }
 
@@ -1681,6 +1687,17 @@ void do_place()
 		}
 	}
 	if ( isMachine(item_selected) ) {
+		int beltID = layer_belts[ tileoffset ];
+		int mach_mini_it = (item_selected - IT_TYPES_MACHINE) + IT_TYPES_MINI_MACHINES;
+		if ( beltID >= 0 )
+		{
+			if (inventory_remove_item( inventory, item_selected, 1 ))
+			{
+				// place the 8x8 resource item in the centre of the square
+				insertAtFrontItemList(&itemlist, mach_mini_it, cursor_tx*gTileSize + 4, cursor_ty*gTileSize + 4);
+				numItems++;
+			}
+		} else
 		if ( objectmap[tileoffset]==NULL )
 		{
 			// miners can only be placed where there is an overlay resource
@@ -2459,7 +2476,7 @@ void show_info()
 	if ( info_item_bmid >= 0 )
 	{
 		char * text = itemtypes[ info_item_type ].desc;
-		int textlen = MAX(strlen(text) * 8, 100);
+		int textlen = MAX(strlen(text) * 8, 108);
 		draw_filled_box( infox, infoy, textlen+4, boxh, 11, 8);
 		vdp_adv_select_bitmap( info_item_bmid );
 		vdp_draw_bitmap( infox+4, infoy+4 );
@@ -2520,6 +2537,11 @@ void show_info()
 					}
 					vdp_move_to( x, infoy+4 + 4 );
 					printf("%d",mach->countOut);
+				}
+				if ( info_item_type == IT_GENERATOR )
+				{
+					vdp_move_to( infox+24, infoy+12);
+					printf("TotEn:%d",fac.energy);
 				}
 			}
 		}
@@ -2718,7 +2740,12 @@ void pickupItemsAtTile(int tx, int ty)
 			ItemNodePtr ip = popFrontItem(&itptr);
 			while (ip)
 			{
-				inventory_add_item( inventory, ip->item, 1 );
+				int it = ip->item;
+				if ( it >= IT_TYPES_MINI_MACHINES && it < NUM_ITEMTYPES )
+				{
+					it = it - IT_TYPES_MINI_MACHINES + IT_TYPES_MACHINE;
+				}
+				inventory_add_item( inventory, it, 1 );
 				free(ip);
 				ip=NULL;
 				
@@ -3274,6 +3301,11 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 	// to the inventory
 	if ( machine_type == IT_BOX )
 	{
+		// if the item is a machine, convert to the actual machine
+		if ( item >= IT_TYPES_MINI_MACHINES && item < NUM_ITEMTYPES )
+		{
+			item = item - IT_TYPES_MINI_MACHINES + IT_TYPES_MACHINE;
+		}
 		inventory_add_item(inventory, item, 1);
 		bInserted = true;
 	}
@@ -3370,7 +3402,7 @@ void check_items_on_machines()
 
 #define RECIPE_EXT_BORDER 5
 #define RECIPE_INT_BORDER 2
-#define RECIPE_NUM_SELECTIONS 6
+#define RECIPE_NUM_IN_VIEW 6
 #define RECIPE_BOX_WIDTH 120
 #define RECIPE_SELECT_HEIGHT 24
 #define RECIPE_TITLE_HEIGHT 10
@@ -3390,7 +3422,7 @@ int show_recipe_dialog(int machine_type, bool bManual)
 	// UI sze
 	int boxw = RECIPE_EXT_BORDER + RECIPE_BOX_WIDTH + RECIPE_EXT_BORDER;
 	int boxh = RECIPE_EXT_BORDER + RECIPE_TITLE_HEIGHT + 
-		(RECIPE_SELECT_HEIGHT + RECIPE_INT_BORDER) * MIN(RECIPE_NUM_SELECTIONS,NUM_ASM_PROCESSES) 
+		(RECIPE_SELECT_HEIGHT + RECIPE_INT_BORDER) * MIN(RECIPE_NUM_IN_VIEW,NUM_ASM_PROCESSES) 
 		+ 8
 		- RECIPE_INT_BORDER + RECIPE_EXT_BORDER;
 
@@ -3415,7 +3447,13 @@ int show_recipe_dialog(int machine_type, bool bManual)
 			processType = generatorProcessTypes;
 			break;
 		case IT_ASSEMBLER:
-			num_processes = NUM_ASM_PROCESSES;
+			if (bManual)
+			{
+				num_processes = NUM_MANUAL_ASM_PROCESSES;
+			} else
+			{
+				num_processes = NUM_ASM_PROCESSES;
+			}
 			processType = assemblerProcessTypes;
 			break;
 		case IT_FURNACE:
@@ -3428,7 +3466,7 @@ int show_recipe_dialog(int machine_type, bool bManual)
 			break;
 	}
 	int from_process = 0;
-	int to_process = MIN(RECIPE_NUM_SELECTIONS, num_processes);
+	int to_process = MIN(RECIPE_NUM_IN_VIEW, num_processes);
 	do {
 
 		if ( redisplay_recipes )
@@ -3553,7 +3591,7 @@ int show_recipe_dialog(int machine_type, bool bManual)
 		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_DOWN ) )
 		{
 			key_wait_ticks = clock() + key_wait;
-			if ( recipe_selected < MIN(RECIPE_NUM_SELECTIONS+from_process, num_processes)-1 ) {
+			if ( recipe_selected < MIN(RECIPE_NUM_IN_VIEW+from_process, num_processes)-1 ) {
 				recipe_selected++;
 				redisplay_cursor = true;
 			} else 
@@ -3561,7 +3599,7 @@ int show_recipe_dialog(int machine_type, bool bManual)
 			{
 				recipe_selected++;
 				from_process += 1;
-				to_process = MIN(RECIPE_NUM_SELECTIONS+from_process, num_processes);
+				to_process = MIN(RECIPE_NUM_IN_VIEW+from_process, num_processes);
 				redisplay_recipes = true;
 				redisplay_cursor = true;
 			}
