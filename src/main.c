@@ -1439,7 +1439,11 @@ void draw_cursor(bool draw)
 	{
 		vdp_select_sprite( CURSOR_SPRITE );
 		vdp_move_sprite_to( cursorx, cursory );
-		vdp_nth_sprite_frame( 0 );
+		int frame=0;
+#ifdef CURSOR_RANGE
+		if (!cursor_in_range()) frame=2;
+#endif
+		vdp_nth_sprite_frame( frame );
 	}
 	vdp_refresh_sprites();
 
@@ -3711,17 +3715,18 @@ void show_help()
 	help_line(line++, 2, 6, "H", "Show this help screen");
 	help_line(line++, 2, 6, "X", "Exit");
 	help_line(line++, 2, 6, "F", "File dialog");
+	help_line(line++, 2, 6, "L", "Refresh screen.");
 	line++;
-	help_line(line++, 2, 6, "E", "Show Inventory");
+	help_line(line++, 2, 6, "I", "Show info under cursor");
+	help_line(line++, 2, 6, "E", "Show Inventory and select item");
+	help_line(line++, 2, 6, "P/Q", "Begin/Quit placing item");
 	help_line(line++, 2, 6, "Enter", "Place selected item");
-	help_line(line++, 2, 6, "P", "Reselect item to place");
 	help_line(line++, 2, 6, "R", "Rotate selected item");
 	help_line(line++, 2, 6, "Del", "Delete item");
 	help_line(line++, 2, 6, "Z", "Pickup items under cursor");
+	line++;
 	help_line(line++, 2, 6, "M", "Mine. Facing resource & cursor");
 	help_line(line++, 2, 6, "G", "Manually assemble item.");
-	help_line(line++, 2, 6, "I", "Show info");
-	help_line(line++, 2, 6, "L", "Refresh screen.");
 
 	line+=1;
 
