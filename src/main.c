@@ -347,7 +347,7 @@ bool alloc_map()
 void reset_cursor()
 {
 	cursor_tx = getTileX(fac.bobx+gTileSize/2);
-	cursor_ty = getTileY(fac.boby+gTileSize/2)+1;
+	cursor_ty = getTileY(fac.boby+gTileSize/2);
 	cursorx = getTilePosInScreenX(cursor_tx);
 	cursory = getTilePosInScreenY(cursor_ty);
 	old_cursorx=cursorx;
@@ -389,13 +389,6 @@ int main(int argc, char *argv[])
 	fac.energy = 0;
 	bGenerating = false;
 
-	/* start bob and screen centred in map */
-	fac.bobx = (mapinfo.width * gTileSize / 2) & 0xFFFFF0;
-	fac.boby = (mapinfo.height * gTileSize / 2) & 0xFFFFF0;
-	fac.xpos = fac.bobx - gScreenWidth/2;
-	fac.ypos = fac.boby - gScreenHeight/2;
-
-	reset_cursor();
 
 	// setup complete
 	change_mode(gMode);
@@ -414,7 +407,11 @@ int main(int argc, char *argv[])
 	item_selected = 0; // belts
 
 	vdp_activate_sprites(0);
-	draw_screen();
+
+	// simple mission
+	target_item_type = IT_COMPUTER;
+	target_items = 20;
+	target_item_count = 0;
 
 	load_game("maps/splash_save.data", true);
 	COL(15);COL(128+4);
@@ -425,11 +422,6 @@ int main(int argc, char *argv[])
 	}
 
 	load_game_map("maps/m4");
-
-	// simple mission
-	target_item_type = IT_COMPUTER;
-	target_items = 20;
-	target_item_count = 0;
 
 	/* start bob and screen centred in map */
 	fac.bobx = (mapinfo.width * gTileSize / 2) & 0xFFFFF0;
@@ -811,6 +803,12 @@ void game_loop()
 			draw_screen();
 		}
 
+		if ( vdp_check_key_press( KEY_c ) ) // recentre cursor on Bob
+		{
+			while ( vdp_check_key_press( KEY_c ) );
+			reset_cursor();
+		}
+
 		if ( machine_update_ticks < clock() )
 		{
 			machine_update_ticks = clock() + machine_update_rate;
@@ -859,6 +857,9 @@ void game_loop()
 					generatorProduce( mach, &fac.energy );
 				}
 
+				// possible to reach energy < 0 due to simultaneous updates?
+				if ( fac.energy < 0 ) fac.energy = 0;
+
 				pushOutputs( mach );
 
 				tlistp = tlistp->next;
@@ -870,6 +871,7 @@ void game_loop()
 				draw_filled_box( 70, 84, 180, 30, 11, 25 );
 				COL(128+25);COL(9);TAB(10,12);printf("  !!! You Win !!! ");
 				target_item_count=0;
+				delay(500);
 				wait_for_any_key();
 				draw_screen();
 				vdp_activate_sprites( NUM_SPRITES );
@@ -1110,14 +1112,16 @@ void scroll_screen(int dir, int step)
 
 bool can_scroll_screen(int dir, int step)
 {
-	if (dir == SCROLL_RIGHT || dir == SCROLL_LEFT) {
-		if ((fac.bobx - fac.xpos) < gScreenWidth/2) { return false; }
-		if ((fac.bobx - fac.xpos) > gScreenWidth/2) { return false; }
-	}
-	if (dir == SCROLL_UP || dir == SCROLL_DOWN) {
-		if ((fac.boby - fac.ypos) < gScreenHeight/2) { return false; }
-		if ((fac.boby - fac.ypos) > gScreenHeight/2) { return false; }
-	}
+	// let Bob return to centre if he has moved away
+	int btx = (fac.bobx - fac.xpos)/gTileSize;
+	int bty = (fac.boby - fac.ypos)/gTileSize;
+	int cx = (gScreenWidth/2)/gTileSize;
+	int cy = (gScreenHeight/2)/gTileSize;
+
+	if (dir == SCROLL_RIGHT && btx > cx) { return false; }
+	if (dir == SCROLL_LEFT  && btx < cx) { return false; }
+	if (dir == SCROLL_UP    && bty > cy) { return false; }
+	if (dir == SCROLL_DOWN  && bty < cy) { return false; }
 
 	switch (dir) {
 		case SCROLL_RIGHT: // scroll screen to right, view moves left
@@ -1260,32 +1264,32 @@ bool move_bob(int dir, int speed)
 	switch (dir) {
 		case BOB_LEFT:
 			if (fac.bobx > speed 
-					&& check_tile(fac.bobx-speed,fac.boby)
-					&& check_tile(fac.bobx-speed,fac.boby+gTileSize-1)
+					&& check_tile(fac.bobx-speed, fac.boby+2)
+					&& check_tile(fac.bobx-speed, fac.boby+gTileSize-3)
 					) {
 				newx -= speed;
 			}
 			break;
 		case BOB_RIGHT:
 			if (fac.bobx < mapinfo.width*gTileSize - speed 
-					&& check_tile(fac.bobx+speed+gTileSize-1,fac.boby)
-					&& check_tile(fac.bobx+speed+gTileSize-1, fac.boby+gTileSize-1)
+					&& check_tile(fac.bobx+speed+gTileSize-1, fac.boby+2)
+					&& check_tile(fac.bobx+speed+gTileSize-1, fac.boby+gTileSize-3)
 						) {
 				newx += speed;
 			}
 			break;
 		case BOB_UP:
 			if (fac.boby > speed 
-					&& check_tile(fac.bobx,fac.boby-speed)
-					&& check_tile(fac.bobx+gTileSize-1,fac.boby-speed)
+					&& check_tile(fac.bobx+2,           fac.boby-speed)
+					&& check_tile(fac.bobx+gTileSize-3, fac.boby-speed)
 					) {
 				newy -= speed;
 			}
 			break;
 		case BOB_DOWN:
 			if (fac.boby < mapinfo.height*gTileSize - speed 
-				&& check_tile(fac.bobx,fac.boby+speed+gTileSize-1)
-				&& check_tile(fac.bobx+gTileSize-1,fac.boby+speed+gTileSize-1)
+				&& check_tile(fac.bobx+2,           fac.boby+speed+gTileSize-1)
+				&& check_tile(fac.bobx+gTileSize-3, fac.boby+speed+gTileSize-1)
 				) {
 				newy += speed;
 			}
@@ -2705,7 +2709,33 @@ void removeAtCursor()
 			free( delme );
 		} else 
 		{
+			// add machine
 			inventory_add_item( inventory, machine_type, 1 );
+			
+			// add all of the machine's stored items
+			Machine *mach = (Machine*) objectmap[tileoffset];
+			ProcessType *pt;
+			if ( machine_type == IT_FURNACE )
+			{
+				pt = &furnaceProcessTypes[mach->ptype];
+			}
+			if ( machine_type == IT_ASSEMBLER )
+			{
+				pt = &assemblerProcessTypes[mach->ptype];
+			}
+			if ( machine_type == IT_GENERATOR )
+			{
+				pt = &generatorProcessTypes[mach->ptype];
+			}
+
+			for ( int inputs=0; inputs < pt->innum; inputs++)
+			{
+				if (pt->incnt[inputs] > 0) 
+					inventory_add_item( inventory, pt->in[inputs], mach->countIn[inputs]);
+			}
+			if (pt->outcnt > 0) 
+				inventory_add_item( inventory, pt->out, mach->countOut);
+
 			// delete machine
 			ThingNodePtr thingnode = getMachineNode( &machinelist, objectmap[tileoffset] );
 			free( thingnode->thing );
@@ -3773,7 +3803,6 @@ void show_help()
 	COL(6);TAB(2,line++);printf("  into items and more machines.");
 
 	COL(15);TAB(2,line++);printf("     WIN: Make %d %ss.", target_items, itemtypes[target_item_type].desc);
-
 
 	COL(3);TAB(5,27);printf("Next: any key     X: Exit help");
 
