@@ -2443,6 +2443,8 @@ void show_info()
 	int info_item_bmid = -1;
 	int info_item_type = 0;
 	int resource_count = -1;
+	int resource_type = -1;
+	int resource_bmid = -1;
 
 	int tileoffset = cursor_ty*mapinfo.width + cursor_tx;
 	if ( layer_belts[ tileoffset ] >=0 )
@@ -2473,9 +2475,25 @@ void show_info()
 		// feature
 		info_item_bmid = getOverlayAtOffset(tileoffset) - 1 + BMOFF_FEAT16;
 		info_item_type = ((info_item_bmid - BMOFF_FEAT16 ) % 5) + IT_FEAT_STONE;
+		resource_type = (info_item_type - IT_FEAT_STONE) + IT_STONE;
+		resource_bmid = itemtypes[ resource_type ].bmID;
 	}
 
 	resource_count = getResourceCount(cursor_tx, cursor_ty);
+
+	if (cursor_tx == getTileX(fac.bobx) && cursor_ty == getTileY(fac.boby) )
+	{
+		char text[]="This is BOB";
+		int textlen = MAX(strlen(text) * 8, 108);
+		draw_filled_box( infox, infoy, textlen+4, boxh, 11, 8);
+		vdp_write_at_graphics_cursor();
+		vdp_move_to( infox+4, infoy+8 );
+		printf("%s",text);
+		vdp_write_at_text_cursor();
+		while( vdp_check_key_press( KEY_i ) ) { vdp_update_key_state(); }; 
+		wait_for_any_key();
+		draw_screen();
+	} else
 
 	if ( info_item_bmid >= 0 )
 	{
@@ -2484,7 +2502,7 @@ void show_info()
 		draw_filled_box( infox, infoy, textlen+4, boxh, 11, 8);
 		vdp_adv_select_bitmap( info_item_bmid );
 		vdp_draw_bitmap( infox+4, infoy+4 );
-		putch(0x05); // print at graphics cursor
+		vdp_write_at_graphics_cursor();
 		if ( info_item_type == IT_FURNACE || info_item_type == IT_ASSEMBLER || info_item_type == IT_GENERATOR )
 		{
 			Machine* mach = findMachine(&machinelist, cursor_tx, cursor_ty);
@@ -2551,13 +2569,20 @@ void show_info()
 		}
 		if ( resource_count > 0 )
 		{
-			vdp_move_to( infox+4+20, infoy+4 );
+			int x = infox+32;
+			vdp_move_to( x, infoy+4 + 4 ); putch(CHAR_RIGHTARROW);
+			x+=10;
+			vdp_adv_select_bitmap( resource_bmid );
+			vdp_draw_bitmap( x, infoy+4 );
+			x+=10;
+			vdp_move_to( x, infoy+4 );
 			printf("%d",resource_count);
 		}
+
 		vdp_move_to( infox+3, infoy+4+18 + yadj );
 		vdp_gcol(0, 15);
 		printf("%s",itemtypes[ info_item_type ].desc);
-		putch(0x04); // print at text cursor
+		vdp_write_at_text_cursor();
 
 		while( vdp_check_key_press( KEY_i ) ) { vdp_update_key_state(); }; 
 		wait_for_any_key();
@@ -3758,15 +3783,15 @@ void help_machines()
 
 }
 
-void help_line(int line, int column, int keywidth, char *keystr, char* helpstr)
+void help_line(int line, int column, int keywidth, char *keystr, char* helpstr, int col1, int col2)
 {
 	TAB(column,line);
-	COL(11);
+	COL(col1);
 	printf("%s",keystr);
 	COL(8);
 	for(int i=strlen(keystr);i<=keywidth;i++) printf(".");
 	TAB(column+keywidth,line);
-	COL(13);
+	COL(col2);
 	printf("%s",helpstr);
 }
 
@@ -3777,24 +3802,24 @@ void show_help()
 	COL(128);
 	COL(3);TAB(3,2); printf("--------  F A C   HELP   --------");
 	int line = 4;
-	help_line(line, 2, 6, "WASD", "Move Bob");
-	help_line(line++, 18, 9, "Dir keys", "Move cursor");
+	help_line(line, 2, 6, "WASD", "Move Bob", 11, 13);
+	help_line(line++, 18, 9, "Dir keys", "Move cursor", 11, 13);
 	line++;
-	help_line(line++, 2, 6, "H", "Show this help screen");
-	help_line(line++, 2, 6, "X", "Exit");
-	help_line(line++, 2, 6, "F", "File dialog");
-	help_line(line++, 2, 6, "L", "Refresh screen.");
+	help_line(line++, 2, 6, "H", "Show this help screen", 11, 13);
+	help_line(line++, 2, 6, "X", "Exit", 11, 13);
+	help_line(line++, 2, 6, "F", "File dialog", 11, 13);
+	help_line(line++, 2, 6, "L", "Refresh screen.", 11, 13);
+	help_line(line++, 2, 6, "C", "Recentre cursor.", 11, 13);
+	help_line(line++, 2, 6, "I", "Show info under cursor", 10, 14);
+	help_line(line++, 2, 6, "E", "Show Inventory and select item", 10, 14);
+	help_line(line++, 2, 6, "P/Q", "Begin/Quit placing item", 10, 14);
+	help_line(line++, 2, 6, "Enter", "Place selected item", 10, 14);
+	help_line(line++, 2, 6, "R", "Rotate selected item", 10, 14);
+	help_line(line++, 2, 6, "Del", "Delete item", 10, 14);
+	help_line(line++, 2, 6, "Z", "Pickup items under cursor", 10, 14);
 	line++;
-	help_line(line++, 2, 6, "I", "Show info under cursor");
-	help_line(line++, 2, 6, "E", "Show Inventory and select item");
-	help_line(line++, 2, 6, "P/Q", "Begin/Quit placing item");
-	help_line(line++, 2, 6, "Enter", "Place selected item");
-	help_line(line++, 2, 6, "R", "Rotate selected item");
-	help_line(line++, 2, 6, "Del", "Delete item");
-	help_line(line++, 2, 6, "Z", "Pickup items under cursor");
-	line++;
-	help_line(line++, 2, 6, "M", "Mine. Facing resource & cursor");
-	help_line(line++, 2, 6, "G", "Manually assemble item.");
+	help_line(line++, 2, 6, "M", "Mine. Facing resource & cursor", 11, 13);
+	help_line(line++, 2, 6, "G", "Manually assemble items", 11, 13);
 
 	line+=1;
 
