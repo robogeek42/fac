@@ -208,6 +208,9 @@ int generating_item_count;
 
 bool bIsTest = false;
 
+bool bPlayingWalkSound = false;
+clock_t walk_sound_ticks;
+
 //------------------------------------------------------------
 //Function defs
 void wait();
@@ -295,6 +298,7 @@ bool splash_loop();
 bool load_game_map( char * game_map_name );
 int convertProductionToMachine( int it );
 int convertMachineToProduction( int it );
+int load_sound_sample(char *fname, int sample_id);
 
 static volatile SYSVAR *sys_vars = NULL;
 
@@ -422,6 +426,15 @@ int main(int argc, char *argv[])
 	{
 		goto my_exit2;
 	}
+
+#if 0
+	int sample_len = load_sound_sample("/cc/play/steps.raw",-2);
+	if (sample_len == 0 )
+	{
+		printf("Error loading sound sample.");
+		goto my_exit2;
+	}
+#endif
 
 	load_game_map("maps/m4");
 
@@ -1327,6 +1340,8 @@ bool move_bob(int dir, int speed)
 	vdp_nth_sprite_frame( bob_frame );
 	bob_anim_ticks = clock()+10;
 	vdp_refresh_sprites();
+	
+	//vdp_audio_play_note(1, 100, 435, 0 );
 
 	return moved;
 }
@@ -4066,3 +4081,46 @@ int convertMachineToProduction( int it )
 	}
 	return it;
 }
+
+// returns length of sound sample
+int load_sound_sample(char *fname, int sample_id)
+{
+	unsigned int file_len = 0;
+	FILE *fp;
+	fp = fopen(fname, "rb");
+	if ( !fp )
+	{
+		printf("Fail to Open %s\n",fname);
+		return 0;
+	}
+	// get length of file
+	fseek(fp, 0, SEEK_END);
+	file_len = ftell(fp);
+	fseek(fp, 0, SEEK_SET);
+
+	uint8_t *data = (uint8_t*) malloc(file_len);
+	if ( !data )
+	{
+		fclose(fp);
+		printf("Mem alloc error\n");
+		return 0;
+	}
+	unsigned int bytes_read = fread( data, 1, file_len, fp );
+	if ( bytes_read != file_len )
+	{
+		fclose(fp);
+		printf("Err read %d bytes expected %d\n", bytes_read, file_len);
+		return 0;
+	}
+
+	fclose(fp);
+
+	if (file_len)
+	{
+		vdp_audio_load_sample(sample_id, file_len, data);
+		//vdp_audio_set_sample( 1, abs(sample_id)+64255 );
+	}
+
+	return file_len;
+}
+
