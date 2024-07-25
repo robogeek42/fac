@@ -293,6 +293,8 @@ void show_help();
 bool splash_screen();
 bool splash_loop();
 bool load_game_map( char * game_map_name );
+int convertProductionToMachine( int it );
+int convertMachineToProduction( int it );
 
 static volatile SYSVAR *sys_vars = NULL;
 
@@ -446,9 +448,17 @@ int main(int argc, char *argv[])
 	inventory_add_item(inventory, IT_GENERATOR, 1);
 	if (bIsTest)
 	{
-		inventory_add_item(inventory, IT_STONE, 12);
-		inventory_add_item(inventory, IT_WOOD, 12);
+		inventory_add_item(inventory, IT_STONE, 20);
+		inventory_add_item(inventory, IT_WOOD, 20);
+		inventory_add_item(inventory, IT_COAL, 100);
+		inventory_add_item(inventory, IT_IRON_PLATE, 20);
+		inventory_add_item(inventory, IT_COPPER_PLATE, 20);
 		inventory_add_item(inventory, IT_ASSEMBLER, 10);
+		inventory_add_item(inventory, IT_GEARWHEEL, 20);
+		inventory_add_item(inventory, IT_CIRCUIT, 20);
+		inventory_add_item(inventory, IT_WIRE, 20);
+		inventory_add_item(inventory, IT_STONE_BRICK, 20);
+		inventory_add_item(inventory, IT_MINER, 10);
 	}
 
 	game_loop();
@@ -736,6 +746,7 @@ void game_loop()
 								}
 							}
 							generating_item = assemblerProcessTypes[recipe].out;
+							generating_item = convertProductionToMachine(generating_item);
 							generating_item_count = assemblerProcessTypes[recipe].outcnt;
 
 							char buf[20]; snprintf(buf,20,"generate +%d",generating_item_count);
@@ -1426,11 +1437,27 @@ void draw_cursor(bool draw)
 	cursorx = getTilePosInScreenX(cursor_tx);
 	cursory = getTilePosInScreenY(cursor_ty);
 
+	int tileoffset = mapinfo.width * cursor_ty + cursor_tx;
+	MachineHeader *mh = (MachineHeader*) objectmap[tileoffset];
+	int machine_itemtype = -1;
+	if (mh && mh->machine_type > 0)
+	{
+		machine_itemtype = mh->machine_type;
+	}
+
 	if (bPlace) // placement cursor is active
 	{
 		if ( isBelt( item_selected ) )
 		{
-			draw_place_belt();
+			if (layer_belts[ cursor_tx+cursor_ty*mapinfo.width ] >= 0 || machine_itemtype==IT_ASSEMBLER)
+			{
+				vdp_adv_select_bitmap( itemtypes[IT_MINI_BELT].bmID );
+				vdp_draw_bitmap( 
+						cursorx + itemtypes[IT_MINI_BELT].size*4, 
+						cursory + itemtypes[IT_MINI_BELT].size*4);
+			} else {
+				draw_place_belt();
+			}
 		}
 		if ( isResource( item_selected ) || isProduct( item_selected ) )
 		{
@@ -1438,7 +1465,16 @@ void draw_cursor(bool draw)
 		}
 		if ( isMachine( item_selected ) )
 		{
-			draw_place_machine();
+			if (machine_itemtype==IT_ASSEMBLER)
+			{
+				int it = convertMachineToProduction( item_selected );
+				vdp_adv_select_bitmap( itemtypes[it].bmID );
+				vdp_draw_bitmap( 
+						cursorx + itemtypes[it].size*4, 
+						cursory + itemtypes[it].size*4);
+			} else {
+				draw_place_machine();
+			}
 		}
 		
 		vdp_select_sprite( CURSOR_SPRITE );
@@ -1656,13 +1692,37 @@ void do_place()
 {
 	if ( !bPlace ) return;
 	int tileoffset = mapinfo.width * cursor_ty + cursor_tx;
+
+	MachineHeader *mh = (MachineHeader*) objectmap[tileoffset];
+	int machine_itemtype = -1;
+	if (mh && mh->machine_type > 0)
+	{
+		machine_itemtype = mh->machine_type;
+	}
+
    	if ( isBelt(item_selected) ) {
 		if ( place_belt_selected<0 ) return;
 
+		int beltID = layer_belts[ tileoffset ];
 		int ret = inventory_remove_item( inventory, IT_BELT, 1 );
 		if ( ret >= 0 )
 		{
-			layer_belts[tileoffset] = place_belt_selected;
+			MachineHeader *mh = (MachineHeader*) objectmap[tileoffset];
+			if (mh && mh->machine_type > 0)
+			{
+				int machine_itemtype = mh->machine_type;
+				if ( machine_itemtype == IT_ASSEMBLER )
+				{
+					drop_item(IT_MINI_BELT);
+				}
+			} else {
+				if (beltID>=0)
+				{
+					drop_item(IT_MINI_BELT);
+				} else {
+					layer_belts[tileoffset] = place_belt_selected;
+				}
+			}
 		}
 	}
 	if ( isResource(item_selected) || isProduct(item_selected) ) {
@@ -1692,13 +1752,21 @@ void do_place()
 	}
 	if ( isMachine(item_selected) ) {
 		int beltID = layer_belts[ tileoffset ];
-		int mach_mini_it = (item_selected - IT_TYPES_MACHINE) + IT_TYPES_MINI_MACHINES;
+		int mach_mini_it = convertMachineToProduction(item_selected);
 		if ( beltID >= 0 )
 		{
 			if (inventory_remove_item( inventory, item_selected, 1 ))
 			{
 				// place the 8x8 resource item in the centre of the square
 				insertAtFrontItemList(&itemlist, mach_mini_it, cursor_tx*gTileSize + 4, cursor_ty*gTileSize + 4);
+				numItems++;
+			}
+		} else
+		if (machine_itemtype == IT_ASSEMBLER) 
+		{
+			if (inventory_remove_item( inventory, item_selected, 1 ))
+			{
+				insertItemIntoMachine( item_selected, cursor_tx, cursor_ty, machine_itemtype );
 				numItems++;
 			}
 		} else
@@ -2795,11 +2863,8 @@ void pickupItemsAtTile(int tx, int ty)
 			ItemNodePtr ip = popFrontItem(&itptr);
 			while (ip)
 			{
-				int it = ip->item;
-				if ( it >= IT_TYPES_MINI_MACHINES && it < NUM_ITEMTYPES )
-				{
-					it = it - IT_TYPES_MINI_MACHINES + IT_TYPES_MACHINE;
-				}
+				int it = convertProductionToMachine(ip->item);
+				
 				inventory_add_item( inventory, it, 1 );
 				free(ip);
 				ip=NULL;
@@ -3357,10 +3422,7 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 	if ( machine_type == IT_BOX )
 	{
 		// if the item is a machine, convert to the actual machine
-		if ( item >= IT_TYPES_MINI_MACHINES && item < NUM_ITEMTYPES )
-		{
-			item = item - IT_TYPES_MINI_MACHINES + IT_TYPES_MACHINE;
-		}
+		item = convertProductionToMachine(item);
 		inventory_add_item(inventory, item, 1);
 		bInserted = true;
 	}
@@ -3386,6 +3448,14 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 
 		if ( ptype >= 0 )
 		{
+			if (isMachine(item)) 
+			{
+				item = item - IT_TYPES_MACHINE + IT_TYPES_MINI_MACHINES;
+			}
+			if (item == IT_BELT)
+			{
+				item = IT_MINI_BELT;
+			}
 			// find which of the inputs matches this item
 			for (int k=0; k < assemblerProcessTypes[ptype].innum; k++)
 			{
@@ -3573,7 +3643,9 @@ int show_recipe_dialog(int machine_type, bool bManual)
 				}
 				vdp_move_to( xx, yy ); printf("%c",CHAR_RIGHTARROW);
 				xx += 10;
-				int itemBMID = itemtypes[ processType[j].out ].bmID;
+				int out_itemtype = convertProductionToMachine(processType[j].out);
+				int itemBMID = itemtypes[ out_itemtype ].bmID;
+
 				if ( machine_type == IT_GENERATOR )
 				{
 					vdp_move_to( xx, yy ); printf("%dE",processType[j].outcnt);
@@ -3968,4 +4040,29 @@ bool splash_loop()
 	} while (loopexit==0);
 
 	return true;
+}
+
+int convertProductionToMachine( int it )
+{
+	if (it >= IT_TYPES_MINI_MACHINES && it < NUM_ITEMTYPES)
+	{
+		it = it - IT_TYPES_MINI_MACHINES + IT_TYPES_MACHINE;
+	}
+	if (it == IT_MINI_BELT)
+	{
+		it = IT_BELT;
+	}
+	return it;
+}
+int convertMachineToProduction( int it )
+{
+	if (it >= IT_TYPES_MACHINE && it < IT_TYPES_FEATURES)
+	{
+		it = it - IT_TYPES_MACHINE + IT_TYPES_MINI_MACHINES;
+	}
+	if (it == IT_BELT)
+	{
+		it = IT_MINI_BELT;
+	}
+	return it;
 }

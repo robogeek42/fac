@@ -82,18 +82,18 @@ ProcessType furnaceProcessTypes[NUM_FURNACE_PROCESSES] = {
 #define NUM_ASM_PROCESSES 12
 #define NUM_MANUAL_ASM_PROCESSES 9
 ProcessType assemblerProcessTypes[NUM_ASM_PROCESSES] = {
-	{ {IT_STONE,			IT_WOOD,		0			}, IT_FURNACE,		{2, 1, 0}, 1, 2, true },
-	{ {IT_IRON_PLATE,		0,				0			}, IT_GEARWHEEL,	{1, 0, 0}, 2, 1, true },
-	{ {IT_COPPER_PLATE,		0, 				0			}, IT_WIRE,			{1, 0, 0}, 2, 1, true },
-	{ {IT_IRON_PLATE,		IT_WIRE, 		0			}, IT_CIRCUIT,		{1, 2, 0}, 1, 2, true },
-	{ {IT_IRON_PLATE,		IT_STONE_BRICK,	0			}, IT_MINER,		{1, 1, 0}, 1, 2, true },
-	{ {IT_WOOD,				0,				0			}, IT_BOX,			{4, 0, 0}, 1, 1, true },
-	{ {IT_IRON_PLATE,		IT_GEARWHEEL,	IT_CIRCUIT	}, IT_ASSEMBLER,	{2, 2, 1}, 1, 3, true },
-	{ {IT_IRON_PLATE,		IT_STONE_BRICK,	IT_WIRE		}, IT_GENERATOR,	{2, 2, 2}, 1, 3, true },
-	{ {IT_WOOD,				IT_GEARWHEEL,	0			}, IT_BELT,			{1, 2, 0}, 1, 2, true },
-	{ {IT_STONE_BRICK,		0,				0			}, IT_PAVING,		{4, 0, 0}, 1, 1, false },
-	{ {IT_GEARWHEEL,		IT_WOOD,		IT_CIRCUIT	}, IT_INSERTER,		{2, 2, 1}, 1, 3, false },
-	{ {IT_GEARWHEEL,		IT_WIRE,		IT_CIRCUIT	}, IT_COMPUTER,		{2, 2, 2}, 1, 3, false },
+	{ {IT_STONE,			IT_WOOD,		0			}, IT_PROD_FURNACE,		{2, 1, 0}, 1, 2, true },
+	{ {IT_IRON_PLATE,		0,				0			}, IT_GEARWHEEL,		{1, 0, 0}, 2, 1, true },
+	{ {IT_COPPER_PLATE,		0, 				0			}, IT_WIRE,				{1, 0, 0}, 2, 1, true },
+	{ {IT_IRON_PLATE,		IT_WIRE, 		0			}, IT_CIRCUIT,			{1, 2, 0}, 1, 2, true },
+	{ {IT_IRON_PLATE,		IT_STONE_BRICK,	0			}, IT_PROD_MINER,		{1, 1, 0}, 1, 2, true },
+	{ {IT_WOOD,				0,				0			}, IT_PROD_BOX,			{4, 0, 0}, 1, 1, true },
+	{ {IT_IRON_PLATE,		IT_GEARWHEEL,	IT_CIRCUIT	}, IT_PROD_ASSEMBLER,	{2, 2, 1}, 1, 3, true },
+	{ {IT_IRON_PLATE,		IT_STONE_BRICK,	IT_WIRE		}, IT_PROD_GENERATOR,	{2, 2, 2}, 1, 3, true },
+	{ {IT_WOOD,				IT_GEARWHEEL,	0			}, IT_MINI_BELT,		{1, 2, 0}, 1, 2, true },
+	{ {IT_STONE_BRICK,		0,				0			}, IT_PAVING,			{4, 0, 0}, 1, 1, false },
+	{ {IT_GEARWHEEL,		IT_MINI_BELT,	IT_CIRCUIT	}, IT_PROD_INSERTER,	{2, 1, 1}, 1, 3, false },
+	{ {IT_PROD_ASSEMBLER,	IT_WIRE,		IT_CIRCUIT	}, IT_COMPUTER,			{1, 2, 2}, 1, 3, false },
 };
 
 #define NUM_GENERATOR_PROCESSES 2

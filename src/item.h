@@ -122,6 +122,7 @@ enum ItemTypesEnum {
 	IT_CIRCUIT,
 	IT_PAVING,
 	IT_COMPUTER,
+	IT_MINI_BELT,
 	IT_TYPES_MINI_MACHINES,
 	IT_PROD_FURNACE = IT_TYPES_MINI_MACHINES,
 	IT_PROD_MINER,
@@ -166,13 +167,14 @@ static ItemType itemtypes[] = {
     {IT_CIRCUIT,		"Circuit Board",false, false, false, false, BMOFF_PROD8+2, BM_SIZE8, 0 },
     {IT_PAVING,			"Paving",		false, false, false, false, BMOFF_PROD8+3, BM_SIZE8, 0 },
     {IT_COMPUTER,		"Computer",		false, false, false, false, BMOFF_PROD8+4, BM_SIZE8, 0 },
+    {IT_MINI_BELT,		"Belt",			false, false, false, false, BMOFF_BELT_MINI, BM_SIZE8, 0 },
     {IT_PROD_FURNACE,	"Furnace",		false, false, false, false, BMOFF_MACH_MINI+0, BM_SIZE8, 0 },
     {IT_PROD_MINER,		"Miner",		false, false, false, false, BMOFF_MACH_MINI+1, BM_SIZE8, 0 },
     {IT_PROD_ASSEMBLER,	"Assembler",	false, false, false, false, BMOFF_MACH_MINI+2, BM_SIZE8, 0 },
     {IT_PROD_INSERTER,	"Inserter",		false, false, false, false, BMOFF_MACH_MINI+3, BM_SIZE8, 0 },
     {IT_PROD_BOX,		"Box",			false, false, false, false, BMOFF_MACH_MINI+4, BM_SIZE8, 0 },
     {IT_PROD_GENERATOR,	"Generator",	false, false, false, false, BMOFF_MACH_MINI+5, BM_SIZE8, 0 },
-
+	
 };
 
 typedef struct {

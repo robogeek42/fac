@@ -65,7 +65,11 @@
 #define BMOFF_MACH_MINI ( BMOFF_ZAP + NUM_BM_ZAP)
 #define NUM_BM_MACH_MINI 6
 
-#define TOTAL_BM ( BMOFF_MACH_MINI + NUM_BM_MACH_MINI)
+#define FN_BELT_MINI "img/bmini.rgb2"
+#define BMOFF_BELT_MINI ( BMOFF_MACH_MINI + NUM_BM_MACH_MINI )
+#define NUM_BM_BELT_MINI 1
+
+#define TOTAL_BM ( BMOFF_BELT_MINI + NUM_BM_BELT_MINI )
 
 #define BOB_SPRITE_DOWN 0
 #define BOB_SPRITE_UP 1
@@ -233,6 +237,10 @@ bool load_images(bool progress)
 		if ( ret < 0 ) return false;
 		if (progress) update_bar(progbar, cnt++);
 	}
+
+	ret = load_bitmap_file(FN_BELT_MINI, 8, 8, BMOFF_BELT_MINI );
+	if ( ret < 0 ) return false;
+
 
 #if 0
 	printf("TILES start %d count %d\n",BMOFF_TERR16,NUM_BM_TERR16);

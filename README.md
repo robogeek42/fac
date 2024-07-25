@@ -7,11 +7,13 @@ So far:
 - Belts.
 - Items that can be moved by belts.
 - Inventory
-
-To add:
 - Machine functionality
 - Movements from/to belts/machines
-- Mining/Forestry (part done)
-- SOUND!
+- Mining/Forestry
+- recipies, manual generation
+- 1st Game!
 
-And that is before any overt optimisation, although I can't help myself
+To add:
+- SOUND
+
+Needs optimisation
