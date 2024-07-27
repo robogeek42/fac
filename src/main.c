@@ -310,9 +310,9 @@ void wait()
 
 void change_mode(int mode)
 {
-	sys_vars->vpd_pflags = 0;
+	sys_vars->vdp_pflags = 0;
 	vdp_mode(mode);
-	while ( !(sys_vars->vpd_pflags & vdp_pflag_mode) );
+	while ( !(sys_vars->vdp_pflags & vdp_pflag_mode) );
 }
 
 #define CHAR_RIGHTARROW 128

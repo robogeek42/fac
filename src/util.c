@@ -355,12 +355,12 @@ float cosLU(float angle)
 uint24_t readPixelColour(volatile SYSVAR *sys_vars, int x, int y)
 {
 	uint24_t pixel = 0;
-	sys_vars->vpd_pflags = 0;
+	sys_vars->vdp_pflags = 0;
 
 	vdu_read_pixel_colour.x = x;
 	vdu_read_pixel_colour.y = y;
 	VDP_PUTS( vdu_read_pixel_colour );
-	while ( !(sys_vars->vpd_pflags & vdp_pflag_point) ) {
+	while ( !(sys_vars->vdp_pflags & vdp_pflag_point) ) {
 		vdp_update_key_state();
 	};
 
