@@ -1,6 +1,8 @@
 # fac
 A Factory game for the Agon.
 
+![FAC Screenshot](title_screen.png "FAC a new game for the Agon")
+
 So far:
 - Simplified scrollable map.
 - Terrain feaures (e.g. Treesm Rocks, Ores)
