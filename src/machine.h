@@ -98,8 +98,8 @@ ProcessType assemblerProcessTypes[NUM_ASM_PROCESSES] = {
 
 #define NUM_GENERATOR_PROCESSES 2
 ProcessType generatorProcessTypes[NUM_GENERATOR_PROCESSES] = {
-	{ {IT_WOOD, 0, 0}, 0,	{1,0,0},20,1, false},
-	{ {IT_COAL, 0, 0}, 0,	{1,0,0},100,1, false},
+	{ {IT_WOOD, 0, 0}, 0,	{1,0,0},30,1, false},
+	{ {IT_COAL, 0, 0}, 0,	{1,0,0},120,1, false},
 };
 
 #endif
