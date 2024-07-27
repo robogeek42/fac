@@ -25,7 +25,7 @@ check: bin/$(NAME).bin
 	@if [ $(shell stat -L -c %s $<) -gt 98303 ]; then echo "WARNING !! Executable is greater than 96k!"; fi;
 
 install: check bin/$(NAME).bin
-	srec_cat bin/$(NAME).bin -binary -offset 0x40000 -o bin/$(NAME).hex -intel
+	#srec_cat bin/$(NAME).bin -binary -offset 0x40000 -o bin/$(NAME).hex -intel
 	cp bin/$(NAME).bin $(NAME)
 	cp bin/$(NAME).bin ~/agon/fab/sdcard/bin/
 	cp bin/$(NAME).bin ~/agon/sdcard_sync/bin/
