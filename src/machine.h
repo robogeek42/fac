@@ -433,7 +433,7 @@ void pushOutputs(Machine *mach )
 {
 	if (mach->countOut > 0)
 	{
-		ProcessType *pt;
+		ProcessType *pt = NULL;
 		switch (mach->machine_type)
 		{
 			case IT_FURNACE:
@@ -445,21 +445,24 @@ void pushOutputs(Machine *mach )
 			default:
 				break;
 		}
-		int  outx = mach->tx*gTileSize+4;
-		int  outy = mach->ty*gTileSize+4;
-		switch ( mach->dir )
+		if (pt)
 		{
-			case DIR_UP: outy-=8; break;
-			case DIR_RIGHT: outx+=8; break;
-			case DIR_DOWN: outy+=8; break;
-			case DIR_LEFT: outx-=8; break;
-			default: break;
-		}
+			int  outx = mach->tx*gTileSize+4;
+			int  outy = mach->ty*gTileSize+4;
+			switch ( mach->dir )
+			{
+				case DIR_UP: outy-=8; break;
+				case DIR_RIGHT: outx+=8; break;
+				case DIR_DOWN: outy+=8; break;
+				case DIR_LEFT: outx-=8; break;
+				default: break;
+			}
 
-		if ( ! isAnythingAtXY(&mach->itemlist, outx, outy) )
-		{
-			mach->countOut -= 1;
-			insertAtFrontItemList(&mach->itemlist, pt->out, outx, outy);
+			if ( ! isAnythingAtXY(&mach->itemlist, outx, outy) )
+			{
+				mach->countOut -= 1;
+				insertAtFrontItemList(&mach->itemlist, pt->out, outx, outy);
+			}
 		}
 	}
 }

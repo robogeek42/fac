@@ -2593,22 +2593,9 @@ void show_info()
 		if ( info_item_type == IT_FURNACE || info_item_type == IT_ASSEMBLER || info_item_type == IT_GENERATOR )
 		{
 			Machine* mach = findMachine(&machinelist, cursor_tx, cursor_ty);
-			int ptype = mach->ptype;
-			if ( ptype >= 0 )
+			if ( mach && mach->ptype >= 0 )
 			{
-				ProcessType *pt;
-			   	if ( info_item_type == IT_FURNACE )
-				{
-					pt = &furnaceProcessTypes[ptype];
-				}
-			   	if ( info_item_type == IT_ASSEMBLER )
-				{
-					pt = &assemblerProcessTypes[ptype];
-				}
-			   	if ( info_item_type == IT_GENERATOR )
-				{
-					pt = &generatorProcessTypes[ptype];
-				}
+				ProcessType *pt = getProcessType( mach );
 				int x=infox+4+20;
 				int leftx = x;
 				int maxx = 0;
@@ -2840,42 +2827,57 @@ void removeAtCursor()
 			if (ret < 0)
 			{
 				message("Inventory full!",100,1);
-			} else {
-			
+			} 
+			else 
+			{
 				// add all of the machine's stored items
 				Machine *mach = (Machine*) objectmap[tileoffset];
 				ProcessType *pt = getProcessType(mach);
-
-				for ( int inputs=0; inputs < pt->innum; inputs++)
+				if ( mach )
 				{
-					if (mach->countIn[inputs] > 0) 
+					if ( pt )
 					{
-						int it = convertProductionToMachine( pt->in[inputs] );
-						int ret = inventory_add_item( inventory, it, mach->countIn[inputs]);
-						if (ret < 0)
+						for ( int inputs=0; inputs < pt->innum; inputs++)
 						{
-							message("Inventory full!",100,1);
+							if (mach->countIn[inputs] > 0) 
+							{
+								int it = convertProductionToMachine( pt->in[inputs] );
+								int ret = inventory_add_item( inventory, it, mach->countIn[inputs]);
+								if (ret < 0)
+								{
+									message("Inventory full!",100,1);
+								}
+
+							}
+						}
+						if (mach->countOut > 0) 
+						{
+							int it = convertProductionToMachine( pt->out );
+							int ret = inventory_add_item( inventory, it, mach->countOut);
+							if (ret < 0)
+							{
+								message("Inventory full!",100,1);
+							}
 						}
 
-					}
-				}
-				if (mach->countOut > 0) 
-				{
-					int it = convertProductionToMachine( pt->out );
-					int ret = inventory_add_item( inventory, it, mach->countOut);
-					if (ret < 0)
-					{
-						message("Inventory full!",100,1);
-					}
-				}
+						// delete machine
+						ThingNodePtr thingnode = getMachineNode( &machinelist, objectmap[tileoffset] );
+						if (thingnode)
+						{
+							deleteThing(&machinelist, thingnode);
+							objectmap[tileoffset] = NULL;
+						}
+					} 
+					// no process type - can be a box
 
-				// delete machine
-				ThingNodePtr thingnode = getMachineNode( &machinelist, objectmap[tileoffset] );
-				free( thingnode->thing );
-				thingnode->thing=NULL;
-				objectmap[tileoffset]=NULL;
-				ThingNodePtr delme = popThing( &machinelist, thingnode );
-				free( delme );
+					// delete machine
+					ThingNodePtr thingnode = getMachineNode( &machinelist, objectmap[tileoffset] );
+					if (thingnode)
+					{
+						deleteThing(&machinelist, thingnode);
+						objectmap[tileoffset] = NULL;
+					}
+				}
 			}
 		}
 	}
@@ -3613,7 +3615,7 @@ int show_recipe_dialog(int machine_type, bool bManual)
 
 	vdp_write_at_graphics_cursor();
 
-	// game loop for interacting with inventory
+	// game loop for interacting with recipe dialog
 	clock_t key_wait_ticks = clock() + 20;
 	bool finish = false;
 	bool finish_exit = false;
