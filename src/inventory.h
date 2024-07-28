@@ -11,11 +11,13 @@
 #include <stdbool.h>
 #include "item.h"
 
-#define MAX_INVENTORY_ITEMS 20
+#define MAX_INVENTORY_ITEMS 25
 typedef struct {
-	uint8_t item;
+	int item;
 	int count;
 } INV_ITEM;
+
+#define INVENTORY_EMPTY_SLOT -1
 
 void inventory_init(INV_ITEM *);
 int inventory_find_item(INV_ITEM *inv, uint8_t item);
@@ -30,7 +32,7 @@ void inventory_init(INV_ITEM *inv)
 {
 	for (int i=0; i<MAX_INVENTORY_ITEMS; i++)
 	{
-		inv[i].item = 255;
+		inv[i].item = INVENTORY_EMPTY_SLOT;
 		inv[i].count = 0;
 	}
 }
@@ -58,13 +60,14 @@ int inventory_find_item(INV_ITEM *inv, uint8_t item)
 int inventory_add_item(INV_ITEM *inv, uint8_t item, int count)
 {
 	int index = inventory_find_item(inv, item);
+	if ( count <= 0) return index;
 
+	// could not find item type in inventory
 	if (index < 0)
 	{
-		// could not find item type in inventory
 		// find an empty slot
 		index = 0;
-		while (inv[index].item != 255 && index<MAX_INVENTORY_ITEMS)
+		while (inv[index].item != INVENTORY_EMPTY_SLOT && index<MAX_INVENTORY_ITEMS)
 		{
 			index++;
 		}
@@ -76,9 +79,9 @@ int inventory_add_item(INV_ITEM *inv, uint8_t item, int count)
 		*/
 	}
 
+	// inventory full
 	if (index == MAX_INVENTORY_ITEMS)
 	{
-		// inventory full
 		return -1;
 	}
 
@@ -87,6 +90,7 @@ int inventory_add_item(INV_ITEM *inv, uint8_t item, int count)
 	inv[index].count += count;
 	//printf("add item %d at ind %d: bm %d\n",item, index, itemtypes[item].bmID);
 
+	// update the global count of the target item
 	if ( item == target_item_type ) 
 	{
 		target_item_count += count;
@@ -99,18 +103,24 @@ int inventory_add_item(INV_ITEM *inv, uint8_t item, int count)
 int inventory_remove_item(INV_ITEM *inv, uint8_t item, int count)
 {
 	int index = inventory_find_item(inv, item);
+	// not found
 	if ( index < 0 )
 	{
 		return index;
 	}
 	inv[index].count -= count;
+
+	// update the global count of the target item
 	if ( item == target_item_type ) 
 	{
 		target_item_count -= count;
 	}
-	if ( inv[index].count == 0 )
+
+	// deleted all the items ...
+	if ( inv[index].count <= 0 )
 	{
-		inv[index].item = 255;
+		inv[index].item = INVENTORY_EMPTY_SLOT;
+		inv[index].count = 0;
 	}
 	return index;
 }

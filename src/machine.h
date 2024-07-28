@@ -187,6 +187,29 @@ void clearMachines(ThingNodePtr *machinelist)
 	
 }
 
+ProcessType* getProcessType(Machine *mach)
+{
+	ProcessType *pt = NULL;
+	switch (mach->machine_type)
+	{
+		case IT_MINER:
+			pt = &minerProcessTypes[mach->ptype];
+			break;
+		case IT_FURNACE:
+			pt = &furnaceProcessTypes[mach->ptype];
+			break;
+		case IT_ASSEMBLER:
+			pt = &assemblerProcessTypes[mach->ptype];
+			break;
+		case IT_GENERATOR:
+			pt = &generatorProcessTypes[mach->ptype];
+			break;
+		default:
+			break;
+	}
+	return pt;
+}
+
 Machine* addMachine( ThingNodePtr *machinelist, uint8_t machine_type, int tx, int ty, uint8_t direction, int speed, int ptype, uint8_t energyCost )
 {
 	Machine *mach = (Machine*) malloc(sizeof(Machine));

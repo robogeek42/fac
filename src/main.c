@@ -145,9 +145,9 @@ int belt_layer_frame = 0;
 // machines have a 3 frame animation
 int machine_frame = 0;
 
-// Inventory position
+// Inventory size
 int inv_items_wide = 5;
-int inv_items_high = 4;
+int inv_items_high = 5;
 int inv_selected = 0;
 
 // item selected
@@ -660,7 +660,7 @@ void game_loop()
 			if (key_wait_ticks < clock()) 
 			{
 				key_wait_ticks = clock() + key_wait;
-				show_inventory(20,20);
+				show_inventory(12,12);
 			}
 		}
 		if ( vdp_check_key_press( KEY_i ) ) // i for item info
@@ -752,11 +752,7 @@ void game_loop()
 						{
 							for (int i=0; i<assemblerProcessTypes[recipe].innum;i++)
 							{
-								int index = inventory_find_item(inventory, assemblerProcessTypes[recipe].in[i]);
-								if (index >= 0)
-								{
-									inventory[index].count -=  assemblerProcessTypes[recipe].incnt[i];
-								}
+								inventory_remove_item(inventory, assemblerProcessTypes[recipe].in[i], assemblerProcessTypes[recipe].incnt[i]);
 							}
 							generating_item = assemblerProcessTypes[recipe].out;
 							generating_item = convertProductionToMachine(generating_item);
@@ -2331,14 +2327,14 @@ void draw_items_at_tile(int tx, int ty)
 }
 
 #define INV_EXT_BORDER 3
-#define INV_INT_BORDER 5
+#define INV_INT_BORDER 4
 // Show inventory and run it's own mini game-loop
 void show_inventory(int X, int Y)
 {
 	int offx = X;
 	int offy = Y;
-	int inv_offsetsX[20] = {0};
-	int inv_offsetsY[20] = {0};
+	int inv_offsetsX[MAX_INVENTORY_ITEMS] = {0};
+	int inv_offsetsY[MAX_INVENTORY_ITEMS] = {0};
 	int cursor_border_on = 15;
 	int cursor_border_off = 0;
 	// yellow border of UI with dark-grey fill
@@ -2369,7 +2365,15 @@ void show_inventory(int X, int Y)
 	// draw inventory items
 	for (int ii=0; ii<MAX_INVENTORY_ITEMS; ii++)
 	{
-		if (inventory[ii].item<255)
+		// zero count shouldn't show anything
+		if ( inventory[ii].count <= 0 )
+		{
+			inventory[ii].item = INVENTORY_EMPTY_SLOT;
+			inventory[ii].count = 0;
+		}
+
+		// if anything is in this slot, draw it
+		if ( inventory[ii].item >= 0 && inventory[ii].item != INVENTORY_EMPTY_SLOT )
 		{
 			int item = inventory[ii].item;
 			ItemType *type = &itemtypes[item];
@@ -2785,9 +2789,13 @@ void do_mining()
 		if ( reduceResourceCount(cursor_tx, cursor_ty) )
 		{
 			// add to inventory
-			/* int ret = */inventory_add_item(inventory, raw_item, 1);
-			// not doing anything if inventory is full ...
-			message_with_bm8("+1",itemtypes[raw_item].bmID, 100, 17);
+			int ret = inventory_add_item(inventory, raw_item, 1);
+			if (ret < 0)
+			{
+				message("Inventory full!",100,1);
+			} else {
+				message_with_bm8("+1",itemtypes[raw_item].bmID, 100, 17);
+			}
 		}
 	}
 }
@@ -2798,8 +2806,13 @@ void removeAtCursor()
 	int tileoffset = cursor_tx + cursor_ty * mapinfo.width;
 	if ( layer_belts[ tileoffset ] >= 0 )
 	{
-		inventory_add_item( inventory, IT_BELT, 1 );
-		layer_belts[ tileoffset ] = -1;
+		int ret = inventory_add_item( inventory, IT_BELT, 1 );
+		if (ret < 0)
+		{
+			message("Inventory full!",100,1);
+		} else {
+			layer_belts[ tileoffset ] = -1;
+		}
 	}
 	MachineHeader *mh = (MachineHeader*) objectmap[tileoffset];
 	if (mh && mh->machine_type > 0)
@@ -2807,50 +2820,63 @@ void removeAtCursor()
 		int machine_type = mh->machine_type;
 		if ( machine_type == IT_INSERTER )
 		{
-			inventory_add_item( inventory, IT_INSERTER, 1 );
-			// delete inserter object
-			ThingNodePtr thingnode = getInserterNode(&inserterlist, objectmap[tileoffset]);
-			free( thingnode->thing );
-			thingnode->thing=NULL;
-			objectmap[tileoffset]=NULL;
-			ThingNodePtr delme = popThing( &inserterlist, thingnode );
-			free( delme );
+			int ret = inventory_add_item( inventory, IT_INSERTER, 1 );
+			if (ret < 0)
+			{
+				message("Inventory full!",100,1);
+			} else {
+				// delete inserter object
+				ThingNodePtr thingnode = getInserterNode(&inserterlist, objectmap[tileoffset]);
+				free( thingnode->thing );
+				thingnode->thing=NULL;
+				objectmap[tileoffset]=NULL;
+				ThingNodePtr delme = popThing( &inserterlist, thingnode );
+				free( delme );
+			}
 		} else 
 		{
 			// add machine
-			inventory_add_item( inventory, machine_type, 1 );
+			int ret = inventory_add_item( inventory, machine_type, 1 );
+			if (ret < 0)
+			{
+				message("Inventory full!",100,1);
+			} else {
 			
-			// add all of the machine's stored items
-			Machine *mach = (Machine*) objectmap[tileoffset];
-			ProcessType *pt;
-			if ( machine_type == IT_FURNACE )
-			{
-				pt = &furnaceProcessTypes[mach->ptype];
-			}
-			if ( machine_type == IT_ASSEMBLER )
-			{
-				pt = &assemblerProcessTypes[mach->ptype];
-			}
-			if ( machine_type == IT_GENERATOR )
-			{
-				pt = &generatorProcessTypes[mach->ptype];
-			}
+				// add all of the machine's stored items
+				Machine *mach = (Machine*) objectmap[tileoffset];
+				ProcessType *pt = getProcessType(mach);
 
-			for ( int inputs=0; inputs < pt->innum; inputs++)
-			{
-				if (pt->incnt[inputs] > 0) 
-					inventory_add_item( inventory, pt->in[inputs], mach->countIn[inputs]);
-			}
-			if (pt->outcnt > 0) 
-				inventory_add_item( inventory, pt->out, mach->countOut);
+				for ( int inputs=0; inputs < pt->innum; inputs++)
+				{
+					if (mach->countIn[inputs] > 0) 
+					{
+						int it = convertProductionToMachine( pt->in[inputs] );
+						int ret = inventory_add_item( inventory, it, mach->countIn[inputs]);
+						if (ret < 0)
+						{
+							message("Inventory full!",100,1);
+						}
 
-			// delete machine
-			ThingNodePtr thingnode = getMachineNode( &machinelist, objectmap[tileoffset] );
-			free( thingnode->thing );
-			thingnode->thing=NULL;
-			objectmap[tileoffset]=NULL;
-			ThingNodePtr delme = popThing( &machinelist, thingnode );
-			free( delme );
+					}
+				}
+				if (mach->countOut > 0) 
+				{
+					int it = convertProductionToMachine( pt->out );
+					int ret = inventory_add_item( inventory, it, mach->countOut);
+					if (ret < 0)
+					{
+						message("Inventory full!",100,1);
+					}
+				}
+
+				// delete machine
+				ThingNodePtr thingnode = getMachineNode( &machinelist, objectmap[tileoffset] );
+				free( thingnode->thing );
+				thingnode->thing=NULL;
+				objectmap[tileoffset]=NULL;
+				ThingNodePtr delme = popThing( &machinelist, thingnode );
+				free( delme );
+			}
 		}
 	}
 	draw_tile( cursor_tx, cursor_ty, cursorx, cursory );
@@ -2880,9 +2906,14 @@ void pickupItemsAtTile(int tx, int ty)
 			{
 				int it = convertProductionToMachine(ip->item);
 				
-				inventory_add_item( inventory, it, 1 );
-				free(ip);
-				ip=NULL;
+				int ret = inventory_add_item( inventory, it, 1 );
+				if (ret < 0)
+				{
+					message("Inventory full!",100,1);
+				} else {
+					free(ip);
+					ip=NULL;
+				}
 				
 				ip = popFrontItem(&itptr);
 			}
@@ -3438,8 +3469,13 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 	{
 		// if the item is a machine, convert to the actual machine
 		item = convertProductionToMachine(item);
-		inventory_add_item(inventory, item, 1);
-		bInserted = true;
+		int ret = inventory_add_item(inventory, item, 1);
+		if (ret < 0)
+		{
+			message("Inventory full!",100,1);
+		} else {
+			bInserted = true;
+		}
 	}
 	if ( machine_type == IT_FURNACE )
 	{
@@ -3506,7 +3542,12 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 	if (!bInserted)
 	{
 		// machine didn't accept it, bung the item into the inventory
-		inventory_add_item(inventory, item, 1);
+		int it = convertProductionToMachine(item);
+		int ret = inventory_add_item(inventory, it, 1);
+		if (ret < 0)
+		{
+			message("Inventory full!",100,1);
+		}
 	}
 }
 
