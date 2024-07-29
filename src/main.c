@@ -122,15 +122,17 @@ INV_ITEM inventory[MAX_INVENTORY_ITEMS];
 //------------------------------------------------------------
 // variables containing state that can be reset after game load
 
-// cursor position position in screen pixel coords
+// cursor position position in screen in pixels
 int cursorx=0, cursory=0;
-// cursor position in tile coords
+
+// cursor position in world in tile coords (0 --> mapsize)
 int cursor_tx=0, cursor_ty=0;
 
-// previous cursor position position in screen pixel coords
+// previous cursor position position in screen in pixels
 int old_cursorx=0, old_cursory=0;
-// previous cursor position in tile coords
+// previous cursor position in world in tile coords
 int oldcursor_tx=0, oldcursor_ty=0;
+
 // whether we are placing an item or are just moving the cursor
 bool bPlace=false;
 // belt selection changes on rotate key press
@@ -228,7 +230,7 @@ int getTilePosInScreenY(int ty) { return ((ty * gTileSize) - fac.ypos); }
 
 bool cursor_in_range();
 void draw_tile(int tx, int ty, int tposx, int tposy);
-void draw_machines(int tx, int ty, int tposx, int tposy);
+void draw_machines(int tx, int ty, int tposx, int tposy, bool bDrawExtensionTile);
 void draw_screen();
 void scroll_screen(int dir, int step);
 bool can_scroll_screen(int dir, int step);
@@ -472,6 +474,7 @@ int main(int argc, char *argv[])
 		inventory_add_item(inventory, IT_WIRE, 20);
 		inventory_add_item(inventory, IT_STONE_BRICK, 20);
 		inventory_add_item(inventory, IT_MINER, 10);
+		inventory_add_item(inventory, IT_INSERTER, 10);
 	}
 
 	game_loop();
@@ -571,8 +574,8 @@ void game_loop()
 			layer_wait_ticks = clock() + belt_speed; // belt anim speed
 			//draw_cursor(false);
 			move_items(false);
-			move_items_on_inserters(true);
-			move_items_on_machines(true);
+			move_items_on_inserters(false);
+			move_items_on_machines(false);
 			check_items_on_machines();
 			draw_layer(true);
 			draw_cursor(true);
@@ -655,7 +658,7 @@ void game_loop()
 			vdp_refresh_sprites();
 		}
 
-		if ( vdp_check_key_press( KEY_e ) ) // Brung up inventory
+		if ( vdp_check_key_press( KEY_e ) ) // Bring up inventory
 		{
 			if (key_wait_ticks < clock()) 
 			{
@@ -994,7 +997,7 @@ int getOverlayAtCursor()
 	return (tilemap[cursor_ty*mapinfo.width +  cursor_tx] & 0xF0) >> 4;
 }
 
-// draws terrain, features and machines at a tile
+// draws terrain and features at a tile
 // (tx,ty) tile in map 
 // (tposx,tposy) tile position in screen
 void draw_tile(int tx, int ty, int tposx, int tposy)
@@ -1015,7 +1018,7 @@ void draw_tile(int tx, int ty, int tposx, int tposy)
 
 // (tx,ty) tile in map 
 // (tposx,tposy) tile position in screen
-void draw_machines(int tx, int ty, int tposx, int tposy)
+void draw_machines(int tx, int ty, int tposx, int tposy, bool bDrawExtensionTile)
 {
 	int tileoffset = ty*mapinfo.width + tx;
 	MachineHeader *mh = (MachineHeader*) objectmap[tileoffset];
@@ -1031,6 +1034,110 @@ void draw_machines(int tx, int ty, int tposx, int tposy)
 			vdp_draw_bitmap( tposx, tposy );
 		}
 #endif
+		if (bDrawExtensionTile)
+		{
+			if ( mh->machine_type < IT_INSERTER ) // items can move out of these
+			{
+				// get machine object: holds end (output) tile
+				Machine *mach = (Machine*) objectmap[tileoffset];
+				int px = getTilePosInScreenX(mach->end_tx);
+				int py = getTilePosInScreenY(mach->end_ty);
+
+				// new tile offset for end of machine
+				int end_tileoffset = mach->end_ty*mapinfo.width + mach->end_tx;
+
+				// draw the terrain and overlay resource
+				draw_tile(mach->end_tx, mach->end_ty, px, py);
+
+				// draw any belts at that tile
+				if (  layer_belts[end_tileoffset] >= 0 )
+				{
+					vdp_adv_select_bitmap( layer_belts[end_tileoffset]*4 + BMOFF_BELT16 + belt_layer_frame);
+					vdp_draw_bitmap( px, py );
+				}
+				// draw any machines at the output tile
+				MachineHeader *mh_end = (MachineHeader*) objectmap[end_tileoffset];
+				if (mh_end && mh_end->machine_type > 0)
+				{
+					int bmid = getMachineBMIDmh(mh_end);
+					vdp_adv_select_bitmap( bmid );
+					vdp_draw_bitmap( px, py );
+#ifdef MACH_NEED_ENERGY
+					if (fac.energy <= 0 && ( mh_end->machine_type < IT_INSERTER ))
+					{
+						vdp_adv_select_bitmap( BMOFF_ZAP );
+						vdp_draw_bitmap( px, py );
+					}
+#endif
+				}
+				// draw items on the output tile
+				draw_items_at_tile(mach->end_tx, mach->end_ty);
+			}
+
+			// Draw input and output tiles of inserter
+			if ( mh->machine_type == IT_INSERTER ) // items can move in and out of these
+			{
+				// get inserter object
+				Inserter *insp = (Inserter*) objectmap[tileoffset];
+				int start_px = getTilePosInScreenX(insp->start_tx);
+				int start_py = getTilePosInScreenY(insp->start_ty);
+				int end_px = getTilePosInScreenX(insp->end_tx);
+				int end_py = getTilePosInScreenY(insp->end_ty);
+
+				// new tile offset for start and end of machine
+				int start_tileoffset = insp->start_ty*mapinfo.width + insp->start_tx;
+				int end_tileoffset = insp->end_ty*mapinfo.width + insp->end_tx;
+
+				// draw the terrain and overlay resource
+				draw_tile(insp->start_tx, insp->start_ty, start_px, start_py);
+				draw_tile(insp->end_tx, insp->end_ty, end_px, end_py);
+
+				// draw any belts at those tiles
+				if (  layer_belts[start_tileoffset] >= 0 )
+				{
+					vdp_adv_select_bitmap( layer_belts[start_tileoffset]*4 + BMOFF_BELT16 + belt_layer_frame);
+					vdp_draw_bitmap( start_px, start_py );
+				}
+				if (  layer_belts[end_tileoffset] >= 0 )
+				{
+					vdp_adv_select_bitmap( layer_belts[end_tileoffset]*4 + BMOFF_BELT16 + belt_layer_frame);
+					vdp_draw_bitmap( end_px, end_py );
+				}
+				// draw any machines at those tiles
+				MachineHeader *mh_start = (MachineHeader*) objectmap[start_tileoffset];
+				MachineHeader *mh_end = (MachineHeader*) objectmap[end_tileoffset];
+				if (mh_start && mh_start->machine_type > 0)
+				{
+					int bmid = getMachineBMIDmh(mh_start);
+					vdp_adv_select_bitmap( bmid );
+					vdp_draw_bitmap( start_px, start_py );
+#ifdef MACH_NEED_ENERGY
+					if (fac.energy <= 0 && ( mh_start->machine_type < IT_INSERTER ))
+					{
+						vdp_adv_select_bitmap( BMOFF_ZAP );
+						vdp_draw_bitmap( start_px, start_py );
+					}
+#endif
+				}
+				if (mh_end && mh_end->machine_type > 0)
+				{
+					int bmid = getMachineBMIDmh(mh_end);
+					vdp_adv_select_bitmap( bmid );
+					vdp_draw_bitmap( end_px, end_py );
+#ifdef MACH_NEED_ENERGY
+					if (fac.energy <= 0 && ( mh_end->machine_type < IT_INSERTER ))
+					{
+						vdp_adv_select_bitmap( BMOFF_ZAP );
+						vdp_draw_bitmap( end_px, end_py );
+					}
+#endif
+				}
+
+				// draw items on the input and output tiles
+				draw_items_at_tile(insp->start_tx, insp->start_ty);
+				draw_items_at_tile(insp->end_tx, insp->end_ty);
+			}
+		}
 	}
 }
 
@@ -1042,7 +1149,7 @@ void draw_horizontal(int tx, int ty, int len)
 	for (int i=0; i<len; i++)
 	{
 		draw_tile(tx + i, ty, px + i*gTileSize, py); 
-		draw_machines(tx + i, ty, px + i*gTileSize, py); 
+		draw_machines(tx + i, ty, px + i*gTileSize, py, false); 
 		vdp_update_key_state();
 	}
 
@@ -1055,7 +1162,7 @@ void draw_vertical(int tx, int ty, int len)
 	for (int i=0; i<len; i++)
 	{
 		draw_tile(tx, ty + i, px, py + i*gTileSize);
-		draw_machines(tx, ty + i, px, py + i*gTileSize);
+		draw_machines(tx, ty + i, px, py + i*gTileSize, false);
 		vdp_update_key_state();
 	}
 }
@@ -1527,72 +1634,99 @@ bool itemIsInHorizontal(ItemNodePtr itemptr, int tx, int ty, int len)
 	if ( itemptr->x < tx*gTileSize || itemptr->x > (tx+len+1)*gTileSize ) return false;
 	return true;
 }
+bool itemIsInRows(ItemNodePtr itemptr, int from_row, int to_row)
+{
+	int from_y = from_row * gTileSize - 15 ;
+	int to_y = to_row * gTileSize ;
+
+	if (itemptr->x > fac.xpos - 8 &&
+		itemptr->x < fac.xpos + gScreenWidth &&
+		itemptr->y > fac.ypos + from_y &&
+		itemptr->y < fac.ypos + to_y )
+	{
+		return true;
+	}
+	return false;
+}
 
 // draws the additional layers: belts, machines and items
+//
+// Modified to draw screen in 3 horizontal sections to reduce flickering of items on belts
+// If we draw all the belts and then all the items, the VDP doesn't keep up
+// Ideally we would draw each horizontal row of tiles and their tiles to get minimum flickering
+// but that is way too slow, so a comprimise is to draw 3 sections.
 void draw_layer(bool draw_items)
 {
 	int tx=getTileX(fac.xpos);
 	int ty=getTileY(fac.ypos);
 
-	for (int i=0; i < (1+gScreenHeight/gTileSize); i++) 
-	{
-		draw_horizontal_layer(tx, ty+i, 1+(gScreenWidth/gTileSize), true, true, false );
-	}
+	int num_sections = 3;
+	int from_row = 0;
+	int num_rows = (gScreenHeight/gTileSize) / num_sections;
 
-	if ( draw_items )
+	for ( int section = 0 ; section < num_sections ; section++)
 	{
-		ItemNodePtr currPtr = itemlist;
-		int cnt=0;
-		while (currPtr != NULL) {
-			if ( itemIsOnScreen(currPtr) )
+		for (int i=from_row; i < from_row+num_rows; i++) 
+		{
+			draw_horizontal_layer(tx, ty+i, 1+(gScreenWidth/gTileSize), true, true, false );
+		}
+
+		if ( draw_items )
+		{
+			ItemNodePtr currPtr = itemlist;
+			int cnt=0;
+			while (currPtr != NULL) {
+				if ( itemIsInRows(currPtr, from_row, from_row+num_rows) )
+				{
+					vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+					vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+				}
+				currPtr = currPtr->next;
+				cnt++;
+				if (cnt % 4 == 0) vdp_update_key_state();
+			}
+			
+			ThingNodePtr tlistp = inserterlist;
+			while ( tlistp != NULL )
 			{
-				vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
-				vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
-			}
-			currPtr = currPtr->next;
-			cnt++;
-			if (cnt % 4 == 0) vdp_update_key_state();
-		}
-		
-		ThingNodePtr tlistp = inserterlist;
-		while ( tlistp != NULL )
-		{
-			if (tlistp->thing == NULL) break;
-			Inserter *insp = (Inserter*)tlistp->thing;
+				if (tlistp->thing == NULL) break;
+				Inserter *insp = (Inserter*)tlistp->thing;
 
-			currPtr = insp->itemlist;
-			while (currPtr != NULL) {
-				if ( itemIsOnScreen(currPtr) )
-				{
-					vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
-					vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+				currPtr = insp->itemlist;
+				while (currPtr != NULL) {
+					if ( itemIsInRows(currPtr, from_row, from_row+num_rows) )
+					{
+						vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+						vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+					}
+					currPtr = currPtr->next;
+					cnt++;
+					if (cnt % 4 == 0) vdp_update_key_state();
 				}
-				currPtr = currPtr->next;
-				cnt++;
-				if (cnt % 4 == 0) vdp_update_key_state();
+				tlistp = tlistp->next;
 			}
-			tlistp = tlistp->next;
-		}
-		tlistp = machinelist;
-		while ( tlistp != NULL )
-		{
-			if (tlistp->thing == NULL) break;
-			Machine *machp = (Machine*)tlistp->thing;
+			tlistp = machinelist;
+			while ( tlistp != NULL )
+			{
+				if (tlistp->thing == NULL) break;
+				Machine *machp = (Machine*)tlistp->thing;
 
-			currPtr = machp->itemlist;
-			while (currPtr != NULL) {
-				if ( itemIsOnScreen(currPtr) )
-				{
-					vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
-					vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+				currPtr = machp->itemlist;
+				while (currPtr != NULL) {
+					if ( itemIsInRows(currPtr, from_row, from_row+num_rows) )
+					{
+						vdp_adv_select_bitmap( itemtypes[currPtr->item].bmID );
+						vdp_draw_bitmap( currPtr->x - fac.xpos, currPtr->y - fac.ypos );
+					}
+					currPtr = currPtr->next;
+					cnt++;
+					if (cnt % 4 == 0) vdp_update_key_state();
 				}
-				currPtr = currPtr->next;
-				cnt++;
-				if (cnt % 4 == 0) vdp_update_key_state();
+				tlistp = tlistp->next;
 			}
-			tlistp = tlistp->next;
-		}
-	}		
+		}		
+		from_row += num_rows;
+	}
 
 	vdp_update_key_state();
 	belt_layer_frame = (belt_layer_frame +1) % 4;
@@ -1619,7 +1753,7 @@ void draw_horizontal_layer(int tx, int ty, int len, bool bdraw_belts, bool bdraw
 		}
 		if (bdraw_machines && mh && mh->machine_type > 0)
 		{
-			draw_machines(tx + i, ty, px + i*gTileSize, py); 
+			draw_machines(tx + i, ty, px + i*gTileSize, py, true); 
 		}
 	}
 
@@ -2738,7 +2872,7 @@ bool reduceResourceCount(int tx, int ty)
 			int px=getTilePosInScreenX(tx);
 			int py=getTilePosInScreenY(ty);
 			draw_tile(tx, ty, px, py);
-			draw_machines(tx, ty, px, py);
+			draw_machines(tx, ty, px, py, false);
 			deleteItem(&resourcelist, rp);
 		} else if ( (rp->item % resourceMultiplier) == 0 )
 		{
@@ -2749,7 +2883,7 @@ bool reduceResourceCount(int tx, int ty)
 			int px=getTilePosInScreenX(tx);
 			int py=getTilePosInScreenY(ty);
 			draw_tile(tx, ty, px, py);
-			draw_machines(tx, ty, px, py);
+			draw_machines(tx, ty, px, py, false);
 		} 
 		return true;
 	}
@@ -2882,7 +3016,7 @@ void removeAtCursor()
 		}
 	}
 	draw_tile( cursor_tx, cursor_ty, cursorx, cursory );
-	draw_machines( cursor_tx, cursor_ty, cursorx, cursory );
+	draw_machines( cursor_tx, cursor_ty, cursorx, cursory, false );
 
 }
 
@@ -4061,7 +4195,14 @@ bool splash_loop()
 	layer_wait_ticks = clock();
 	key_wait_ticks = clock();
 
-	//insertAtFrontItemList(&itemlist, IT_COPPER_PLATE, (4)*gTileSize + 4, (1)*gTileSize + 4);
+	for (int i = 0; i< 4; i++)
+	{
+		insertAtFrontItemList(&itemlist, IT_COPPER_PLATE, (4+i*4)*gTileSize + 4, (1)*gTileSize + 4);
+		insertAtFrontItemList(&itemlist, IT_IRON_PLATE, (4+i*4)*gTileSize + 4, (13)*gTileSize + 4);
+		insertAtFrontItemList(&itemlist, IT_CIRCUIT, (0)*gTileSize + 4, (2+i*3)*gTileSize + 4);
+		insertAtFrontItemList(&itemlist, IT_GEARWHEEL, (19)*gTileSize + 4, (2+i*3)*gTileSize + 4);
+	}
+
 	do {
 		if (layer_wait_ticks < clock()) 
 		{
