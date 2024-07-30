@@ -35,7 +35,7 @@
 
 #define FN_CURSORS "img/cursor%02d.rgb2"
 #define BMOFF_CURSORS ( BMOFF_NUMS + NUM_BM_NUMS )
-#define NUM_BM_CURSORS 2
+#define NUM_BM_CURSORS 3
 
 #define FN_MINERS "img/tm16/miner%s%02d.rgb2"
 #define BMOFF_MINERS ( BMOFF_CURSORS + NUM_BM_CURSORS )
@@ -51,13 +51,25 @@
 
 #define FN_PROD8 "img/tp8/tp%02d.rgb2"
 #define BMOFF_PROD8 ( BMOFF_ASSEMBLERS + NUM_BM_ASSEMBLERS)
-#define NUM_BM_PROD8 3
+#define NUM_BM_PROD8 5
 
 #define FN_INSERTERS "img/ins/ins%02d.rgb2"
 #define BMOFF_INSERTERS ( BMOFF_PROD8 + NUM_BM_PROD8 )
 #define NUM_BM_INSERTERS 12
 
-#define TOTAL_BM ( BMOFF_INSERTERS + NUM_BM_INSERTERS)
+#define FN_ZAP "img/zap8x8.rgb2"
+#define BMOFF_ZAP ( BMOFF_INSERTERS + NUM_BM_INSERTERS )
+#define NUM_BM_ZAP 1
+
+#define FN_MACH_MINI "img/tm8/mini%02d.rgb2"
+#define BMOFF_MACH_MINI ( BMOFF_ZAP + NUM_BM_ZAP)
+#define NUM_BM_MACH_MINI 6
+
+#define FN_BELT_MINI "img/bmini.rgb2"
+#define BMOFF_BELT_MINI ( BMOFF_MACH_MINI + NUM_BM_MACH_MINI )
+#define NUM_BM_BELT_MINI 1
+
+#define TOTAL_BM ( BMOFF_BELT_MINI + NUM_BM_BELT_MINI )
 
 #define BOB_SPRITE_DOWN 0
 #define BOB_SPRITE_UP 1
@@ -214,6 +226,22 @@ bool load_images(bool progress)
 		if ( ret < 0 ) return false;
 		if (progress) update_bar(progbar, cnt++);
 	}
+
+	int ret = load_bitmap_file(FN_ZAP, 8, 8, BMOFF_ZAP );
+	if ( ret < 0 ) return false;
+
+	for (int fn=1; fn<=NUM_BM_MACH_MINI; fn++)
+	{
+		sprintf(fname, FN_MACH_MINI, fn);
+		int ret = load_bitmap_file(fname, 8, 8, BMOFF_MACH_MINI + fn-1 );
+		if ( ret < 0 ) return false;
+		if (progress) update_bar(progbar, cnt++);
+	}
+
+	ret = load_bitmap_file(FN_BELT_MINI, 8, 8, BMOFF_BELT_MINI );
+	if ( ret < 0 ) return false;
+
+
 #if 0
 	printf("TILES start %d count %d\n",BMOFF_TERR16,NUM_BM_TERR16);
 	printf("FEATS start %d count %d\n",BMOFF_FEAT16,NUM_BM_FEAT16);
@@ -250,7 +278,7 @@ void create_sprites()
 	vdp_adv_create_sprite( BOB_SPRITE_ACT_LEFT, BMOFF_BOB16 + 16 + BOB_SPRITE_LEFT*2, 2 );
 	vdp_adv_create_sprite( BOB_SPRITE_ACT_RIGHT, BMOFF_BOB16 + 16 + BOB_SPRITE_RIGHT*2, 2 );
 
-	vdp_adv_create_sprite( CURSOR_SPRITE, BMOFF_CURSORS, 2 );
+	vdp_adv_create_sprite( CURSOR_SPRITE, BMOFF_CURSORS, 3 );
 
 	vdp_activate_sprites( NUM_BOB_SPRITES + 1 );
 

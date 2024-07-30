@@ -2,7 +2,7 @@
   vim:ts=4
   vim:sw=4
 */
-#include "../src/colmap.h"
+#include "colmap.h"
 
 #include "agon/vdp_vdu.h"
 #include "agon/vdp_key.h"
@@ -14,7 +14,7 @@
 #include <math.h>
 #include <time.h>
 #include <stdbool.h>
-//#include "../../../agon_ccode/common/util.h"
+#include "util.h"
 
 #include "item.h"
 
@@ -147,9 +147,9 @@ void wait()
 
 void change_mode(int mode)
 {
-	sys_vars->vpd_pflags = 0;
+	sys_vars->vdp_pflags = 0;
 	vdp_mode(mode);
-	while ( !(sys_vars->vpd_pflags & vdp_pflag_mode) );
+	while ( !(sys_vars->vdp_pflags & vdp_pflag_mode) );
 }
 
 int main(/*int argc, char *argv[]*/)
