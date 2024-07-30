@@ -2,7 +2,7 @@
 #define _PROGBAR_H
 
 #include "globals.h"
-#include "../../agon_ccode/common/util.h"
+#include "util.h"
 
 typedef struct {
 	int x;
