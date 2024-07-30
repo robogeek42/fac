@@ -48,7 +48,7 @@ int gScreenHeightTiles = 15;
 
 int gMapTW = 14;
 int gMapTH = 14;
-int gViewOffX = 8;
+int gViewOffX = 12;
 int gViewOffY = 8;
 
 int gMinimapScale = 2;
@@ -68,7 +68,6 @@ uint8_t* tilemap;
 
 // cursor position in tile coords
 int cursor_tx=0, cursor_ty=0;
-int old_cursor_tx=0, old_cursor_ty=0;
 
 bool bGridLines = true;
 bool bTileNumbers = true;
@@ -136,7 +135,7 @@ void set_tile(bool bRandom);
 int newmap_dialog();
 void fill_random();
 void draw_mini_map();
-void circle_random(bool bRandom);
+void circle();
 void new_mode();
 
 void wait()
@@ -180,8 +179,6 @@ int main(/*int argc, char *argv[]*/)
 
 	cursor_tx = 0;
 	cursor_ty = 0;
-	old_cursor_tx = 0;
-	old_cursor_ty = 0;
 
 	draw_screen();
 	draw_cursor();
@@ -219,60 +216,51 @@ void game_loop()
 		int scroll_tiles=1;
 
 		// cursor movement
-		if ( vdp_check_key_press( KEY_LEFT ) ) {cursor_dir |= BITS_LEFT; }
-		if ( vdp_check_key_press( KEY_RIGHT ) ) {cursor_dir |= BITS_RIGHT; }
-		if ( vdp_check_key_press( KEY_UP ) ) {cursor_dir |= BITS_UP; }
-		if ( vdp_check_key_press( KEY_DOWN ) ) {cursor_dir |= BITS_DOWN; }
+		if ( vdp_check_key_press( KEY_LEFT ) ) {cursor_dir |= BITS_LEFT; scroll_tiles=1; }
+		if ( vdp_check_key_press( KEY_RIGHT ) ) {cursor_dir |= BITS_RIGHT; scroll_tiles=1; }
+		if ( vdp_check_key_press( KEY_UP ) ) {cursor_dir |= BITS_UP; scroll_tiles=1; }
+		if ( vdp_check_key_press( KEY_DOWN ) ) {cursor_dir |= BITS_DOWN; scroll_tiles=1; }
+
+		if ( vdp_check_key_press( KEY_home ) ) {cursor_dir |= BITS_LEFT; scroll_tiles=gMapTW; }
+		if ( vdp_check_key_press( KEY_end ) ) {cursor_dir |= BITS_RIGHT; scroll_tiles=gMapTW; }
+		if ( vdp_check_key_press( KEY_pageup ) ) {cursor_dir |= BITS_UP; scroll_tiles=gMapTH; }
+		if ( vdp_check_key_press( KEY_pagedown ) ) {cursor_dir |= BITS_DOWN; scroll_tiles=gMapTH; }
 
 		// move the cursor
 		if (cursor_dir>0 && ( key_wait_ticks < clock() ) ) {
 			key_wait_ticks = clock() + key_wait;
 
-			if ( cursor_dir & BITS_UP ) { old_cursor_ty=cursor_ty; cursor_ty--; }
-			if ( cursor_dir & BITS_RIGHT ) { old_cursor_tx=cursor_tx; cursor_tx++; }
-			if ( cursor_dir & BITS_DOWN ) { old_cursor_ty=cursor_ty; cursor_ty++; }
-			if ( cursor_dir & BITS_LEFT ) { old_cursor_tx=cursor_tx; cursor_tx--; }
+			if ( cursor_dir & BITS_UP )
+			{
+				if ( cursor_ty > 0 ) { cursor_ty -= MIN( scroll_tiles, fac.mapHeight-scr_ty ); }
+				if ( cursor_ty < 0 ) cursor_ty = 0;
+				if ( cursor_ty < scr_ty ) { dir=SCROLL_UP; }
+			}
+			if ( cursor_dir & BITS_RIGHT )
+			{
+				if ( cursor_tx < fac.mapWidth - 1 ) { cursor_tx += MIN( scroll_tiles, fac.mapWidth-cursor_tx); } 
+				if ( cursor_tx > fac.mapWidth - 1 ) cursor_tx = fac.mapWidth -1;
+				if ( cursor_tx >= scr_tx + gMapTW ) { dir=SCROLL_RIGHT; }
+			}
+			if ( cursor_dir & BITS_DOWN )
+			{
+				if ( cursor_ty < fac.mapHeight - 1 ) { cursor_ty += MIN( scroll_tiles, fac.mapHeight-cursor_ty); }
+				if ( cursor_ty > fac.mapHeight - 1 ) cursor_ty = fac.mapHeight -1;
+				if ( cursor_ty >= scr_ty + gMapTH ) { dir=SCROLL_DOWN; }
+			}
+			if ( cursor_dir & BITS_LEFT )
+			{
+				if ( cursor_tx > 0 ) { cursor_tx -= MIN( scroll_tiles, fac.mapWidth-scr_tx ); }
+				if ( cursor_tx < 0 ) cursor_tx = 0;
+				if ( cursor_tx < scr_tx )  { dir=SCROLL_LEFT; }
+			}
 			bRedrawCursor = true;
 			if (bBlockSelect) 
 			{
 				bRedrawBlock = true;
 			}
 		}
-		// keep cursor on screen
-		if ( cursor_tx < scr_tx ) { 
-			old_cursor_tx=cursor_tx; cursor_tx = scr_tx; 
-			dir=SCROLL_RIGHT; bRedrawCursor=true;
-		}
-		if ( cursor_ty < scr_ty ) {
-			old_cursor_ty=cursor_ty; cursor_ty = scr_ty; 
-			dir=SCROLL_UP; bRedrawCursor=true;
-		}
-		if ( cursor_tx >= scr_tx + gMapTW ) {
-			old_cursor_tx=cursor_tx; cursor_tx = scr_tx + gMapTW-1;
-			dir=SCROLL_LEFT; bRedrawCursor=true;
-		}
 
-		if ( cursor_ty >= scr_ty + gMapTH ) {
-			old_cursor_ty=cursor_ty; cursor_ty = scr_ty + gMapTH-1;
-			dir=SCROLL_DOWN; bRedrawCursor=true;
-		}
-
-		/*
-		if ( vdp_check_key_press( KEY_w ) ) { dir=SCROLL_UP; }
-		if ( vdp_check_key_press( KEY_a ) ) { dir=SCROLL_RIGHT; }
-		if ( vdp_check_key_press( KEY_s ) ) { dir=SCROLL_DOWN; }
-		if ( vdp_check_key_press( KEY_d ) ) { dir=SCROLL_LEFT; }
-		*/
-
-		if ( vdp_check_key_press( KEY_pageup ) ) { dir=SCROLL_UP; scroll_tiles = gMapTH; }
-		if ( vdp_check_key_press( KEY_home ) ) { dir=SCROLL_RIGHT; scroll_tiles = gMapTW; }
-		if ( vdp_check_key_press( KEY_pagedown ) ) { dir=SCROLL_DOWN; scroll_tiles = gMapTH; }
-		if ( vdp_check_key_press( KEY_end ) ) { dir=SCROLL_LEFT; scroll_tiles = gMapTW; }
-
-		if (bRedrawCursor)
-		{
-			draw_cursor();
-		}
 
 		// scroll the screen
 		if (dir>=0 && ( move_wait_ticks < clock() ) ) {
@@ -284,6 +272,10 @@ void game_loop()
 			draw_block();
 		}
 
+		if (bRedrawCursor)
+		{
+			draw_cursor();
+		}
 
 		if ( vdp_check_key_press( KEY_g ) && key_wait_ticks < clock() ) // toggle grid lines
 		{
@@ -398,10 +390,10 @@ void game_loop()
 			set_tile( true );
 		}
 
-		if ( vdp_check_key_press( KEY_o ) && key_wait_ticks < clock() ) // circle random
+		if ( vdp_check_key_press( KEY_o ) && key_wait_ticks < clock() ) // circle
 		{
 			key_wait_ticks = clock() + key_wait;
-			circle_random( true );
+			circle();
 		}
 
 
@@ -452,6 +444,42 @@ void game_loop()
 
 }
 
+void scroll_screen(int dir, int tiles)
+{
+	switch (dir) {
+		case SCROLL_LEFT:
+			if (scr_tx > tiles) {
+				scr_tx -= tiles;
+			} else {
+				scr_tx = 0;
+			}
+			break;
+		case SCROLL_RIGHT:
+			if ((scr_tx + gMapTW + tiles ) < fac.mapWidth) {
+				scr_tx += tiles;
+			} else {
+				scr_tx = fac.mapWidth - gMapTW;
+			}
+			break;
+		case SCROLL_UP:
+			if (scr_ty >= tiles) {
+				scr_ty -= tiles;
+			} else {
+				scr_ty = 0;
+			}
+			break;
+		case SCROLL_DOWN:
+			if ((scr_ty + gMapTH + tiles ) < fac.mapHeight) {
+				scr_ty += tiles;
+			} else {
+				scr_ty = fac.mapHeight - gMapTH;
+			}
+			break;
+		default:
+			break;
+	}
+}
+
 void help_line(int line, char *keystr, char* helpstr)
 {
 	TAB(2,line);
@@ -486,7 +514,9 @@ void show_help()
 	line++;
 	help_line(line++, "T", "Select tileset");
 	help_line(line++, "R", "Place random tile (block)");
-	help_line(line++, "O", "Circle random in block");
+	help_line(line++, "O", "Circle in block");
+	line++;
+	help_line(line++, "F12", "Change mode");
 
 	while( vdp_check_key_press( KEY_h ) )
 	{
@@ -713,8 +743,6 @@ void draw_screen()
 		} else {
 			bBlockSelect = false;
 		}
-		old_cursor_tx = cursor_tx;
-		old_cursor_ty = cursor_ty;
 	}
 }
 void draw_block()
@@ -767,55 +795,6 @@ void draw_cursor()
 	vdp_nth_sprite_frame( 0 );
 	
 	vdp_refresh_sprites();
-}
-
-/* 0=right, 1=left, 2=up, 3=down */
-void scroll_screen(int dir, int tiles)
-{
-	switch (dir) {
-		case SCROLL_RIGHT: // scroll screen to right, view moves left
-			if (scr_tx >= tiles)
-			{
-				scr_tx -= tiles;
-			}
-			else
-			{
-				scr_tx = 0;
-			}
-			break;
-		case SCROLL_LEFT: // scroll screen to left, view moves right
-			if ((scr_tx + gMapTW + tiles ) < fac.mapWidth)
-			{
-				scr_tx += tiles;
-			}
-			else
-			{
-				scr_tx = fac.mapWidth - gMapTW;
-			}
-			break;
-		case SCROLL_UP:
-			if (scr_ty >= tiles)
-			{
-				scr_ty -= tiles;
-			}
-			else
-			{
-				scr_ty = 0;
-			}
-			break;
-		case SCROLL_DOWN:
-			if ((scr_ty + gMapTH + tiles ) < fac.mapHeight)
-			{
-				scr_ty += tiles;
-			}
-			else
-			{
-				scr_ty = fac.mapHeight - gMapTH;
-			}
-			break;
-		default:
-			break;
-	}
 }
 
 void draw_digit(int i, int px, int py)
@@ -876,7 +855,7 @@ void draw_tile_menu()
 	y = ytop;
 	for (int tile = 0; tile < 10; tile++)
 	{
-		draw_number(tile, x+14, y+4);
+		draw_number(tile, x+9, y+4);
 		y += gTileSize+1;
 	}
 	x += gTileSize;
@@ -902,7 +881,7 @@ void draw_tile_menu()
 	// draw selected tileset
 	ytop = 8+17*10+4;
 	draw_filled_box(xleft,ytop,190,16,0,0);
-	draw_number_lj(ts, xleft+8, ytop+4);
+	draw_number_lj(ts, xleft+6, ytop+4);
 	for (int i=0; i<tileset[ ts ].num; i++)
 	{
 		vdp_adv_select_bitmap( tileset[ts].set[i] );
@@ -1193,7 +1172,7 @@ void do_edging()
 	}
 }
 
-void circle_random(bool bRandom)
+void circle()
 {
 	if (!bBlockSelect) return;
 printf("c");
@@ -1231,9 +1210,9 @@ void new_mode()
 {
 
 	vdp_cls();
-	TAB(2,2);printf(" 0 - Mode 8 320x240 64 cols ");
-	TAB(2,3);printf(" 1 - Mode 0 640x480 16 cols ");
-	TAB(2,4);printf(" 2 - Mode 3 640x240 64 cols ");
+	TAB(2,2);printf("0 Mode 8 320x240 64 cols ");
+	TAB(2,3);printf("1 Mode 0 640x480 16 cols (False Cols)");
+	TAB(2,4);printf("2 Mode 3 640x240 64 cols ");
 	int choice = input_int_noclear(2,6,"Enter choice 0-3");
 	switch (choice)
 	{
@@ -1256,7 +1235,7 @@ void new_mode()
 			gTileSize = 16;
 			gScreenWidthTiles = 40;
 			gScreenHeightTiles = 30;
-			gMapTW = 35;
+			gMapTW = 34;
 			gMapTH = 29;
 			gMinimapScale= 4;
 			break;
@@ -1267,12 +1246,16 @@ void new_mode()
 			gTileSize = 16;
 			gScreenWidthTiles = 40;
 			gScreenHeightTiles = 15;
-			gMapTW = 35;
+			gMapTW = 34;
 			gMapTH = 14;
 			gMinimapScale= 2;
 			break;
 	}
 	change_mode(gMode);
+	cursor_tx = 0;
+	cursor_ty = 0;
+	scr_tx = 0;
+	scr_ty = 0;
 	vdp_cursor_enable( false );
 	vdp_logical_scr_dims( false );
 	draw_all();
