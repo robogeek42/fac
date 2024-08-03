@@ -106,6 +106,8 @@
 #define KEY_lcontrol 0x79
 #define KEY_rcontrol 0x7A
 
+#define KEY_escape 0x7D
+
 #define KEY_insert 0x80
 #define KEY_delete 0x82
 #define KEY_backspace 0x84

@@ -645,7 +645,7 @@ void game_loop()
 			draw_screen();
 		}
 
-		if ( vdp_check_key_press( KEY_x ) ) { // x - exit
+		if ( vdp_check_key_press( KEY_x ) || vdp_check_key_press( KEY_escape ) ) { // x - exit
 			vdp_activate_sprites(0);
 			draw_filled_box( 70, 84, 180, 30, 11, 0 );
 			COL(128+0);COL(15);TAB(10,12);printf("EXIT: Are you sure?");
