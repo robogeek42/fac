@@ -317,7 +317,8 @@ void change_mode(int mode)
 	while ( !(sys_vars->vdp_pflags & vdp_pflag_mode) );
 }
 
-#define CHAR_RIGHTARROW 128
+// redefine "~" character as arrow
+#define CHAR_RIGHTARROW 0x7E
 void load_custom_chars()
 {
 	// right arrow
