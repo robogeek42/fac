@@ -42,6 +42,8 @@ int target_item_count = 0;
 #define _INSERTER_IMPLEMENTATION
 #include "inserter.h"
 
+#include "message.h"
+
 int gMode = 8; 
 int gScreenWidth = 320;
 int gScreenHeight = 240;
@@ -186,14 +188,6 @@ clock_t bob_anim_ticks;
 clock_t move_wait_ticks;
 clock_t layer_wait_ticks;
 
-// message
-bool bMessage = false;
-int message_len = 0;
-int message_height = 0;
-int message_tx = 0;
-int message_ty = 0;
-clock_t message_timeout_ticks;
-
 // FPS 
 int frame_time_in_ticks;
 clock_t ticks_start;
@@ -275,10 +269,6 @@ void do_mining();
 bool check_can_mine();
 void removeAtCursor();
 void pickupItemsAtTile(int tx, int ty);
-void message(char *message, int timeout, int bgcol);
-void message_with_bm8(char *message, int bmID, int timeout, int bgcol);
-void message_with_bm16(char *message, int bmID, int timeout, int bgcol);
-void message_clear();
 bool save_game( char *filepath );
 bool load_game( char *filepath, bool bQuiet );
 void show_filedialog();
@@ -302,6 +292,9 @@ bool load_game_map( char * game_map_name );
 int convertProductionToMachine( int it );
 int convertMachineToProduction( int it );
 int load_sound_sample(char *fname, int sample_id);
+
+#define _MESSAGE_IMPLEMENTATION
+#include "message.h"
 
 static volatile SYSVAR *sys_vars = NULL;
 
@@ -512,6 +505,8 @@ void game_loop()
 		int dir=-1;
 		int bob_dir = -1;
 		int place_dir=0;
+		bool bUpdated=false;
+		bool bMoved=false;
 		ticks_start = clock();
 
 		if ( vdp_check_key_press( KEY_w ) ) { bob_dir = BOB_UP; dir=SCROLL_UP; }
@@ -537,6 +532,7 @@ void game_loop()
 
 					scroll_screen(dir,1);
 					draw_cursor(true); // re-draw cursor
+					bMoved = true;
 				}
 			}
 			// can't scroll screen, just move Bob around
@@ -544,6 +540,7 @@ void game_loop()
 			{
 				move_bob(bob_dir, 1);
 			}
+			bUpdated = true;
 		}
 
 		// cursor movement
@@ -569,6 +566,7 @@ void game_loop()
 			if ( place_dir & BITS_LEFT ) cursor_tx--;
 
 			draw_cursor(true);
+			bUpdated = true;
 		}
 
 		if (layer_wait_ticks < clock()) 
@@ -581,6 +579,7 @@ void game_loop()
 			check_items_on_machines();
 			draw_layer(true);
 			draw_cursor(true);
+			bUpdated = true;
 		}
 
 		if (debug)
@@ -637,6 +636,7 @@ void game_loop()
 		{
 			key_wait_ticks = clock() + key_wait;
 			removeAtCursor();
+			bUpdated = true;
 		}
 
 
@@ -645,6 +645,7 @@ void game_loop()
 			debug = !debug;
 			while ( vdp_check_key_press( KEY_backtick ) );
 			draw_screen();
+			bUpdated = true;
 		}
 
 		if ( vdp_check_key_press( KEY_x ) || vdp_check_key_press( KEY_escape ) ) { // x - exit
@@ -692,9 +693,9 @@ void game_loop()
 						vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
 						vdp_refresh_sprites();
 					} else {
-						if (bMessage) message_clear();
-						message("can't mine",100,25);
+						new_message(&messageinfo, "can't mine", -1, 100, 25);
 					}
+					bUpdated = true;
 				}
 			}
 		}
@@ -708,12 +709,14 @@ void game_loop()
 				vdp_select_sprite( BOB_SPRITE_ACT_DOWN + bob_facing );
 				vdp_nth_sprite_frame( bob_mining_anim_frame );
 				vdp_refresh_sprites();
+				bUpdated = true;
 			}
 		  	if ( mining_time_ticks < clock() )
 			{
 				bIsMining = false;
 				do_mining();
 				select_bob_sprite( bob_facing );
+				bUpdated = true;
 			}
 		}
 
@@ -725,6 +728,7 @@ void game_loop()
 			
 				pickupItemsAtTile(cursor_tx, cursor_ty);	
 				draw_screen();
+				bUpdated = true;
 			}
 		}
 
@@ -764,34 +768,27 @@ void game_loop()
 							generating_item_count = assemblerProcessTypes[recipe].outcnt;
 
 							char buf[20]; snprintf(buf,20,"generate +%d",generating_item_count);
-							if (itemtypes[generating_item].size == 0)
-								message_with_bm16(buf,itemtypes[generating_item].bmID, 290, 17);
-							else
-								message_with_bm8(buf,itemtypes[generating_item].bmID, 290, 17);
+							new_message(&messageinfo, buf, generating_item, 290, 17);
 							generate_timeout_ticks = clock() + 300;
 							bGenerating = true;
 						} else {
-							message("Inputs?",150,25);
+							new_message(&messageinfo, "Inputs?", -1, 150,25);
 						}
 					} else {
-						message("Need assembler",150,25);
+						new_message(&messageinfo, "Need assembler", -1, 150,25);
 					}
 				}
 				key_wait_ticks = clock() + key_wait;
+				bUpdated = true;
 			}
-		}
-
-		// clear messages when they timeout
-		if ( bMessage && message_timeout_ticks < clock() )
-		{
-			message_clear();
 		}
 
 		if (bGenerating && generate_timeout_ticks < clock() )
 		{
 			inventory_add_item( inventory,  generating_item, generating_item_count );
-			message("done",80,17);
+			new_message(&messageinfo, "done", -1, 80,17);
 			bGenerating = false;
+			bUpdated = true;
 		}
 
 		// only animate machines if there is active energy
@@ -826,6 +823,7 @@ void game_loop()
 		{
 			while ( vdp_check_key_press( KEY_l ) );
 			draw_screen();
+			bUpdated = true;
 		}
 
 		if ( vdp_check_key_press( KEY_c ) ) // recentre cursor on Bob
@@ -904,7 +902,22 @@ void game_loop()
 				vdp_show_sprite();
 				vdp_refresh_sprites();
 			}
+			bUpdated = true;
 		}
+		
+		if (bUpdated && bMessage)
+		{
+			// clear messages when they timeout
+			if ( messageinfo.timeout_ticks < clock() )
+			{
+				message_clear( &messageinfo );
+				bMessage = false;
+			} else {
+				if (bMoved) message_clear( &messageinfo );
+				display_message( &messageinfo );
+			}
+		}
+
 		vdp_update_key_state();
 
 		frame_time_in_ticks = clock() - ticks_start;
@@ -2665,6 +2678,8 @@ void show_info()
 		infoy += 16;
 	}
 
+	// get resource and machine info
+	
 	int info_item_bmid = -1;
 	int info_item_type = 0;
 	int resource_count = -1;
@@ -2706,6 +2721,7 @@ void show_info()
 
 	resource_count = getResourceCount(cursor_tx, cursor_ty);
 
+	// Pointing to Bob - don't bother with the other info
 	if (cursor_tx == getTileX(fac.bobx) && cursor_ty == getTileY(fac.boby) )
 	{
 		char text[]="This is BOB";
@@ -2716,11 +2732,11 @@ void show_info()
 		printf("%s",text);
 		vdp_write_at_text_cursor();
 		while( vdp_check_key_press( KEY_i ) ) { vdp_update_key_state(); }; 
-		wait_for_any_key();
+		wait_for_any_key_press();
 		draw_screen();
 	} else
 
-	if ( info_item_bmid >= 0 )
+	if ( info_item_bmid >= 0 ) // have something to show
 	{
 		char * text = itemtypes[ info_item_type ].desc;
 		int textlen = MAX(strlen(text) * 8, 108);
@@ -2728,6 +2744,8 @@ void show_info()
 		vdp_adv_select_bitmap( info_item_bmid );
 		vdp_draw_bitmap( infox+4, infoy+4 );
 		vdp_write_at_graphics_cursor();
+
+		// show machine and recipe
 		if ( info_item_type == IT_FURNACE || info_item_type == IT_ASSEMBLER || info_item_type == IT_GENERATOR )
 		{
 			Machine* mach = findMachine(&machinelist, cursor_tx, cursor_ty);
@@ -2779,6 +2797,8 @@ void show_info()
 				}
 			}
 		}
+
+		// show resource info
 		if ( resource_count > 0 )
 		{
 			int x = infox+32;
@@ -2791,13 +2811,15 @@ void show_info()
 			printf("%d",resource_count);
 		}
 
+		// item description
 		vdp_move_to( infox+3, infoy+4+18 + yadj );
 		vdp_gcol(0, 15);
 		printf("%s",itemtypes[ info_item_type ].desc);
 		vdp_write_at_text_cursor();
 
 		while( vdp_check_key_press( KEY_i ) ) { vdp_update_key_state(); }; 
-		wait_for_any_key();
+
+		wait_for_any_key_press();
 		draw_screen();
 	}
 }
@@ -2917,9 +2939,9 @@ void do_mining()
 			int ret = inventory_add_item(inventory, raw_item, 1);
 			if (ret < 0)
 			{
-				message("Inventory full!",100,1);
+				new_message(&messageinfo, "Inventory full!", -1, 100, 1);
 			} else {
-				message_with_bm8("+1",itemtypes[raw_item].bmID, 100, 17);
+				new_message(&messageinfo, "+1", raw_item, 100, 17);
 			}
 		}
 	}
@@ -2934,7 +2956,7 @@ void removeAtCursor()
 		int ret = inventory_add_item( inventory, IT_BELT, 1 );
 		if (ret < 0)
 		{
-			message("Inventory full!",100,1);
+			new_message(&messageinfo, "Inventory full!", -1, 100, 1);
 		} else {
 			layer_belts[ tileoffset ] = -1;
 		}
@@ -2948,7 +2970,7 @@ void removeAtCursor()
 			int ret = inventory_add_item( inventory, IT_INSERTER, 1 );
 			if (ret < 0)
 			{
-				message("Inventory full!",100,1);
+				new_message(&messageinfo, "Inventory full!", -1, 100, 1);
 			} else {
 				// delete inserter object
 				ThingNodePtr thingnode = getInserterNode(&inserterlist, objectmap[tileoffset]);
@@ -2964,7 +2986,7 @@ void removeAtCursor()
 			int ret = inventory_add_item( inventory, machine_type, 1 );
 			if (ret < 0)
 			{
-				message("Inventory full!",100,1);
+				new_message(&messageinfo, "Inventory full!", -1, 100, 1);
 			} 
 			else 
 			{
@@ -2983,7 +3005,7 @@ void removeAtCursor()
 								int ret = inventory_add_item( inventory, it, mach->countIn[inputs]);
 								if (ret < 0)
 								{
-									message("Inventory full!",100,1);
+									new_message(&messageinfo, "Inventory full!", -1, 100, 1);
 								}
 
 							}
@@ -2994,7 +3016,7 @@ void removeAtCursor()
 							int ret = inventory_add_item( inventory, it, mach->countOut);
 							if (ret < 0)
 							{
-								message("Inventory full!",100,1);
+								new_message(&messageinfo, "Inventory full!", -1, 100, 1);
 							}
 						}
 
@@ -3049,7 +3071,7 @@ void pickupItemsAtTile(int tx, int ty)
 				int ret = inventory_add_item( inventory, it, 1 );
 				if (ret < 0)
 				{
-					message("Inventory full!",100,1);
+					new_message(&messageinfo, "Inventory full!", -1, 100, 1);
 				} else {
 					free(ip);
 					ip=NULL;
@@ -3059,95 +3081,6 @@ void pickupItemsAtTile(int tx, int ty)
 			}
 		}	
 	}
-}
-
-void message_clear()
-{
-	draw_horizontal( message_tx-2, message_ty-1, message_len+2 );
-	draw_horizontal_layer( message_tx-2, message_ty-1, message_len+2, true, true, true );
-	draw_horizontal( message_tx-2, message_ty, message_len+2 );
-	draw_horizontal_layer( message_tx-2, message_ty, message_len+2, true, true, true );
-	draw_horizontal( message_tx-2, message_ty+1, message_len+2 );
-	draw_horizontal_layer( message_tx-2, message_ty+1, message_len+2, true, true, true );
-	
-	if (message_height==2)
-	{
-		draw_horizontal( message_tx-1, message_ty+2, message_len+1 );
-		draw_horizontal_layer( message_tx-1, message_ty+2, message_len+1, true, true, true );
-	}
-
-	bMessage = false;
-
-}
-
-void message(char *message, int timeout, int bgcol)
-{
-	// place message above and to right of bob
-	message_tx = fac.bobx/gTileSize + 1;
-	message_ty = fac.boby/gTileSize - 1;
-	int sx = message_tx*gTileSize - (fac.xpos/gTileSize)*gTileSize;
-	int sy = message_ty*gTileSize - (fac.ypos/gTileSize)*gTileSize;
-
-	message_len = strlen(message)+1;
-	message_height = 1;
-
-	vdp_write_at_graphics_cursor();
-	draw_filled_box(sx-4, sy-4, (message_len+1)*8, (message_height+1)*8, 11, bgcol);
-	vdp_move_to(sx, sy);
-	vdp_gcol(0,15);
-	printf("%s",message);
-	vdp_write_at_text_cursor();
-
-	bMessage = true;
-	message_timeout_ticks = clock()+timeout;
-}
-void message_with_bm8(char *message, int bmID, int timeout, int bgcol)
-{
-	// place message above and to right of bob
-	message_tx = fac.bobx/gTileSize + 1;
-	message_ty = fac.boby/gTileSize - 1;
-	int sx = message_tx*gTileSize - (fac.xpos/gTileSize)*gTileSize;
-	int sy = message_ty*gTileSize - (fac.ypos/gTileSize)*gTileSize;
-
-	message_len = strlen(message)+2;
-	message_height = 1;
-
-	vdp_write_at_graphics_cursor();
-	draw_filled_box(sx-4, sy-4, (message_len+1)*8, (message_height+1)*8, 11, bgcol);
-	vdp_move_to(sx+12, sy);
-	vdp_gcol(0,15);
-	printf("%s",message);
-	vdp_write_at_text_cursor();
-
-	vdp_adv_select_bitmap( bmID );
-	vdp_draw_bitmap( sx, sy );
-
-	bMessage = true;
-	message_timeout_ticks = clock()+timeout;
-}
-void message_with_bm16(char *message, int bmID, int timeout, int bgcol)
-{
-	// place message above and to right of bob
-	message_tx = fac.bobx/gTileSize + 1;
-	message_ty = fac.boby/gTileSize - 1;
-	int sx = message_tx*gTileSize - (fac.xpos/gTileSize)*gTileSize;
-	int sy = message_ty*gTileSize - (fac.ypos/gTileSize)*gTileSize;
-
-	message_len = strlen(message)+3;
-	message_height = 2;
-
-	vdp_write_at_graphics_cursor();
-	draw_filled_box(sx-4, sy-4, (message_len+1)*8, (message_height+1)*8, 11, bgcol);
-	vdp_move_to(sx+20, sy+4);
-	vdp_gcol(0,15);
-	printf("%s",message);
-	vdp_write_at_text_cursor();
-
-	vdp_adv_select_bitmap( bmID );
-	vdp_draw_bitmap( sx, sy );
-
-	bMessage = true;
-	message_timeout_ticks = clock()+timeout;
 }
 
 bool save_game( char *filepath )
@@ -3612,7 +3545,7 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 		int ret = inventory_add_item(inventory, item, 1);
 		if (ret < 0)
 		{
-			message("Inventory full!",100,1);
+			new_message(&messageinfo, "Inventory full!", -1, 100, 1);
 		} else {
 			bInserted = true;
 		}
@@ -3686,7 +3619,7 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 		int ret = inventory_add_item(inventory, it, 1);
 		if (ret < 0)
 		{
-			message("Inventory full!",100,1);
+			new_message(&messageinfo, "Inventory full!", -1, 100, 1);
 		}
 	}
 }

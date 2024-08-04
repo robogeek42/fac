@@ -551,6 +551,7 @@ uint8_t wait_for_key_with_exit(uint8_t key, uint8_t exit_key)
 	}
 }
 
+// return after key is released
 uint8_t wait_for_any_key()
 {
 	do 
@@ -559,6 +560,16 @@ uint8_t wait_for_any_key()
 	} while(key_pressed_code == 0);
 	int key = key_pressed_code;
 	while( vdp_check_key_press(key)) vdp_update_key_state();
+	return key;
+}
+// return after key-down event
+uint8_t wait_for_any_key_press()
+{
+	do 
+	{
+		vdp_update_key_state();
+	} while(key_pressed_code == 0);
+	int key = key_pressed_code;
 	return key;
 }
 
