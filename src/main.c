@@ -294,6 +294,7 @@ int getResourceCount(int tx, int ty);
 ItemNodePtr getResource(int tx, int ty);
 bool reduceResourceCount(int tx, int ty);
 int show_recipe_dialog(int machine_type, bool bManual);
+int show_item_dialog();
 void show_help();
 bool splash_screen();
 bool splash_loop();
@@ -1953,9 +1954,10 @@ void do_place()
 			} else 
 			if ( item_selected == IT_INSERTER )
 			{
+				int filter_item = show_item_dialog();
 				if ( inventory_remove_item( inventory, item_selected, 1 ) ) // take from inventory
 				{
-					Inserter *insp = addInserter(&inserterlist, cursor_tx, cursor_ty, place_belt_index);
+					Inserter *insp = addInserter(&inserterlist, cursor_tx, cursor_ty, place_belt_index, filter_item);
 					objectmap[tileoffset] = insp;
 				}
 			} else 
@@ -2026,7 +2028,8 @@ void move_items(bool bDraw)
 		{
 			Inserter *insp = (Inserter*) thptr->thing;
 			if ( ( (insp->start_tx == tx && insp->start_ty == ty) )
-				 && insp->itemcnt < insp->maxitemcnt)
+				 && insp->itemcnt < insp->maxitemcnt
+				 && currPtr->item == insp->filter_item )
 			{
 				bool pop = false;
 				switch (insp->dir)
@@ -3780,7 +3783,7 @@ int show_recipe_dialog(int machine_type, bool bManual)
 			break;
 		default:
 			finish_exit = true;
-			goto show_assembler_dialog_exit;
+			goto show_recipe_dialog_exit;
 			break;
 	}
 	int from_process = 0;
@@ -3928,7 +3931,7 @@ int show_recipe_dialog(int machine_type, bool bManual)
 		vdp_update_key_state();
 	} while (finish==false);
 
-show_assembler_dialog_exit:
+show_recipe_dialog_exit:
 	vdp_write_at_text_cursor();
 	draw_screen();
 	COL(15);
@@ -3938,6 +3941,164 @@ show_assembler_dialog_exit:
 	vdp_refresh_sprites();
 
 	return finish_exit?-1:recipe_selected;
+}
+
+#define ITEMD_EXT_BORDER 5
+#define ITEMD_INT_BORDER 2
+#define ITEMD_NUM_IN_VIEW 6
+#define ITEMD_BOX_WIDTH 120
+#define ITEMD_SELECT_HEIGHT 16
+#define ITEMD_TITLE_HEIGHT 10
+int show_item_dialog()
+{
+	int offx = 10;
+	int offy = 20;
+	if ( cursorx > 160 ) offx = 180;
+
+	int box_offsetsY[20] = {0};
+	int cursor_border_on = 15; // white
+	int cursor_border_off = 0; // black
+
+	int item_selected = 0;
+	int old_item_selected = 0;
+ 
+	// UI sze
+	int boxw = ITEMD_EXT_BORDER + ITEMD_BOX_WIDTH + ITEMD_EXT_BORDER;
+	int boxh = ITEMD_EXT_BORDER + ITEMD_TITLE_HEIGHT + 
+		(ITEMD_SELECT_HEIGHT + ITEMD_INT_BORDER) * MIN(ITEMD_NUM_IN_VIEW,NUM_ASM_PROCESSES) 
+		+ 8
+		- ITEMD_INT_BORDER + ITEMD_EXT_BORDER;
+
+	vdp_select_sprite( CURSOR_SPRITE );
+	vdp_hide_sprite();
+	vdp_refresh_sprites();
+
+	vdp_write_at_graphics_cursor();
+
+	// game loop for interacting with dialog
+	clock_t key_wait_ticks = clock() + 20;
+	bool finish = false;
+	bool redisplay_cursor = true;
+	bool redisplay_items = true;
+	int num_items = 0;
+	int select_items[NUM_ITEMTYPES];
+	for (int i=0; i< NUM_ITEMTYPES; i++)
+	{
+		if ( isResource(i) || isProduct(i) )
+		{
+			select_items[num_items++] = i;
+		}
+	}
+	int from_item = 0;
+	int to_item = MIN(ITEMD_NUM_IN_VIEW, num_items);
+	do {
+		if ( redisplay_items )
+		{
+			// dark-blue filled box with yellow line border
+			draw_filled_box( offx, offy, boxw, boxh, 11, 16 );
+			vdp_move_to( offx + ITEMD_EXT_BORDER, offy + ITEMD_EXT_BORDER);
+			COL(2); printf("Select Filter");
+			vdp_move_to( offx + ITEMD_EXT_BORDER, boxh+8);
+			COL(2); printf("Enter to select");
+
+			redisplay_items = false;
+			for (int j = from_item; j < to_item; j++)
+			{
+				box_offsetsY[j-from_item] = offy + ITEMD_EXT_BORDER + ITEMD_TITLE_HEIGHT + 
+					(j-from_item)*(ITEMD_SELECT_HEIGHT+ITEMD_INT_BORDER);
+
+				// cells with dark grey fill with (cursor_border_off=black) border
+				draw_filled_box(
+						offx + ITEMD_EXT_BORDER,
+						box_offsetsY[j-from_item],
+						ITEMD_BOX_WIDTH, ITEMD_SELECT_HEIGHT, cursor_border_off, 8);
+
+				vdp_gcol(0, 11);
+				int xx = offx + ITEMD_EXT_BORDER + 2;
+				int yy = box_offsetsY[j-from_item] + 2;
+
+				draw_number_lj( j, xx, yy+2 );
+				xx+=8;
+				int itype = select_items[j];
+				vdp_adv_select_bitmap(itemtypes[itype].bmID);
+				vdp_draw_bitmap( xx, yy ); xx+=15 + (1-itemtypes[itype].size);
+				vdp_move_to(xx, yy);
+				vdp_gcol(0, 11);
+				printf("%s",itemtypes[itype].desc);
+			}
+		}
+		if ( redisplay_cursor )
+		{
+			redisplay_cursor = false;
+			// clear old cursor
+			draw_box( 
+				offx + ITEMD_EXT_BORDER, 
+				box_offsetsY[old_item_selected-from_item], 
+				ITEMD_BOX_WIDTH, 
+				ITEMD_SELECT_HEIGHT,
+				cursor_border_off);
+			// cursor
+			draw_box( 
+				offx + ITEMD_EXT_BORDER, 
+				box_offsetsY[item_selected-from_item], 
+				ITEMD_BOX_WIDTH, 
+				ITEMD_SELECT_HEIGHT,
+				cursor_border_on);
+			old_item_selected = item_selected;
+		}
+
+		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_enter ) )
+		{
+			finish=true;
+			// delay otherwise x will cause exit from program
+			while ( vdp_check_key_press( KEY_enter ) ) vdp_update_key_state();
+		}
+
+		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_UP ) )
+		{
+			key_wait_ticks = clock() + key_wait;
+			if ( item_selected > from_item )
+			{
+				item_selected--;
+				redisplay_cursor = true;
+			} else 
+			if ( item_selected > 0 ) {
+				item_selected--;
+				redisplay_cursor = true;
+				from_item--;
+				to_item--;
+				redisplay_items=true;
+			}
+		}
+		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_DOWN ) )
+		{
+			key_wait_ticks = clock() + key_wait;
+			if ( item_selected < MIN(ITEMD_NUM_IN_VIEW+from_item, num_items)-1 ) {
+				item_selected++;
+				redisplay_cursor = true;
+			} else 
+			if ( item_selected < num_items-1 )
+			{
+				item_selected++;
+				from_item += 1;
+				to_item = MIN(ITEMD_NUM_IN_VIEW+from_item, num_items);
+				redisplay_items = true;
+				redisplay_cursor = true;
+			}
+		}
+
+		vdp_update_key_state();
+	} while (finish==false);
+
+	vdp_write_at_text_cursor();
+	draw_screen();
+	COL(15);
+
+	vdp_select_sprite( CURSOR_SPRITE );
+	vdp_show_sprite();
+	vdp_refresh_sprites();
+
+	return select_items[item_selected];
 }
 
 void help_clear(int col)

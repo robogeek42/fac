@@ -23,6 +23,7 @@ typedef struct {
 	uint16_t start_ty;
 	int itemcnt;
 	int maxitemcnt;
+	int filter_item;
 	ItemNodePtr itemlist;
 } Inserter;
 
@@ -37,6 +38,7 @@ typedef struct {
 	uint16_t start_ty;
 	int itemcnt;
 	int maxitemcnt;
+	int filter_item;
 } InserterSave;
 
 #endif
@@ -156,7 +158,7 @@ void clearInserters(ThingNodePtr *inserterlist)
 	
 }
 
-Inserter* addInserter(ThingNodePtr *inserterlist, int tx, int ty, int dir)
+Inserter* addInserter(ThingNodePtr *inserterlist, int tx, int ty, int dir, int filter_item)
 {
 	int start_tx = tx;
 	int start_ty = ty;
@@ -195,6 +197,7 @@ Inserter* addInserter(ThingNodePtr *inserterlist, int tx, int ty, int dir)
 	insp->start_ty = start_ty;
 	insp->end_tx = end_tx;
 	insp->end_ty = end_ty;
+	insp->filter_item = filter_item;
 	//printf("Add ins %d,%d->%d,%d->%d,%d ",start_tx, start_ty, tx, ty, end_tx, end_ty);
 	insertAtFrontThingList(inserterlist, insp);
 

@@ -319,7 +319,7 @@ void clearItemList(ItemNodePtr *listptr)
 }
 
 bool isBelt(int item) {
-	return itemtypes[item].isBelt;
+	return item == IT_BELT;
 }
 bool isMachine(int item) {
 	return itemtypes[item].isMachine;
@@ -331,8 +331,7 @@ bool isOverlay(int item) {
 	return itemtypes[item].isOverlay;
 }
 bool isProduct(int item) {
-	ItemType *p = &itemtypes[item];
-	return !p->isBelt && !p->isMachine && !p->isResource && ! p->isOverlay;
+	return itemtypes[item].isProduct;
 }
 
 

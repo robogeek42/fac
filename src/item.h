@@ -77,10 +77,10 @@ void clearItemList(ItemNodePtr *listptr);
 typedef struct {
 	uint8_t item;
 	char desc[40];
-	bool isBelt;		// special handling for belts
 	bool isMachine;		// can convert resources
 	bool isResource;	// general resource type
 	bool isOverlay;		// background feature - can't place these
+	bool isProduct;
 	int bmID;
 	int size; 			// 16x16=0, 8x8=1
 	int fuel_value;		
@@ -135,45 +135,45 @@ enum ItemTypesEnum {
 };
 
 static ItemType itemtypes[] = {
-//                                     Belt  Machine Resouce Overlay
+//                                     Machine Resouce Overlay Product
 // belts are special
-	{IT_BELT, 			"Belts", 		true, false, false, false, BMOFF_BELT16, BM_SIZE16, 0 },
+	{IT_BELT, 			"Belts", 		false, false, false, false, BMOFF_BELT16, BM_SIZE16, 0 },
 // raw items
-	{IT_STONE,			"Stone",		false, false, true, false, BMOFF_ITEM8+4, BM_SIZE8, 0 },
-	{IT_IRON_ORE,		"Iron Ore", 	false, false, true, false, BMOFF_ITEM8+5, BM_SIZE8, 0 },
-	{IT_COPPER_ORE,		"Copper Ore",	false, false, true, false, BMOFF_ITEM8+6, BM_SIZE8, 0 },
-	{IT_COAL,			"Coal",			false, false, true, false, BMOFF_ITEM8+7, BM_SIZE8, 10 },
-	{IT_WOOD,			"Wood",			false, false, true, false, BMOFF_ITEM8+0, BM_SIZE8, 5 },
+	{IT_STONE,			"Stone",		false, true, false, false, BMOFF_ITEM8+4, BM_SIZE8, 0 },
+	{IT_IRON_ORE,		"Iron Ore", 	false, true, false, false, BMOFF_ITEM8+5, BM_SIZE8, 0 },
+	{IT_COPPER_ORE,		"Copper Ore",	false, true, false, false, BMOFF_ITEM8+6, BM_SIZE8, 0 },
+	{IT_COAL,			"Coal",			false, true, false, false, BMOFF_ITEM8+7, BM_SIZE8, 10 },
+	{IT_WOOD,			"Wood",			false, true, false,  false,BMOFF_ITEM8+0, BM_SIZE8, 5 },
 // processed items
-	{IT_IRON_PLATE,		"Iron Plate",	false, false, true, false, BMOFF_ITEM8+1, BM_SIZE8, 0 },
-	{IT_COPPER_PLATE,	"Copper Plate", false, false, true, false, BMOFF_ITEM8+2, BM_SIZE8, 0 },
-	{IT_STONE_BRICK,	"Stone brick",	false, false, true, false, BMOFF_ITEM8+3, BM_SIZE8, 0 },
+	{IT_IRON_PLATE,		"Iron Plate",	false, true, false, false, BMOFF_ITEM8+1, BM_SIZE8, 0 },
+	{IT_COPPER_PLATE,	"Copper Plate", false, true, false, false, BMOFF_ITEM8+2, BM_SIZE8, 0 },
+	{IT_STONE_BRICK,	"Stone brick",	false, true, false, false, BMOFF_ITEM8+3, BM_SIZE8, 0 },
 // Machines
-    {IT_FURNACE,		"Furnace",		false, true, false, false, BMOFF_MACH16+0, BM_SIZE16, 0 },
-    {IT_MINER,			"Miner",		false, true, false, false, BMOFF_MACH16+1, BM_SIZE16, 0 },
-    {IT_ASSEMBLER,		"Assembler",	false, true, false, false, BMOFF_MACH16+2, BM_SIZE16, 0 },
-    {IT_INSERTER,		"Inserter", 	false, true, false, false, BMOFF_MACH16+3, BM_SIZE16, 0 },
-    {IT_BOX,			"Box",		 	false, true, false, false, BMOFF_MACH16+4, BM_SIZE16, 0 },
-    {IT_GENERATOR,		"Generator", 	false, true, false, false, BMOFF_MACH16+5, BM_SIZE16, 0 },
+    {IT_FURNACE,		"Furnace",		true, false, false, false, BMOFF_MACH16+0, BM_SIZE16, 0 },
+    {IT_MINER,			"Miner",		true, false, false, false, BMOFF_MACH16+1, BM_SIZE16, 0 },
+    {IT_ASSEMBLER,		"Assembler",	true, false, false, false, BMOFF_MACH16+2, BM_SIZE16, 0 },
+    {IT_INSERTER,		"Inserter", 	true, false, false, false, BMOFF_MACH16+3, BM_SIZE16, 0 },
+    {IT_BOX,			"Box",		 	true, false, false, false, BMOFF_MACH16+4, BM_SIZE16, 0 },
+    {IT_GENERATOR,		"Generator", 	true, false, false, false, BMOFF_MACH16+5, BM_SIZE16, 0 },
 // Overlays
-	{IT_FEAT_STONE,		"Stone",		false, false, false, true, BMOFF_FEAT16+0, BM_SIZE16, 0 },
-	{IT_FEAT_IRON,		"Iron Ore", 	false, false, false, true, BMOFF_FEAT16+1, BM_SIZE16, 0 },
-	{IT_FEAT_COPPER,	"Copper Ore",	false, false, false, true, BMOFF_FEAT16+2, BM_SIZE16, 0 },
-	{IT_FEAT_COAL,		"Coal",			false, false, false, true, BMOFF_FEAT16+3, BM_SIZE16, 0 },
-	{IT_FEAT_WOOD,		"Tree",			false, false, false, true, BMOFF_FEAT16+4, BM_SIZE16, 0 },
+	{IT_FEAT_STONE,		"Stone",		false, false, true, false, BMOFF_FEAT16+0, BM_SIZE16, 0 },
+	{IT_FEAT_IRON,		"Iron Ore", 	false, false, true, false, BMOFF_FEAT16+1, BM_SIZE16, 0 },
+	{IT_FEAT_COPPER,	"Copper Ore",	false, false, true, false, BMOFF_FEAT16+2, BM_SIZE16, 0 },
+	{IT_FEAT_COAL,		"Coal",			false, false, true, false, BMOFF_FEAT16+3, BM_SIZE16, 0 },
+	{IT_FEAT_WOOD,		"Tree",			false, false, true, false, BMOFF_FEAT16+4, BM_SIZE16, 0 },
 // Products
-    {IT_GEARWHEEL,		"Gear Wheel",	false, false, false, false, BMOFF_PROD8+0, BM_SIZE8, 0 },
-    {IT_WIRE,			"Copper Wire",	false, false, false, false, BMOFF_PROD8+1, BM_SIZE8, 0 },
-    {IT_CIRCUIT,		"Circuit Board",false, false, false, false, BMOFF_PROD8+2, BM_SIZE8, 0 },
-    {IT_PAVING,			"Paving",		false, false, false, false, BMOFF_PROD8+3, BM_SIZE8, 0 },
-    {IT_COMPUTER,		"Computer",		false, false, false, false, BMOFF_PROD8+4, BM_SIZE8, 0 },
-    {IT_MINI_BELT,		"Belt",			false, false, false, false, BMOFF_BELT_MINI, BM_SIZE8, 0 },
-    {IT_PROD_FURNACE,	"Furnace",		false, false, false, false, BMOFF_MACH_MINI+0, BM_SIZE8, 0 },
-    {IT_PROD_MINER,		"Miner",		false, false, false, false, BMOFF_MACH_MINI+1, BM_SIZE8, 0 },
-    {IT_PROD_ASSEMBLER,	"Assembler",	false, false, false, false, BMOFF_MACH_MINI+2, BM_SIZE8, 0 },
-    {IT_PROD_INSERTER,	"Inserter",		false, false, false, false, BMOFF_MACH_MINI+3, BM_SIZE8, 0 },
-    {IT_PROD_BOX,		"Box",			false, false, false, false, BMOFF_MACH_MINI+4, BM_SIZE8, 0 },
-    {IT_PROD_GENERATOR,	"Generator",	false, false, false, false, BMOFF_MACH_MINI+5, BM_SIZE8, 0 },
+    {IT_GEARWHEEL,		"Gear Wheel",	false, false, false, true, BMOFF_PROD8+0, BM_SIZE8, 0 },
+    {IT_WIRE,			"Copper Wire",	false, false, false, true, BMOFF_PROD8+1, BM_SIZE8, 0 },
+    {IT_CIRCUIT,		"Circuit Board",false, false, false, true, BMOFF_PROD8+2, BM_SIZE8, 0 },
+    {IT_PAVING,			"Paving",		false, false, false, true, BMOFF_PROD8+3, BM_SIZE8, 0 },
+    {IT_COMPUTER,		"Computer",		false, false, false, true, BMOFF_PROD8+4, BM_SIZE8, 0 },
+    {IT_MINI_BELT,		"Belt",			false, false, false, true, BMOFF_BELT_MINI, BM_SIZE8, 0 },
+    {IT_PROD_FURNACE,	"Furnace",		false, false, false, true, BMOFF_MACH_MINI+0, BM_SIZE8, 0 },
+    {IT_PROD_MINER,		"Miner",		false, false, false, true, BMOFF_MACH_MINI+1, BM_SIZE8, 0 },
+    {IT_PROD_ASSEMBLER,	"Assembler",	false, false, false, true, BMOFF_MACH_MINI+2, BM_SIZE8, 0 },
+    {IT_PROD_INSERTER,	"Inserter",		false, false, false, true, BMOFF_MACH_MINI+3, BM_SIZE8, 0 },
+    {IT_PROD_BOX,		"Box",			false, false, false, true, BMOFF_MACH_MINI+4, BM_SIZE8, 0 },
+    {IT_PROD_GENERATOR,	"Generator",	false, false, false, true, BMOFF_MACH_MINI+5, BM_SIZE8, 0 },
 	
 };
 
