@@ -89,8 +89,8 @@ void display_message(MessageInfo *msg)
 	if (!bMessage) return;
 
 	// current screen position for drawing
-	int sx = msg->tx*gTileSize - (fac.xpos/gTileSize)*gTileSize;
-	int sy = msg->ty*gTileSize - (fac.ypos/gTileSize)*gTileSize;
+	int sx = msg->tx*gTileSize - fac.xpos;
+	int sy = msg->ty*gTileSize - fac.ypos;
 
 	vdp_write_at_graphics_cursor();
 	draw_filled_box(sx-4, sy-4, msg->width_box, (msg->height_tiles+1)*8, 11, msg->bgcol);

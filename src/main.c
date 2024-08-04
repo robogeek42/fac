@@ -532,7 +532,7 @@ void game_loop()
 
 					scroll_screen(dir,1);
 					draw_cursor(true); // re-draw cursor
-					bMoved = true;
+					//bMoved = true;
 				}
 			}
 			// can't scroll screen, just move Bob around
