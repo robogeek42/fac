@@ -26,6 +26,7 @@ But to make that you will need a whole host of other machines and furnaces.
 - Press `I` with the cursor over an object to see info on it. (Generators show global energy)
 - Belts can be used to move items
 - Use the File Dialog `F` to save your game progress
+- Toggle Sound with `F9` and change volume with `F7` `F8` 
 
 To place an item:
 - Select it from the inventory.  Then it is in your hand.  Press `Enter` to place it.
@@ -35,8 +36,11 @@ To place an item:
 If you are too far away to do an action the yellow cursor turns grey.
 
 ## TODO
-- SOUND
+- Real boxes that can be used to store and produce
 - technology tree
-- more complex game
 - more recipies
-- Needs optimisation - belts/items movement isn't great
+- general optimisation
+- more sounds. Machines?
+- Music??
+- Enemies .... 
+- Floating HUD ? Could impelement with a big Sprite?

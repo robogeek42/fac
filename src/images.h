@@ -87,8 +87,8 @@
 
 #define NUM_SPRITES ( CURSOR_SPRITE + 1 )
 
-bool load_images(bool progress);
-void create_sprites();
+bool load_images(bool progress, int vert_pos);
+void create_sprites(int vert_pos);
 int get_current_sprite();
 void select_bob_sprite( int sprite );
 void show_bob();
@@ -99,7 +99,7 @@ static int current_bob_sprite = -1;
 #endif
 
 #ifdef _IMAGE_IMPLEMENTATION
-bool load_images(bool progress) 
+bool load_images(bool progress, int vert_pos) 
 {
 	PROGBAR *progbar;
 	int cnt=1;
@@ -107,10 +107,10 @@ bool load_images(bool progress)
 
 	if (progress)
 	{
-		progbar = init_horiz_bar(10,100,300,32,0,prog_max,1,3);
+		TAB(10,vert_pos);printf("Loading Images");
+		progbar = init_horiz_bar(10,8*(vert_pos+2),300,24,0,prog_max,1,3);
 		
 		update_bar(progbar, 0);
-		TAB(10,5);printf("Loading Images");
 	}
 
 	//TAB(0,0);
@@ -260,14 +260,15 @@ bool load_images(bool progress)
 	wait_for_any_key();
 #endif
 
+	delete_bar(&progbar);
+
 	return true;
 }
 
 // Create sprites for Bob moving in each direction with 4 frames each
-void create_sprites() 
+void create_sprites(int vert_pos) 
 {
-	vdp_cls();
-	TAB(10,5);printf("Creating Sprites");
+	TAB(10,vert_pos);printf("Creating Sprites");
 	vdp_adv_create_sprite( BOB_SPRITE_DOWN, BMOFF_BOB16 + BOB_SPRITE_DOWN*4, 4 );
 	vdp_adv_create_sprite( BOB_SPRITE_UP, BMOFF_BOB16 + BOB_SPRITE_UP*4, 4 );
 	vdp_adv_create_sprite( BOB_SPRITE_LEFT, BMOFF_BOB16 + BOB_SPRITE_LEFT*4, 4 );

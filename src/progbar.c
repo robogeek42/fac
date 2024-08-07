@@ -44,12 +44,12 @@ void update_bar(PROGBAR *bar, int val)
 			bar->col);
 }
 
-void delete_bar(PROGBAR *bar)
+void delete_bar(PROGBAR **bar)
 {
-	if (bar)
+	if (*bar)
 	{
-		free(bar);
-		bar=NULL;
+		free(*bar);
+		*bar=NULL;
 	}
 }
 
@@ -69,5 +69,5 @@ void test_progbar()
 		while (clock() < wait_ticks) { vdp_update_key_state(); }
 		wait_ticks = clock()+100;
 	}
-	delete_bar(progbar);
+	delete_bar(&progbar);
 }

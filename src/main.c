@@ -204,8 +204,12 @@ int generating_item_count;
 
 bool bIsTest = false;
 
+bool bSoundEnabled = false;
+bool bSoundSamplesLoaded = false;
+int sound_volume = 40; // 0-127
 bool bPlayingWalkSound = false;
-clock_t walk_sound_ticks;
+#define SOUND_CHAN_STEPS 1
+#define SOUND_CHAN_PICKAXE 2
 
 //------------------------------------------------------------
 //Function defs
@@ -286,12 +290,13 @@ bool reduceResourceCount(int tx, int ty);
 int show_recipe_dialog(int machine_type, bool bManual);
 int show_item_dialog();
 void show_help();
-bool splash_screen();
+bool load_splash_screen_maps();
 bool splash_loop();
 bool load_game_map( char * game_map_name );
 int convertProductionToMachine( int it );
 int convertMachineToProduction( int it );
 int load_sound_sample(char *fname, int sample_id);
+bool load_sound_samples(int vert_pos);
 
 #define _MESSAGE_IMPLEMENTATION
 #include "message.h"
@@ -384,7 +389,7 @@ int main(int argc, char *argv[])
 		goto my_exit2;
 	}
 
-	if ( !splash_screen() )
+	if ( !load_splash_screen_maps() )
 	{
 		goto my_exit2;
 	}
@@ -392,25 +397,34 @@ int main(int argc, char *argv[])
 	fac.energy = 0;
 	bGenerating = false;
 
-
 	// setup complete
 	change_mode(gMode);
 	vdp_cursor_enable( false );
 	vdp_logical_scr_dims( false );
-	//vdu_set_graphics_viewport()
 
-	if ( ! load_images(true) )
+	// load all the bitmaps and sprites
+	if ( ! load_images(true, 2) )
 	{
 		printf("Failed to load images\n");
 		goto my_exit2;
 	}
-	create_sprites();
+
+	// sound samples
+	bSoundSamplesLoaded = load_sound_samples( 8 );
+	if (!bSoundSamplesLoaded)
+	{
+		printf("\nFailed to load sound samples\n");
+	} else {
+		bSoundEnabled = true;
+	}
+
+	create_sprites(16);
 
 	inv_selected = 0; // belts
 	item_selected = 0; // belts
 
 	vdp_activate_sprites(0);
-
+	
 	// simple mission
 	target_item_type = IT_COMPUTER;
 	target_items = 20;
@@ -423,15 +437,6 @@ int main(int argc, char *argv[])
 	{
 		goto my_exit2;
 	}
-
-#if 0
-	int sample_len = load_sound_sample("/cc/play/steps.raw",-2);
-	if (sample_len == 0 )
-	{
-		printf("Error loading sound sample.");
-		goto my_exit2;
-	}
-#endif
 
 	load_game_map("maps/m4");
 
@@ -541,6 +546,15 @@ void game_loop()
 				move_bob(bob_dir, 1);
 			}
 			bUpdated = true;
+		}
+		if ( bSoundEnabled && 
+		     !vdp_check_key_press( KEY_w ) && 
+		     !vdp_check_key_press( KEY_a ) && 
+		     !vdp_check_key_press( KEY_s ) && 
+		     !vdp_check_key_press( KEY_d ) )
+		{
+			vdp_audio_set_volume( SOUND_CHAN_STEPS, 0);
+			bPlayingWalkSound = false;
 		}
 
 		// cursor movement
@@ -692,6 +706,11 @@ void game_loop()
 						select_bob_sprite( BOB_SPRITE_ACT_DOWN+bob_facing );
 						vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
 						vdp_refresh_sprites();
+						if ( bSoundEnabled )
+						{
+							vdp_audio_sample_seek( SOUND_CHAN_PICKAXE, 0 );
+							vdp_audio_set_volume( SOUND_CHAN_PICKAXE, sound_volume );
+						}
 					} else {
 						new_message(&messageinfo, "can't mine", -1, 100, 25);
 					}
@@ -714,6 +733,10 @@ void game_loop()
 		  	if ( mining_time_ticks < clock() )
 			{
 				bIsMining = false;
+				if ( bSoundEnabled )
+				{
+					vdp_audio_set_volume( SOUND_CHAN_PICKAXE, 0 );
+				}
 				do_mining();
 				select_bob_sprite( bob_facing );
 				bUpdated = true;
@@ -830,6 +853,42 @@ void game_loop()
 		{
 			while ( vdp_check_key_press( KEY_c ) );
 			reset_cursor();
+		}
+
+		if ( vdp_check_key_press( KEY_f9 ) )
+		{
+			while ( vdp_check_key_press( KEY_f9 ) );
+			if (bSoundSamplesLoaded)
+			{
+				bSoundEnabled = !bSoundEnabled;
+				char buf[12];
+				sprintf(buf,"Sound %s",bSoundEnabled?"On ":"Off");
+				new_message(&messageinfo, buf, -1, 100, 16);
+			}
+		}
+		if ( vdp_check_key_press( KEY_f7 ) )
+		{
+			while ( vdp_check_key_press( KEY_f7 ) );
+			if (bSoundSamplesLoaded && bSoundEnabled)
+			{
+				sound_volume -= 10;
+				sound_volume = MAX(sound_volume, 10);
+				char buf[12];
+				sprintf(buf,"Volume %d",sound_volume);
+				new_message(&messageinfo, buf, -1, 60, 16);
+			}
+		}
+		if ( vdp_check_key_press( KEY_f8 ) )
+		{
+			while ( vdp_check_key_press( KEY_f8 ) );
+			if (bSoundSamplesLoaded && bSoundEnabled)
+			{
+				sound_volume += 10;
+				sound_volume = MIN(sound_volume, 127);
+				char buf[12];
+				sprintf(buf,"Volume %d",sound_volume);
+				new_message(&messageinfo, buf, -1, 60, 16);
+			}
 		}
 
 		if ( machine_update_ticks < clock() )
@@ -1453,14 +1512,20 @@ bool move_bob(int dir, int speed)
 		moved = true;
 	}
 
+	if (moved) {
+		if ( bSoundEnabled && !bPlayingWalkSound ) {
+			bPlayingWalkSound = true;
+			vdp_audio_sample_seek( SOUND_CHAN_STEPS, 0 );
+			vdp_audio_set_volume( SOUND_CHAN_STEPS, sound_volume );
+		}
+	}
+
 	if (bob_anim_ticks > clock() ) return moved;
 	bob_frame=(bob_frame+1)%4; 
 	vdp_nth_sprite_frame( bob_frame );
 	bob_anim_ticks = clock()+10;
 	vdp_refresh_sprites();
 	
-	//vdp_audio_play_note(1, 100, 435, 0 );
-
 	return moved;
 }
 
@@ -4164,11 +4229,14 @@ void show_help()
 	help_line(line, 2, 6, "WASD", "Move Bob", 11, 13);
 	help_line(line++, 18, 9, "Dir keys", "Move cursor", 11, 13);
 	line++;
-	help_line(line++, 2, 6, "H", "Show this help screen", 11, 13);
-	help_line(line++, 2, 6, "X", "Exit", 11, 13);
-	help_line(line++, 2, 6, "F", "File dialog", 11, 13);
-	help_line(line++, 2, 6, "L", "Refresh screen.", 11, 13);
-	help_line(line++, 2, 6, "C", "Recentre cursor.", 11, 13);
+	help_line(line, 2, 6, "X", "Exit", 11, 13);
+	help_line(line++, 21, 6, "F", "File dialog", 11, 13);
+
+	help_line(line, 2, 6, "L", "Refresh", 11, 13);
+	help_line(line++, 21, 6, "C", "Recentre", 11, 13);
+	help_line(line, 2, 6, "F9", "Toggle Sound", 10, 14);
+	help_line(line++, 21, 6, "F8,F7", "Vol Up/Down", 10, 14);
+	line++;
 	help_line(line++, 2, 6, "I", "Show info under cursor", 10, 14);
 	help_line(line++, 2, 6, "E", "Show Inventory and select item", 10, 14);
 	help_line(line++, 2, 6, "P/Q", "Begin/Quit placing item", 10, 14);
@@ -4252,7 +4320,7 @@ bool load_game_map( char * game_map_name )
 
 	return true;
 }
-bool splash_screen()
+bool load_splash_screen_maps()
 {
 	if ( load_map_info("maps/splash.info") != 0 )
 	{
@@ -4278,14 +4346,19 @@ bool splash_screen()
 	return true;
 }
 
+void splash_loop_info()
+{
+	COL(15);COL(128+4);
+	TAB(4,4);printf("Press ");COL(11);printf("H");COL(15);printf(" for Help, ");COL(11);printf("Enter");COL(15);printf(" to start");
+	TAB(4,25);printf("Sound:");COL(11);printf("%s", bSoundEnabled?"On ":"Off");COL(15);printf(" Toggle with ");COL(11);printf("F9");
+}
 bool splash_loop()
 {
 	int loopexit=0;
 
 	draw_screen();
 	draw_layer(true);
-	COL(15);COL(128+4);
-	TAB(4,25);printf("Press H for Help, Enter to start");
+	splash_loop_info();
 
 	layer_wait_ticks = clock();
 	key_wait_ticks = clock();
@@ -4314,8 +4387,7 @@ bool splash_loop()
 			vdp_activate_sprites(0);
 			draw_screen();
 			draw_layer(true);
-			COL(15);COL(128+4);
-			TAB(4,25);printf("Press H for Help, Enter to start");
+			splash_loop_info();
 		}
 		if ( vdp_check_key_press( KEY_x ) )
 		{
@@ -4326,6 +4398,15 @@ bool splash_loop()
 		{
 			while ( vdp_check_key_press( KEY_enter ) );
 			loopexit = true;
+		}
+		if ( vdp_check_key_press( KEY_f9 ) )
+		{
+			while ( vdp_check_key_press( KEY_f9 ) );
+			if (bSoundSamplesLoaded)
+			{
+				bSoundEnabled = !bSoundEnabled;
+				splash_loop_info();
+			}
 		}
 
 		vdp_update_key_state();
@@ -4397,9 +4478,46 @@ int load_sound_sample(char *fname, int sample_id)
 	if (file_len)
 	{
 		vdp_audio_load_sample(sample_id, file_len, data);
-		//vdp_audio_set_sample( 1, abs(sample_id)+64255 );
 	}
 
 	return file_len;
 }
 
+bool load_sound_samples(int vert_pos)
+{
+	PROGBAR *progbar;
+	int cnt=1;
+	int prog_max = 2;
+
+	TAB(10,vert_pos);printf("Loading Sound Samples");
+	progbar = init_horiz_bar(10,8*(vert_pos+2),300,24,0,prog_max,1,3);
+
+	update_bar(progbar, 0);
+
+	int sample_len = load_sound_sample("sounds/steps.raw",-2);
+	if (sample_len == 0 )
+	{
+		return false;
+	}
+	update_bar(progbar, cnt++);
+
+	vdp_audio_set_sample( SOUND_CHAN_STEPS, 64257 );
+	vdp_audio_play_note( SOUND_CHAN_STEPS, sound_volume, 435, -1 ); // channel 1, loop
+	vdp_audio_set_volume( SOUND_CHAN_STEPS, 0 );
+	bPlayingWalkSound = false;
+
+	sample_len = load_sound_sample("sounds/pick-axe2.pcm",-3);
+	if (sample_len == 0 )
+	{
+		return false;
+	}
+	update_bar(progbar, cnt++);
+
+	vdp_audio_set_sample( SOUND_CHAN_PICKAXE, 64258 );
+	vdp_audio_play_note( SOUND_CHAN_PICKAXE, sound_volume, 435, -1 ); // channel 2, loop
+	vdp_audio_set_volume( SOUND_CHAN_PICKAXE, 0 );
+
+	delete_bar(&progbar);
+
+	return true;
+}
