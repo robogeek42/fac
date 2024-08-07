@@ -35,7 +35,7 @@
 
 #define FN_CURSORS "img/cursor%02d.rgb2"
 #define BMOFF_CURSORS ( BMOFF_NUMS + NUM_BM_NUMS )
-#define NUM_BM_CURSORS 3
+#define NUM_BM_CURSORS 4
 
 #define FN_MINERS "img/tm16/miner%s%02d.rgb2"
 #define BMOFF_MINERS ( BMOFF_CURSORS + NUM_BM_CURSORS )
@@ -279,7 +279,7 @@ void create_sprites(int vert_pos)
 	vdp_adv_create_sprite( BOB_SPRITE_ACT_LEFT, BMOFF_BOB16 + 16 + BOB_SPRITE_LEFT*2, 2 );
 	vdp_adv_create_sprite( BOB_SPRITE_ACT_RIGHT, BMOFF_BOB16 + 16 + BOB_SPRITE_RIGHT*2, 2 );
 
-	vdp_adv_create_sprite( CURSOR_SPRITE, BMOFF_CURSORS, 3 );
+	vdp_adv_create_sprite( CURSOR_SPRITE, BMOFF_CURSORS, 4 );
 
 	vdp_activate_sprites( NUM_BOB_SPRITES + 1 );
 

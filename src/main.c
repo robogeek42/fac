@@ -1677,7 +1677,11 @@ void draw_cursor(bool draw)
 		
 		vdp_select_sprite( CURSOR_SPRITE );
 		vdp_move_sprite_to( cursorx, cursory );
-		vdp_nth_sprite_frame( 1 );
+		int frame=1;
+#ifdef CURSOR_RANGE
+		if (!cursor_in_range()) frame=3;
+#endif
+		vdp_nth_sprite_frame( frame );
 	}
 	else
 	{
