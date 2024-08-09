@@ -56,30 +56,20 @@ int read_str(FILE *fp, char *str, char stop) {
 	return bytes;
 }
 
-uint8_t key_pressed_code;
 uint8_t key_pressed_ascii;
+uint8_t key_pressed_mods;
+uint8_t key_pressed_code;
 	
-static KEY_EVENT prev_key_event = { 0 };
 void key_event_handler( KEY_EVENT key_event )
 {
-	/*
-	if ( key_event.code == 0x7d ) {
-		vdp_mode(0);
-		vdp_cursor_enable( true );
-		vdp_logical_scr_dims(true);
-		exit( 1 );						// Exit program if esc pressed
-	}
-	*/
-
-	if ( key_event.key_data == prev_key_event.key_data ) return;
-	prev_key_event = key_event;
-
 	if (key_event.down)
 	{	
 		key_pressed_ascii = key_event.ascii; 
+		key_pressed_mods = key_event.mods; 
 		key_pressed_code = key_event.code; 
 	} else {
 		key_pressed_ascii = 0;
+		key_pressed_mods = 0;
 		key_pressed_code = 0;
 	}
 }

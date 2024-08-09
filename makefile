@@ -29,7 +29,7 @@ install: check bin/$(NAME).bin
 	cp bin/$(NAME).bin $(NAME)
 	cp bin/$(NAME).bin ~/agon/fab/sdcard/bin/
 	cp bin/$(NAME).bin ~/agon/sdcard_sync/bin/
-	rsync -rvu ./ ~/agon/sdcard_sync/fac
+	rsync -rvu --exclude=.git --exclude=obj ./ ~/agon/sdcard_sync/fac
 
 
 run: install

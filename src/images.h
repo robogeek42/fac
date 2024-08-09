@@ -229,6 +229,7 @@ bool load_images(bool progress, int vert_pos)
 
 	int ret = load_bitmap_file(FN_ZAP, 8, 8, BMOFF_ZAP );
 	if ( ret < 0 ) return false;
+	if (progress) update_bar(progbar, cnt++);
 
 	for (int fn=1; fn<=NUM_BM_MACH_MINI; fn++)
 	{
@@ -240,6 +241,7 @@ bool load_images(bool progress, int vert_pos)
 
 	ret = load_bitmap_file(FN_BELT_MINI, 8, 8, BMOFF_BELT_MINI );
 	if ( ret < 0 ) return false;
+	if (progress) update_bar(progbar, cnt++);
 
 
 #if 0

@@ -17,6 +17,8 @@
 #include <stdbool.h>
 #include "util.h"
 
+extern uint8_t key_pressed_code;
+
 #define DIR_UP 0
 #define DIR_RIGHT 1
 #define DIR_DOWN 2
@@ -475,6 +477,7 @@ int main(int argc, char *argv[])
 		inventory_add_item(inventory, IT_STONE_BRICK, 20);
 		inventory_add_item(inventory, IT_MINER, 10);
 		inventory_add_item(inventory, IT_INSERTER, 10);
+		fac.energy = 1000;
 	}
 
 	game_loop();
@@ -513,6 +516,8 @@ void game_loop()
 		bool bUpdated=false;
 		bool bMoved=false;
 		ticks_start = clock();
+
+		vdp_update_key_state();
 
 		if ( vdp_check_key_press( KEY_w ) ) { bob_dir = BOB_UP; dir=SCROLL_UP; }
 		if ( vdp_check_key_press( KEY_a ) ) { bob_dir = BOB_LEFT; dir=SCROLL_RIGHT; }
@@ -603,6 +608,7 @@ void game_loop()
 			TAB(0,29); printf("%d %d i:%d E:%d  ",frame_time_in_ticks,func_time[0], numItems, fac.energy);
 		}
 			
+		vdp_update_key_state();
 		if ( vdp_check_key_press( KEY_p ) ) { // do place - get ready to place an item from inventory
 			if (key_wait_ticks < clock() && cursor_in_range() ) 
 			{
@@ -615,42 +621,40 @@ void game_loop()
 			}
 		}
 		if ( vdp_check_key_press( KEY_q ) ) { // quit out of place state
-			if (key_wait_ticks < clock()) 
-			{
-				key_wait_ticks = clock() + key_wait;
-				stop_place(); 
-			}
-		}
-		if ( key_wait_ticks<clock() && key_pressed_code == KEY_r ) { // "r" rotate belt. Check actual key code - distinguishes lower/upper case
-			if (bPlace && key_wait_ticks < clock() ) {
-				key_wait_ticks = clock() + key_wait;
-				draw_cursor(false);
-				place_belt_index++;  
-				place_belt_index = place_belt_index % 4;
-				//draw_tile( cursor_tx, cursor_ty, cursorx, cursory );
-				draw_cursor(true);
-			}
-		}
-		if ( key_wait_ticks<clock() && key_pressed_code == KEY_R ) { // "R" rotate belt. Check actual key code - distinguishes lower/upper case
-			if (bPlace && key_wait_ticks < clock() ) {
-				key_wait_ticks = clock() + key_wait;
-				draw_cursor(false);
-				place_belt_index--;  
-				if (place_belt_index < 0) place_belt_index += 4;
-				//draw_tile( cursor_tx, cursor_ty, cursorx, cursory );
-				draw_cursor(true);
-			}
-		}
-		if (  key_wait_ticks<clock() &&vdp_check_key_press( KEY_enter ) && cursor_in_range()  ) // ENTER - start placement state
-		{
-			do_place();
+			key_wait_ticks = clock() + key_wait;
+			stop_place(); 
+			while ( vdp_check_key_press(KEY_q) );
 		}
 
-		if ( key_wait_ticks<clock() && vdp_check_key_press( KEY_delete ) && cursor_in_range()  ) // DELETE - delete item at cursor
+		vdp_update_key_state();
+		if ( bPlace && vdp_check_key_press(KEY_r) ) {
+			while ( vdp_check_key_press(KEY_r) );
+
+			draw_cursor(false);
+			place_belt_index++;  
+			place_belt_index = place_belt_index % 4;
+			draw_cursor(true);
+		}
+		if ( bPlace && vdp_check_key_press(KEY_t) ) {
+			while ( vdp_check_key_press(KEY_t) );
+
+			draw_cursor(false);
+			place_belt_index--;  
+			place_belt_index = (place_belt_index+4) % 4;
+			draw_cursor(true);
+		}
+
+		if (  vdp_check_key_press( KEY_enter ) && cursor_in_range()  ) // ENTER - start placement state
 		{
-			key_wait_ticks = clock() + key_wait;
+			do_place();
+			while ( vdp_check_key_press(KEY_enter) );
+		}
+
+		if ( vdp_check_key_press( KEY_delete ) && cursor_in_range()  ) // DELETE - delete item at cursor
+		{
 			removeAtCursor();
 			bUpdated = true;
+			while ( vdp_check_key_press(KEY_delete) );
 		}
 
 
@@ -675,22 +679,19 @@ void game_loop()
 			vdp_refresh_sprites();
 		}
 
+		vdp_update_key_state();
 		if ( vdp_check_key_press( KEY_e ) ) // Bring up inventory
 		{
-			if (key_wait_ticks < clock()) 
-			{
-				key_wait_ticks = clock() + key_wait;
-				show_inventory(12,12);
-			}
+			show_inventory(12,12);
+			while ( vdp_check_key_press(KEY_e) );
 		}
+		vdp_update_key_state();
 		if ( vdp_check_key_press( KEY_i ) ) // i for item info
 		{
-			if (key_wait_ticks < clock()) 
-			{
-				show_info();
-				key_wait_ticks = clock() + key_wait;
-			}
+			show_info();
+			while ( vdp_check_key_press(KEY_i) );
 		}
+		vdp_update_key_state();
 		if ( vdp_check_key_press( KEY_m ) )  // m for MINE
 		{
 			if (key_wait_ticks < clock() && cursor_in_range() ) 
@@ -743,67 +744,62 @@ void game_loop()
 			}
 		}
 
+		vdp_update_key_state();
 		if ( vdp_check_key_press( KEY_z ) && cursor_in_range()  )  // z - pick-up items under cursor
 		{
-			if (key_wait_ticks < clock()) 
-			{
-				key_wait_ticks = clock() + key_wait;
-			
-				pickupItemsAtTile(cursor_tx, cursor_ty);	
-				draw_screen();
-				bUpdated = true;
-			}
+			pickupItemsAtTile(cursor_tx, cursor_ty);	
+			draw_screen();
+			bUpdated = true;
+			while ( vdp_check_key_press(KEY_z) );
 		}
 
+		vdp_update_key_state();
 		if ( vdp_check_key_press( KEY_g ) ) // g - generate
 		{
-			if (key_wait_ticks < clock() && !bGenerating) 
+			int recipe = show_recipe_dialog(IT_ASSEMBLER, true);
+			if ( recipe >= 0 )
 			{
-				int recipe = show_recipe_dialog(IT_ASSEMBLER, true);
-				if ( recipe >= 0 )
+				if (assemblerProcessTypes[recipe].manual)
 				{
-					if (assemblerProcessTypes[recipe].manual)
+					bool bInputsSatisfied = true;
+					for (int i=0; i<assemblerProcessTypes[recipe].innum;i++)
 					{
-						bool bInputsSatisfied = true;
-						for (int i=0; i<assemblerProcessTypes[recipe].innum;i++)
+						int index = inventory_find_item(inventory, assemblerProcessTypes[recipe].in[i]);
+						if (index >= 0)
 						{
-							int index = inventory_find_item(inventory, assemblerProcessTypes[recipe].in[i]);
-							if (index >= 0)
+							if ( inventory[index].count < assemblerProcessTypes[recipe].incnt[i] )
 							{
-								if ( inventory[index].count < assemblerProcessTypes[recipe].incnt[i] )
-								{
-									bInputsSatisfied = false;
-									break;
-								}
-							} else {
 								bInputsSatisfied = false;
 								break;
 							}
-						}
-						if ( bInputsSatisfied )
-						{
-							for (int i=0; i<assemblerProcessTypes[recipe].innum;i++)
-							{
-								inventory_remove_item(inventory, assemblerProcessTypes[recipe].in[i], assemblerProcessTypes[recipe].incnt[i]);
-							}
-							generating_item = assemblerProcessTypes[recipe].out;
-							generating_item = convertProductionToMachine(generating_item);
-							generating_item_count = assemblerProcessTypes[recipe].outcnt;
-
-							char buf[20]; snprintf(buf,20,"generate +%d",generating_item_count);
-							new_message(&messageinfo, buf, generating_item, 290, 17);
-							generate_timeout_ticks = clock() + 300;
-							bGenerating = true;
 						} else {
-							new_message(&messageinfo, "Inputs?", -1, 150,25);
+							bInputsSatisfied = false;
+							break;
 						}
-					} else {
-						new_message(&messageinfo, "Need assembler", -1, 150,25);
 					}
+					if ( bInputsSatisfied )
+					{
+						for (int i=0; i<assemblerProcessTypes[recipe].innum;i++)
+						{
+							inventory_remove_item(inventory, assemblerProcessTypes[recipe].in[i], assemblerProcessTypes[recipe].incnt[i]);
+						}
+						generating_item = assemblerProcessTypes[recipe].out;
+						generating_item = convertProductionToMachine(generating_item);
+						generating_item_count = assemblerProcessTypes[recipe].outcnt;
+
+						char buf[20]; snprintf(buf,20,"generate +%d",generating_item_count);
+						new_message(&messageinfo, buf, generating_item, 290, 17);
+						generate_timeout_ticks = clock() + 300;
+						bGenerating = true;
+					} else {
+						new_message(&messageinfo, "Inputs?", -1, 150,25);
+					}
+				} else {
+					new_message(&messageinfo, "Need assembler", -1, 150,25);
 				}
-				key_wait_ticks = clock() + key_wait;
-				bUpdated = true;
 			}
+			key_wait_ticks = clock() + key_wait;
+			bUpdated = true;
 		}
 
 		if (bGenerating && generate_timeout_ticks < clock() )
@@ -827,13 +823,8 @@ void game_loop()
 
 		if ( vdp_check_key_press( KEY_f ) ) // file dialog
 		{
-			if (key_wait_ticks < clock()) 
-			{
-				key_wait_ticks = clock() + key_wait;
-
-				show_filedialog();
-			}
-			
+			show_filedialog();
+			key_wait_ticks = clock() + key_wait;
 		}
 
 		if ( vdp_check_key_press( KEY_h ) ) // help dialog
@@ -976,8 +967,6 @@ void game_loop()
 				display_message( &messageinfo );
 			}
 		}
-
-		vdp_update_key_state();
 
 		frame_time_in_ticks = clock() - ticks_start;
 	} while (loopexit==0);
@@ -4245,7 +4234,7 @@ void show_help()
 	help_line(line++, 2, 6, "E", "Show Inventory and select item", 10, 14);
 	help_line(line++, 2, 6, "P/Q", "Begin/Quit placing item", 10, 14);
 	help_line(line++, 2, 6, "Enter", "Place selected item", 10, 14);
-	help_line(line++, 2, 6, "R", "Rotate selected item", 10, 14);
+	help_line(line++, 2, 6, "R/T", "Rotate selected item", 10, 14);
 	help_line(line++, 2, 6, "Del", "Delete item", 10, 14);
 	help_line(line++, 2, 6, "Z", "Pickup items under cursor", 10, 14);
 	line++;
@@ -4503,7 +4492,7 @@ bool load_sound_samples(int vert_pos)
 	{
 		return false;
 	}
-	update_bar(progbar, cnt++);
+	update_bar(progbar, ++cnt);
 
 	vdp_audio_set_sample( SOUND_CHAN_STEPS, 64257 );
 	vdp_audio_play_note( SOUND_CHAN_STEPS, sound_volume, 435, -1 ); // channel 1, loop
@@ -4515,7 +4504,7 @@ bool load_sound_samples(int vert_pos)
 	{
 		return false;
 	}
-	update_bar(progbar, cnt++);
+	update_bar(progbar, ++cnt);
 
 	vdp_audio_set_sample( SOUND_CHAN_PICKAXE, 64258 );
 	vdp_audio_play_note( SOUND_CHAN_PICKAXE, sound_volume, 435, -1 ); // channel 2, loop
