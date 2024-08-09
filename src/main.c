@@ -241,6 +241,7 @@ bool check_dir_exists(char *path);
 int load_map(char *mapname);
 int load_map_info( char *filename);
 void load_resource_data();
+void clear_map();
 
 int readTileInfoFile(char *path, TileInfoFile *tif, int items);
 
@@ -440,6 +441,7 @@ int main(int argc, char *argv[])
 		goto my_exit2;
 	}
 
+	clear_map();
 	load_game_map("maps/m4");
 
 	/* start bob and screen centred in map */
@@ -531,6 +533,7 @@ void game_loop()
 			if (frame_time_in_ticks>=4) move_amount=2;
 			if (frame_time_in_ticks>=8) move_amount=4;
 			if (frame_time_in_ticks>=16) move_amount=8;
+			
 			// screen can scroll, move Bob AND screen
 			if ( can_scroll_screen(dir, move_amount) )
 			{
@@ -4290,6 +4293,28 @@ leave_help:
 	vdp_refresh_sprites();
 }
 
+void clear_map()
+{
+	// clear and read tilemap and layers
+	free(tilemap);
+	free(layer_belts);
+	free(objectmap);
+
+	// clear out item list
+	ItemNodePtr currPtr = itemlist;
+	ItemNodePtr nextPtr = NULL;
+	while ( currPtr != NULL )
+	{
+		nextPtr = currPtr->next;
+		ItemNodePtr pitem = popFrontItem(&itemlist);
+		free(pitem);
+		currPtr = nextPtr;
+	}
+	itemlist = NULL;
+
+	clearMachines(&machinelist);
+	clearInserters(&inserterlist);
+}
 bool load_game_map( char * game_map_name )
 {
 	char buf[20];
