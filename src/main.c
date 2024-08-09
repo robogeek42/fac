@@ -527,10 +527,14 @@ void game_loop()
 		// scroll the screen AND/OR move Bob
 		if ( dir>=0 && ( move_wait_ticks < clock() ) ) {
 			move_wait_ticks = clock()+1;
+			int move_amount = 1;
+			if (frame_time_in_ticks>=4) move_amount=2;
+			if (frame_time_in_ticks>=8) move_amount=4;
+			if (frame_time_in_ticks>=16) move_amount=8;
 			// screen can scroll, move Bob AND screen
-			if ( can_scroll_screen(dir, 1) )
+			if ( can_scroll_screen(dir, move_amount) )
 			{
-				if ( move_bob(bob_dir, 1) )
+				if ( move_bob(bob_dir, move_amount) )
 				{
 					if (debug) // clear the data at the bottom of the screen
 					{
@@ -540,7 +544,7 @@ void game_loop()
 						draw_horizontal(tx,ty,6);
 					}
 
-					scroll_screen(dir,1);
+					scroll_screen(dir,move_amount);
 					draw_cursor(true); // re-draw cursor
 					//bMoved = true;
 				}
@@ -548,7 +552,7 @@ void game_loop()
 			// can't scroll screen, just move Bob around
 			else
 			{
-				move_bob(bob_dir, 1);
+				move_bob(bob_dir, move_amount);
 			}
 			bUpdated = true;
 		}
@@ -1254,44 +1258,44 @@ void scroll_screen(int dir, int step)
 		case SCROLL_RIGHT: // scroll screen to right, view moves left
 			if (fac.xpos > step)
 			{
+				int tx=getTileX(fac.xpos);
+				int ty=getTileY(fac.ypos);
 				fac.xpos -= step;
 				vdp_scroll_screen(dir, step);
 				// draw tiles (tx,ty) to (tx,ty+len)
-				int tx=getTileX(fac.xpos);
-				int ty=getTileY(fac.ypos);
 				draw_vertical(tx,ty, 1+(gScreenHeight/gTileSize));
 			}
 			break;
 		case SCROLL_LEFT: // scroll screen to left, view moves right
 			if ((fac.xpos + gScreenWidth + step) < (mapinfo.width * gTileSize))
 			{
+				int tx=getTileX(fac.xpos + gScreenWidth -1);
+				int ty=getTileY(fac.ypos);
 				fac.xpos += step;
 				vdp_scroll_screen(dir, step);
 				// draw tiles (tx,ty) to (tx,ty+len)
-				int tx=getTileX(fac.xpos + gScreenWidth -1);
-				int ty=getTileY(fac.ypos);
 				draw_vertical(tx,ty, 1+(gScreenHeight/gTileSize));
 			}
 			break;
 		case SCROLL_UP:
 			if (fac.ypos > step)
 			{
+				int tx=getTileX(fac.xpos);
+				int ty=getTileY(fac.ypos);
 				fac.ypos -= step;
 				vdp_scroll_screen(dir, step);
 				// draw tiles (tx,ty) to (tx+len,ty)
-				int tx=getTileX(fac.xpos);
-				int ty=getTileY(fac.ypos);
 				draw_horizontal(tx,ty, 1+(gScreenWidth/gTileSize));
 			}
 			break;
 		case SCROLL_DOWN:
 			if ((fac.ypos + gScreenHeight + step) < (mapinfo.height * gTileSize))
 			{
+				int tx=getTileX(fac.xpos);
+				int ty=getTileY(fac.ypos + gScreenHeight -1);
 				fac.ypos += step;
 				vdp_scroll_screen(dir, step);
 				// draw tiles (tx,ty) to (tx+len,ty)
-				int tx=getTileX(fac.xpos);
-				int ty=getTileY(fac.ypos + gScreenHeight -1);
 				draw_horizontal(tx,ty, 1+(gScreenWidth/gTileSize));
 			}
 			break;
