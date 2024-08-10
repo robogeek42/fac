@@ -262,6 +262,7 @@ void draw_horizontal_layer(int tx, int ty, int len, bool bdraw_belts, bool bdraw
 void drop_item(int item);
 
 void move_items(bool bDraw);
+void inserters_pull_from_box();
 void move_items_on_inserters(bool bDraw);
 void move_items_on_machines(bool bDraw);
 void draw_items();
@@ -479,6 +480,7 @@ int main(int argc, char *argv[])
 		inventory_add_item(inventory, IT_STONE_BRICK, 20);
 		inventory_add_item(inventory, IT_MINER, 10);
 		inventory_add_item(inventory, IT_INSERTER, 10);
+		inventory_add_item(inventory, IT_BOX, 10);
 		fac.energy = 1000;
 	}
 
@@ -600,6 +602,7 @@ void game_loop()
 			layer_wait_ticks = clock() + belt_speed; // belt anim speed
 			//draw_cursor(false);
 			move_items(false);
+			inserters_pull_from_box();
 			move_items_on_inserters(false);
 			move_items_on_machines(false);
 			check_items_on_machines();
@@ -2112,17 +2115,17 @@ void move_items(bool bDraw)
 				bool pop = false;
 				switch (insp->dir)
 				{
-				case DIR_UP:
-				case DIR_DOWN:
-					if (dx == 7 || dx == 8 || dx == 9) pop=true;
-					break;
-				case DIR_LEFT:
-				case DIR_RIGHT:
-					if (dy == 7 || dy == 8 || dy == 9) pop=true;
-					break;
-				
-				default:
-					break;
+					case DIR_UP:
+					case DIR_DOWN:
+						if (dx == 7 || dx == 8 || dx == 9) pop=true;
+						break;
+					case DIR_LEFT:
+					case DIR_RIGHT:
+						if (dy == 7 || dy == 8 || dy == 9) pop=true;
+						break;
+					
+					default:
+						break;
 				}
 				if (pop)
 				{
@@ -2132,10 +2135,10 @@ void move_items(bool bDraw)
 					ip->next = insp->itemlist;
 					insp->itemlist = ip;
 					insp->itemcnt++;
+					break;
 				}
 			}
 			thptr = thptr->next;
-			continue;
 		}
 
 		int beltOffset =  tx + ty*mapinfo.width;
@@ -2264,6 +2267,37 @@ void move_items(bool bDraw)
 	func_time[0]=clock()-func_start;
 }
 
+void inserters_pull_from_box()
+{
+	ThingNodePtr tlistp = inserterlist;
+	while ( tlistp != NULL )
+	{
+		Inserter *insp = (Inserter*)tlistp->thing;
+		int tx = insp->start_tx;
+		int ty = insp->start_ty;
+		int tileoffset = tx + ty * mapinfo.width;
+
+		MachineHeader *mh = (MachineHeader*) objectmap[tileoffset];
+		if (mh && mh->machine_type > 0 )
+		{
+			if ( mh->machine_type == IT_BOX &&
+			     insp->itemcnt < insp->maxitemcnt )
+			{
+				int it = convertProductionToMachine(insp->filter_item);
+				int index = inventory_remove_item( inventory, it, 1 );
+				if (index >=0)
+				{
+					insertAtFrontItemList( &insp->itemlist, insp->filter_item, tx*gTileSize+4, ty*gTileSize+4 );
+					insp->itemcnt++;
+				}
+			}
+		}
+
+
+		tlistp = tlistp->next;
+	}
+}
+
 void move_items_on_inserters(bool bDraw)
 {
 	// go through inserters and move their own items along
@@ -2319,36 +2353,51 @@ void move_items_on_inserters(bool bDraw)
 					currPtr->x = nextx - ITEM_CENTRE_OFFSET;
 					currPtr->y = nexty - ITEM_CENTRE_OFFSET;
 				}
-				if ( bDraw)
-				{
-					// re-draw tile covered by inserter
-					int px = getTilePosInScreenX(insp->start_tx);
-					int py = getTilePosInScreenY(insp->start_ty);
-					draw_tile(insp->start_tx, insp->start_ty, px, py);
-					draw_items_at_tile(insp->start_tx, insp->start_ty);
-
-					px = getTilePosInScreenX(insp->tx);
-					py = getTilePosInScreenY(insp->ty);
-					draw_tile(insp->tx, insp->ty, px, py);
-					draw_items_at_tile(insp->tx, insp->ty);
-
-					px = getTilePosInScreenX(insp->end_tx);
-					py = getTilePosInScreenY(insp->end_ty);
-					draw_tile(insp->end_tx, insp->end_ty, px, py);
-					draw_items_at_tile(insp->end_tx, insp->end_ty);
-				}
 			}
 			if (putback)
 			{
 				ItemNodePtr it = popItem( &insp->itemlist, currPtr );
 				if ( it )
 				{
-					// add to front of itemlist;
-					it->next = itemlist;
-					itemlist = it;
-					insp->itemcnt--;
-					numItems++;
+					// special case it gets put into another inserter (middle)
+					int tileoffset = insp->end_tx + insp->end_ty * mapinfo.width;
+					MachineHeader *mh = (MachineHeader*) objectmap[tileoffset];
+					if (mh && mh->machine_type == IT_INSERTER )
+					{
+						Inserter *insp2 = objectmap[tileoffset];
+						if ( insp2->filter_item == currPtr->item &&
+							 insp2->itemcnt < insp2->maxitemcnt )
+						{
+							insertAtFrontItemList( &insp2->itemlist, currPtr->item, currPtr->x, currPtr->y );
+							insp2->itemcnt++;
+							insp->itemcnt--;
+						}
+					} else {
+						// add to front of itemlist;
+						it->next = itemlist;
+						itemlist = it;
+						insp->itemcnt--;
+						numItems++;
+					}
 				}
+			}
+			if ( bDraw && moved )
+			{
+				// re-draw tile covered by inserter
+				int px = getTilePosInScreenX(insp->start_tx);
+				int py = getTilePosInScreenY(insp->start_ty);
+				draw_tile(insp->start_tx, insp->start_ty, px, py);
+				draw_items_at_tile(insp->start_tx, insp->start_ty);
+
+				px = getTilePosInScreenX(insp->tx);
+				py = getTilePosInScreenY(insp->ty);
+				draw_tile(insp->tx, insp->ty, px, py);
+				draw_items_at_tile(insp->tx, insp->ty);
+
+				px = getTilePosInScreenX(insp->end_tx);
+				py = getTilePosInScreenY(insp->end_ty);
+				draw_tile(insp->end_tx, insp->end_ty, px, py);
+				draw_items_at_tile(insp->end_tx, insp->end_ty);
 			}
 			currPtr = nextPtr;
 		}
@@ -2765,6 +2814,7 @@ void show_info()
 		{
 			info_item_type = mh->machine_type;
 			info_item_bmid = getMachineBMIDmh(mh);
+			// assembler needs more lines for info
 			if ( info_item_type == IT_ASSEMBLER )
 			{
 				boxh=39; yadj = 8;
@@ -2862,7 +2912,18 @@ void show_info()
 				}
 			}
 		}
-
+		if ( info_item_type == IT_INSERTER )
+		{
+			Inserter *insp = (Inserter*)objectmap[tileoffset];
+			if (insp)
+			{
+				int x=infox+4+20;
+				vdp_move_to( x, infoy );
+				int itemBMID = itemtypes[ convertMachineToProduction(insp->filter_item) ].bmID;
+				vdp_adv_select_bitmap( itemBMID );
+				vdp_draw_bitmap( x, infoy+8 );
+			}
+		}
 		// show resource info
 		if ( resource_count > 0 )
 		{
