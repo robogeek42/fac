@@ -54,3 +54,18 @@ Mkfile.old
 dkms.conf
 
 tmp
+
+fed/src/util.c
+fed/src/util.h
+fed/src/colmap.c
+fed/src/colmap.h
+fed/src/filedialog.h
+fed/src/globals.h
+fed/src/item.c
+fed/src/item.h
+fed/src/keydefines.h
+fed/src/listdir.c
+fed/src/listdir.h
+fed/src/progbar.c
+fed/src/progbar.h
+
