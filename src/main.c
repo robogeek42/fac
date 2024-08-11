@@ -43,6 +43,8 @@ int target_item_count = 0;
 #include "machine.h"
 #define _INSERTER_IMPLEMENTATION
 #include "inserter.h"
+#define _HUD_IMPLEMENTATION
+#include "hud.h"
 
 #include "message.h"
 
@@ -424,6 +426,8 @@ int main(int argc, char *argv[])
 
 	create_sprites(16);
 
+	create_hud(19);
+
 	inv_selected = 0; // belts
 	item_selected = 0; // belts
 
@@ -453,12 +457,19 @@ int main(int argc, char *argv[])
 
 	reset_cursor();
 
+	hud_update_count(fac.energy);
+
 	// Turn on sprites and move bob to the centre
 	vdp_activate_sprites( NUM_SPRITES );
 	vdp_select_sprite( CURSOR_SPRITE );
 	vdp_show_sprite();
 	select_bob_sprite( bob_facing );
 	vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
+
+	vdp_select_sprite( HUD_SPRITE );
+	vdp_show_sprite();
+	vdp_move_sprite_to( 0, 0 );
+
 	vdp_refresh_sprites();
 
 	// Add some default items 
@@ -482,6 +493,7 @@ int main(int argc, char *argv[])
 		inventory_add_item(inventory, IT_INSERTER, 10);
 		inventory_add_item(inventory, IT_BOX, 10);
 		fac.energy = 1000;
+		hud_update_count(fac.energy);
 	}
 
 	game_loop();
@@ -963,6 +975,9 @@ void game_loop()
 				vdp_refresh_sprites();
 			}
 			bUpdated = true;
+
+			hud_update_count(fac.energy);
+			vdp_refresh_sprites();
 		}
 		
 		if (bUpdated && bMessage)
@@ -3649,7 +3664,7 @@ void show_filedialog()
 	vdp_logical_scr_dims( false );
 
 	reset_cursor();
-	vdp_activate_sprites( NUM_BOB_SPRITES + 1 );
+	vdp_activate_sprites( NUM_SPRITES );
 	vdp_select_sprite( CURSOR_SPRITE );
 	vdp_show_sprite();
 	show_bob();

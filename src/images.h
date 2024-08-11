@@ -80,12 +80,12 @@
 #define BOB_SPRITE_ACT_LEFT 6
 #define BOB_SPRITE_ACT_RIGHT 7
 
-
 #define NUM_BOB_SPRITES 8
 
 #define CURSOR_SPRITE 8
+#define HUD_SPRITE 9
 
-#define NUM_SPRITES ( CURSOR_SPRITE + 1 )
+#define NUM_SPRITES ( HUD_SPRITE + 1 )
 
 bool load_images(bool progress, int vert_pos);
 void create_sprites(int vert_pos);
