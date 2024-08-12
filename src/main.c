@@ -215,6 +215,10 @@ bool bPlayingWalkSound = false;
 #define SOUND_CHAN_STEPS 1
 #define SOUND_CHAN_PICKAXE 2
 
+bool bShowHud = true;
+int hud_posx = 4;
+int hud_posy = 4;
+
 //------------------------------------------------------------
 //Function defs
 void wait();
@@ -457,7 +461,7 @@ int main(int argc, char *argv[])
 
 	reset_cursor();
 
-	hud_update_count(fac.energy);
+	if (bShowHud) hud_update_count(fac.energy);
 
 	// Turn on sprites and move bob to the centre
 	vdp_activate_sprites( NUM_SPRITES );
@@ -466,9 +470,7 @@ int main(int argc, char *argv[])
 	select_bob_sprite( bob_facing );
 	vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
 
-	vdp_select_sprite( HUD_SPRITE );
-	vdp_show_sprite();
-	vdp_move_sprite_to( 0, 0 );
+	if (bShowHud) show_hud(hud_posx, hud_posy);
 
 	vdp_refresh_sprites();
 
@@ -493,7 +495,7 @@ int main(int argc, char *argv[])
 		inventory_add_item(inventory, IT_INSERTER, 10);
 		inventory_add_item(inventory, IT_BOX, 10);
 		fac.energy = 1000;
-		hud_update_count(fac.energy);
+		if (bShowHud) hud_update_count(fac.energy);
 	}
 
 	game_loop();
@@ -904,6 +906,20 @@ void game_loop()
 			}
 		}
 
+		if ( vdp_check_key_press( KEY_f2 ) )
+		{
+			while ( vdp_check_key_press( KEY_f2 ) );
+			if ( bShowHud )
+			{
+				bShowHud = false;
+				hide_hud();
+			} else {
+				bShowHud = true;
+				show_hud(hud_posx, hud_posy);
+			}
+		}
+
+
 		if ( machine_update_ticks < clock() )
 		{
 			machine_update_ticks = clock() + machine_update_rate;
@@ -976,7 +992,7 @@ void game_loop()
 			}
 			bUpdated = true;
 
-			hud_update_count(fac.energy);
+			if (bShowHud) hud_update_count(fac.energy);
 			vdp_refresh_sprites();
 		}
 		
@@ -4305,13 +4321,11 @@ void show_help()
 	help_line(line, 2, 6, "WASD", "Move Bob", 11, 13);
 	help_line(line++, 18, 9, "Dir keys", "Move cursor", 11, 13);
 	line++;
-	help_line(line, 2, 6, "X", "Exit", 11, 13);
-	help_line(line++, 21, 6, "F", "File dialog", 11, 13);
+	help_line(line, 2, 6, "X", "Exit", 11, 13); help_line(line++, 21, 6, "F", "File dialog", 11, 13);
 
-	help_line(line, 2, 6, "L", "Refresh", 11, 13);
-	help_line(line++, 21, 6, "C", "Recentre", 11, 13);
-	help_line(line, 2, 6, "F9", "Toggle Sound", 10, 14);
-	help_line(line++, 21, 6, "F8,F7", "Vol Up/Down", 10, 14);
+	help_line(line, 2, 6, "L", "Refresh", 11, 13); help_line(line++, 21, 6, "C", "Recentre", 11, 13);
+	help_line(line, 2, 6, "F9", "Toggle Sound", 10, 14); help_line(line++, 21, 6, "F8,F7", "Vol Up/Down", 10, 14);
+	help_line(line++, 2, 6, "F2", "Toggle HUD", 10, 14);
 	line++;
 	help_line(line++, 2, 6, "I", "Show info under cursor", 10, 14);
 	help_line(line++, 2, 6, "E", "Show Inventory and select item", 10, 14);

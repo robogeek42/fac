@@ -203,4 +203,20 @@ void hud_update_count(int count)
 	}
 	vdp_refresh_sprites();
 }
+
+void show_hud(int x, int y)
+{
+	vdp_select_sprite( HUD_SPRITE );
+	vdp_show_sprite();
+	vdp_move_sprite_to( x, y );
+	vdp_refresh_sprites();
+}
+
+void hide_hud()
+{
+	vdp_select_sprite( HUD_SPRITE );
+	vdp_hide_sprite();
+	vdp_refresh_sprites();
+}
+
 #endif
