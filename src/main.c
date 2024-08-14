@@ -2095,9 +2095,12 @@ void do_place()
 			} else 
 			if ( item_selected == IT_TSPLITTER )
 			{
+				// not making a splitter a separate object type as yet 
+				// reuse some of the Machine fields for splitter purposes
+				// ptype - splitter state. Use to lookup TSplitSwitchStates.out[] direction
+				// processTime - (3-bytes int) store ItemNodePtr if an object is moving though it
 				if (inventory_remove_item( inventory, item_selected, 1 ))
 				{
-					// ptype holds the switch state for a splitter
 					objectmap[tileoffset] = addMachine( &machinelist, item_selected, cursor_tx, cursor_ty, place_belt_index, 0, 0, 0);
 				}
 			} else
@@ -2128,6 +2131,114 @@ void drop_item(int item)
 	// place the 8x8 resource item in the centre of the square
 	insertAtFrontItemList(&itemlist, item, cursor_tx*gTileSize + 4, cursor_ty*gTileSize + 4);
 	numItems++;
+}
+
+// move a given item along a belt or a splitter
+// in and out are the directions in and out of the belt/splitter
+// redraw = indicate that the out tile needs to be redrawn
+// return if the item has moved or not
+bool move_item_on_belt(ItemNodePtr currPtr, int in, int out, bool *predraw)
+{
+	bool moved = false;
+
+	int centrex = currPtr->x + ITEM_CENTRE_OFFSET;
+	int centrey = currPtr->y + ITEM_CENTRE_OFFSET;
+
+	// (tx,ty) is the tile the centre of the item is in
+	int tx = centrex >> 4;
+	int ty = centrey >> 4;
+
+	// (dx,dy) offset of centre of item in relation to tile
+	int dx = centrex % gTileSize;
+	int dy = centrey % gTileSize;
+
+	int current_offset =  tx + ty*mapinfo.width;
+
+	// calculate next x,y and next-next x,y
+	int nextx = centrex;
+	int nexty = centrey;
+	int nnx = nextx;
+	int nny = nexty;
+	// check movement on belt towards the centre
+	switch (in)
+	{
+		case DIR_UP:  // in from top - move down
+			if ( !moved && dy < 8 ) { nexty++; nny+=2; moved=true; }
+			break;
+		case DIR_RIGHT: // in from right - move left
+			if ( !moved && dx >= 8 ) { nextx--; nnx-=2;  moved=true; }
+			break;
+		case DIR_DOWN: // in from bottom - move up
+			if ( !moved && dy >= 8 ) { nexty--; nny-=2; moved=true; }
+			break;
+		case DIR_LEFT: // in from left - move right
+			if ( !moved && dx < 8 ) { nextx++; nnx+=2; moved=true; }
+			break;
+		default:
+			break;
+	}
+	if (!moved) switch (out)
+	{
+		case DIR_UP: // out to top - move up
+			if ( !moved ) { nexty--; nny-=2; moved=true; }
+			break;
+		case DIR_RIGHT: // out to right - move right
+			if ( !moved ) { nextx++; nnx+=2; moved=true; }
+			break;
+		case DIR_DOWN: // out to bottom - move down
+			if ( !moved ) { nexty++; nny+=2; moved=true; }
+			break;
+		case DIR_LEFT: // out to left - move left
+			if ( !moved ) { nextx--; nnx-=2; moved=true; }
+			break;
+		default:
+			break;
+	}
+
+	if (moved)
+	{
+		// check next pixel and the one after in the same direction
+		bool found = isAnythingAtXY(&itemlist, nextx-ITEM_CENTRE_OFFSET, nexty-ITEM_CENTRE_OFFSET );
+		found |= isAnythingAtXY(&itemlist, nnx-ITEM_CENTRE_OFFSET, nny-ITEM_CENTRE_OFFSET );
+		if (!found) 
+		{
+			currPtr->x = nextx - ITEM_CENTRE_OFFSET;
+			currPtr->y = nexty - ITEM_CENTRE_OFFSET;
+
+			// jump the tile to the centre of the belt it just moved into
+			// bit hacky but avoids the item moving outside of the belt
+			tx = (currPtr->x + ITEM_CENTRE_OFFSET) >> 4;
+			ty = (currPtr->y + ITEM_CENTRE_OFFSET) >> 4;
+
+			int new_offset = tx + ty*mapinfo.width;
+			if ( new_offset != current_offset )
+			{
+				int newbeltID = layer_belts[ new_offset ];
+				if (newbeltID >= 0)
+				{
+					int newin = belts[newbeltID].in;
+					switch ( out ) 
+					{
+						case DIR_UP:
+							if ( newin != DIR_DOWN ) { (*predraw)=true; currPtr->y = ty*gTileSize + 4; }
+							break;
+						case DIR_RIGHT:
+							if ( newin != DIR_LEFT ) { (*predraw)=true; currPtr->x = tx*gTileSize + 4; }
+							break;
+						case DIR_DOWN:
+							if ( newin != DIR_UP ) { (*predraw)=true; currPtr->y = ty*gTileSize + 4; }
+							break;
+						case DIR_LEFT:
+							if ( newin != DIR_RIGHT ) { (*predraw)=true; currPtr->x = tx*gTileSize + 4; }
+							break;
+						default:
+							break;
+					}
+				}
+			}
+		}
+	}
+	return moved;
 }
 
 /// @brief Move items along a belt or into an inserter or machine
@@ -2191,6 +2302,7 @@ void move_items(bool bDraw)
 			thptr = thptr->next;
 		}
 
+		// check movements on belts
 		int beltOffset =  tx + ty*mapinfo.width;
 		int beltID = layer_belts[ beltOffset ];
 		bool redraw=false;
@@ -2199,99 +2311,12 @@ void move_items(bool bDraw)
 			int in = belts[beltID].in;
 			int out = belts[beltID].out;
 
-			// calculate next x,y and next-next x,y
-			int nextx = centrex;
-			int nexty = centrey;
-			int nnx = nextx;
-			int nny = nexty;
-			// check movement on belt towards the centre
-			switch (in)
-			{
-				case DIR_UP:  // in from top - move down
-					if ( !moved && dy < 8 ) { nexty++; nny+=2; moved=true; }
-					break;
-				case DIR_RIGHT: // in from right - move left
-					if ( !moved && dx >= 8 ) { nextx--; nnx-=2;  moved=true; }
-					break;
-				case DIR_DOWN: // in from bottom - move up
-					if ( !moved && dy >= 8 ) { nexty--; nny-=2; moved=true; }
-					break;
-				case DIR_LEFT: // in from left - move right
-					if ( !moved && dx < 8 ) { nextx++; nnx+=2; moved=true; }
-					break;
-				default:
-					break;
-			}
-			if (!moved) switch (out)
-			{
-				case DIR_UP: // out to top - move up
-					if ( !moved ) { nexty--; nny-=2; moved=true; }
-					break;
-				case DIR_RIGHT: // out to right - move right
-					if ( !moved ) { nextx++; nnx+=2; moved=true; }
-					break;
-				case DIR_DOWN: // out to bottom - move down
-					if ( !moved ) { nexty++; nny+=2; moved=true; }
-					break;
-				case DIR_LEFT: // out to left - move left
-					if ( !moved ) { nextx--; nnx-=2; moved=true; }
-					break;
-				default:
-					break;
-			}
-
-			if (moved)
-			{
-				// check next pixel and the one after in the same direction
-				bool found = isAnythingAtXY(&itemlist, nextx-ITEM_CENTRE_OFFSET, nexty-ITEM_CENTRE_OFFSET );
-				found |= isAnythingAtXY(&itemlist, nnx-ITEM_CENTRE_OFFSET, nny-ITEM_CENTRE_OFFSET );
-				if (!found) 
-				{
-					currPtr->x = nextx - ITEM_CENTRE_OFFSET;
-					currPtr->y = nexty - ITEM_CENTRE_OFFSET;
-#if 1
-					// jump the tile to the centre of the belt it just moved into
-					// bit hacky but avoids the item moving outside of the belt
-					tx = (currPtr->x + ITEM_CENTRE_OFFSET) >> 4;
-					ty = (currPtr->y + ITEM_CENTRE_OFFSET) >> 4;
-
-					int newbeltOffset = tx + ty*mapinfo.width;
-					if ( newbeltOffset != beltOffset )
-					{
-						int newbeltID = layer_belts[ newbeltOffset ];
-						if (newbeltID >= 0)
-						{
-							int in = belts[newbeltID].in;
-							switch ( belts[beltID].out ) 
-							{
-								case DIR_UP:
-									if ( in != DIR_DOWN ) { redraw=true; currPtr->y = ty*gTileSize + 4; }
-									break;
-								case DIR_RIGHT:
-									if ( in != DIR_LEFT ) { redraw=true; currPtr->x = tx*gTileSize + 4; }
-									break;
-								case DIR_DOWN:
-									if ( in != DIR_UP ) { redraw=true; currPtr->y = ty*gTileSize + 4; }
-									break;
-								case DIR_LEFT:
-									if ( in != DIR_RIGHT ) { redraw=true; currPtr->x = tx*gTileSize + 4; }
-									break;
-								default:
-									break;
-							}
-						}
-					}
-#endif
-				}
-			}
+			moved = move_item_on_belt(currPtr, in, out, &redraw);
 		}
 
-		// not making a splitter a separate object type as yet 
-		// reuse some of the Machine fields for splitter purposes
-		// ptype - splitter state. Use to lookup TSplitSwitchStates.out[] direction
-		// processTime - (3-bytes int) store ItemNodePtr if an object is moving though it
+		// check movements on splitters
 		MachineHeader *mhp = (MachineHeader*) objectmap[ beltOffset ];
-		if ( mhp && mhp->machine_type == IT_TSPLITTER )
+		if ( !moved && mhp && mhp->machine_type == IT_TSPLITTER )
 		{
 			Machine *mach = (Machine*) mhp;
 			int in = tsplit_states[mach->dir].in;
@@ -2303,60 +2328,13 @@ void move_items(bool bDraw)
 		
 			if ( mach->processTime == (int) currPtr )
 			{
-				// calculate next x,y and next-next x,y
-				int nextx = centrex;
-				int nexty = centrey;
-				int nnx = nextx;
-				int nny = nexty;
-				// check movement on belt towards the centre
-				switch (in)
+				moved = move_item_on_belt(currPtr, in, out, &redraw);
+				
+				if ( moved )
 				{
-					case DIR_UP:  // in from top - move down
-						if ( !moved && dy < 8 ) { nexty++; nny+=2; moved=true; }
-						break;
-					case DIR_RIGHT: // in from right - move left
-						if ( !moved && dx >= 8 ) { nextx--; nnx-=2;  moved=true; }
-						break;
-					case DIR_DOWN: // in from bottom - move up
-						if ( !moved && dy >= 8 ) { nexty--; nny-=2; moved=true; }
-						break;
-					case DIR_LEFT: // in from left - move right
-						if ( !moved && dx < 8 ) { nextx++; nnx+=2; moved=true; }
-						break;
-					default:
-						break;
-				}
-				if (!moved) switch (out)
-				{
-					case DIR_UP: // out to top - move up
-						if ( !moved ) { nexty--; nny-=2; moved=true; }
-						break;
-					case DIR_RIGHT: // out to right - move right
-						if ( !moved ) { nextx++; nnx+=2; moved=true; }
-						break;
-					case DIR_DOWN: // out to bottom - move down
-						if ( !moved ) { nexty++; nny+=2; moved=true; }
-						break;
-					case DIR_LEFT: // out to left - move left
-						if ( !moved ) { nextx--; nnx-=2; moved=true; }
-						break;
-					default:
-						break;
-				}
-				if (moved)
-				{
-					// check next pixel and the one after in the same direction
-					bool found = isAnythingAtXY(&itemlist, nextx-ITEM_CENTRE_OFFSET, nexty-ITEM_CENTRE_OFFSET );
-					found |= isAnythingAtXY(&itemlist, nnx-ITEM_CENTRE_OFFSET, nny-ITEM_CENTRE_OFFSET );
-					if (!found) 
-					{
-						currPtr->x = nextx - ITEM_CENTRE_OFFSET;
-						currPtr->y = nexty - ITEM_CENTRE_OFFSET;
-					}
-
-					// has it moved out of the splitter tile?
 					int newtx = (currPtr->x + ITEM_CENTRE_OFFSET) >> 4;
 					int newty = (currPtr->y + ITEM_CENTRE_OFFSET) >> 4;
+					// has it moved out of the splitter tile?
 					if ( newtx != tx || newty != ty )
 					{
 						// we are ready for a new object
@@ -2368,7 +2346,16 @@ void move_items(bool bDraw)
 			}
 		}
 
-		if ( bDraw && moved )
+		if ( redraw )
+		{
+			int px=getTilePosInScreenX(tx);
+			int py=getTilePosInScreenY(ty);
+			draw_tile(tx, ty, px, py);
+			//draw_machines(tx, ty, px, py);
+			draw_items_at_tile(tx, ty);
+		}
+
+		if ( (bDraw && moved) || redraw )
 		{
 			// get new tx/ty, if there is a belt there fine, otherwise, draw it
 			tx = (currPtr->x + ITEM_CENTRE_OFFSET) >> 4;
