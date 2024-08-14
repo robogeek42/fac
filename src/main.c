@@ -175,7 +175,7 @@ int machine_anim_speed = 30;
 
 // machine update rate - at which it checks if it can prodcuce
 clock_t machine_update_ticks;
-int machine_update_rate = 10;
+int machine_update_rate = 15;
 
 int resourceMultiplier = 32;
 
@@ -494,6 +494,7 @@ int main(int argc, char *argv[])
 		inventory_add_item(inventory, IT_MINER, 10);
 		inventory_add_item(inventory, IT_INSERTER, 10);
 		inventory_add_item(inventory, IT_BOX, 10);
+		inventory_add_item(inventory, IT_TSPLITTER, 10);
 		fac.energy = 1000;
 		if (bShowHud) hud_update_count(fac.energy);
 	}
@@ -632,7 +633,6 @@ void game_loop()
 			TAB(0,29); printf("%d %d i:%d E:%d  ",frame_time_in_ticks,func_time[0], numItems, fac.energy);
 		}
 			
-		vdp_update_key_state();
 		if ( vdp_check_key_press( KEY_p ) ) { // do place - get ready to place an item from inventory
 			if (key_wait_ticks < clock() && cursor_in_range() ) 
 			{
@@ -703,19 +703,18 @@ void game_loop()
 			vdp_refresh_sprites();
 		}
 
-		vdp_update_key_state();
 		if ( vdp_check_key_press( KEY_e ) ) // Bring up inventory
 		{
 			show_inventory(12,12);
 			while ( vdp_check_key_press(KEY_e) );
 		}
-		vdp_update_key_state();
+	
 		if ( vdp_check_key_press( KEY_i ) ) // i for item info
 		{
 			show_info();
 			while ( vdp_check_key_press(KEY_i) );
 		}
-		vdp_update_key_state();
+
 		if ( vdp_check_key_press( KEY_m ) )  // m for MINE
 		{
 			if (key_wait_ticks < clock() && cursor_in_range() ) 
@@ -777,7 +776,6 @@ void game_loop()
 			while ( vdp_check_key_press(KEY_z) );
 		}
 
-		vdp_update_key_state();
 		if ( vdp_check_key_press( KEY_g ) ) // g - generate
 		{
 			int recipe = show_recipe_dialog(IT_ASSEMBLER, true);
@@ -1085,6 +1083,14 @@ int getMachineBMIDmh(MachineHeader *mh)
 	{
 		int bmid = BMOFF_INSERTERS + 3*(mh->dir);
 		bmid += machine_frame;
+
+		return bmid;
+	} else
+	if ( machine_itemtype == IT_TSPLITTER)
+	{
+		Machine *mach = (Machine*) mh;
+		int bmid = BMOFF_TSPLIT + 2*(mach->dir);
+		bmid += mach->ptype; // ptype holds the switch state for a splitter
 
 		return bmid;
 	} else {
@@ -1647,6 +1653,11 @@ void draw_place_machine()
 	{
 		vdp_adv_select_bitmap( BMOFF_INSERTERS + place_belt_index*3 );
 		vdp_draw_bitmap( cursorx, cursory);
+	} else
+	if ( item_selected == IT_TSPLITTER )
+	{
+		vdp_adv_select_bitmap( BMOFF_TSPLIT_ICON + place_belt_index );
+		vdp_draw_bitmap( cursorx, cursory);
 	} else {
 		vdp_adv_select_bitmap( itemtypes[item_selected].bmID );
 		vdp_draw_bitmap( cursorx, cursory);
@@ -1693,7 +1704,7 @@ void draw_cursor(bool draw)
 		}
 		if ( isMachine( item_selected ) )
 		{
-			if (machine_itemtype==IT_ASSEMBLER)
+			if (layer_belts[ cursor_tx+cursor_ty*mapinfo.width ] >= 0 || machine_itemtype==IT_ASSEMBLER)
 			{
 				int it = convertMachineToProduction( item_selected );
 				vdp_adv_select_bitmap( itemtypes[it].bmID );
@@ -2082,6 +2093,14 @@ void do_place()
 					objectmap[tileoffset] = mach;
 				}
 			} else 
+			if ( item_selected == IT_TSPLITTER )
+			{
+				if (inventory_remove_item( inventory, item_selected, 1 ))
+				{
+					// ptype holds the switch state for a splitter
+					objectmap[tileoffset] = addMachine( &machinelist, item_selected, cursor_tx, cursor_ty, place_belt_index, 0, 0, 0);
+				}
+			} else
 			if ( inventory_remove_item( inventory, item_selected, 1 ) )
 			{
 				// generic machine ... e.g. Box
@@ -2267,6 +2286,87 @@ void move_items(bool bDraw)
 			}
 		}
 
+		// not making a splitter a separate object type as yet 
+		// reuse some of the Machine fields for splitter purposes
+		// ptype - splitter state. Use to lookup TSplitSwitchStates.out[] direction
+		// processTime - (3-bytes int) store ItemNodePtr if an object is moving though it
+		MachineHeader *mhp = (MachineHeader*) objectmap[ beltOffset ];
+		if ( mhp && mhp->machine_type == IT_TSPLITTER )
+		{
+			Machine *mach = (Machine*) mhp;
+			int in = tsplit_states[mach->dir].in;
+			int out = tsplit_states[mach->dir].out[mach->ptype];
+			if ( mach->processTime == 0 )
+			{
+				mach->processTime = (int) currPtr;
+			}
+		
+			if ( mach->processTime == (int) currPtr )
+			{
+				// calculate next x,y and next-next x,y
+				int nextx = centrex;
+				int nexty = centrey;
+				int nnx = nextx;
+				int nny = nexty;
+				// check movement on belt towards the centre
+				switch (in)
+				{
+					case DIR_UP:  // in from top - move down
+						if ( !moved && dy < 8 ) { nexty++; nny+=2; moved=true; }
+						break;
+					case DIR_RIGHT: // in from right - move left
+						if ( !moved && dx >= 8 ) { nextx--; nnx-=2;  moved=true; }
+						break;
+					case DIR_DOWN: // in from bottom - move up
+						if ( !moved && dy >= 8 ) { nexty--; nny-=2; moved=true; }
+						break;
+					case DIR_LEFT: // in from left - move right
+						if ( !moved && dx < 8 ) { nextx++; nnx+=2; moved=true; }
+						break;
+					default:
+						break;
+				}
+				if (!moved) switch (out)
+				{
+					case DIR_UP: // out to top - move up
+						if ( !moved ) { nexty--; nny-=2; moved=true; }
+						break;
+					case DIR_RIGHT: // out to right - move right
+						if ( !moved ) { nextx++; nnx+=2; moved=true; }
+						break;
+					case DIR_DOWN: // out to bottom - move down
+						if ( !moved ) { nexty++; nny+=2; moved=true; }
+						break;
+					case DIR_LEFT: // out to left - move left
+						if ( !moved ) { nextx--; nnx-=2; moved=true; }
+						break;
+					default:
+						break;
+				}
+				if (moved)
+				{
+					// check next pixel and the one after in the same direction
+					bool found = isAnythingAtXY(&itemlist, nextx-ITEM_CENTRE_OFFSET, nexty-ITEM_CENTRE_OFFSET );
+					found |= isAnythingAtXY(&itemlist, nnx-ITEM_CENTRE_OFFSET, nny-ITEM_CENTRE_OFFSET );
+					if (!found) 
+					{
+						currPtr->x = nextx - ITEM_CENTRE_OFFSET;
+						currPtr->y = nexty - ITEM_CENTRE_OFFSET;
+					}
+
+					// has it moved out of the splitter tile?
+					int newtx = (currPtr->x + ITEM_CENTRE_OFFSET) >> 4;
+					int newty = (currPtr->y + ITEM_CENTRE_OFFSET) >> 4;
+					if ( newtx != tx || newty != ty )
+					{
+						// we are ready for a new object
+						mach->processTime = 0;
+						// switch the splitter
+						mach->ptype = 1 - mach->ptype;
+					}
+				}
+			}
+		}
 
 		if ( bDraw && moved )
 		{
@@ -3547,8 +3647,12 @@ bool load_game( char *filepath, bool bQuiet )
 		if ( objs_read != 1 ) {
 			msg = "Fail read machines\n"; goto load_game_errexit;
 		}
+		// start machines with an empty item list
 		newmachp->itemlist = NULL;
 		newmachp->ticksTillProduce = 0;
+		// make sure splitters don't have ghosts of items in them
+		if ( newmachp->machine_type == IT_TSPLITTER ) newmachp->processTime = 0;
+
 		insertAtBackThingList( &machinelist, newmachp);
 		objectmap[newmachp->tx + newmachp->ty * mapinfo.width] = newmachp;
 		num_machs--;

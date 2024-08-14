@@ -63,13 +63,21 @@
 
 #define FN_MACH_MINI "img/tm8/mini%02d.rgb2"
 #define BMOFF_MACH_MINI ( BMOFF_ZAP + NUM_BM_ZAP)
-#define NUM_BM_MACH_MINI 6
+#define NUM_BM_MACH_MINI 7
 
 #define FN_BELT_MINI "img/bmini.rgb2"
 #define BMOFF_BELT_MINI ( BMOFF_MACH_MINI + NUM_BM_MACH_MINI )
 #define NUM_BM_BELT_MINI 1
 
-#define TOTAL_BM ( BMOFF_BELT_MINI + NUM_BM_BELT_MINI )
+#define FN_TSPLIT "img/split/split%02d.rgb2"
+#define BMOFF_TSPLIT ( BMOFF_BELT_MINI + NUM_BM_BELT_MINI )
+#define NUM_BM_TSPLIT 8
+
+#define FN_TSPLIT_ICON "img/split/split_icon%02d.rgb2"
+#define BMOFF_TSPLIT_ICON ( BMOFF_TSPLIT + NUM_BM_TSPLIT )
+#define NUM_BM_TSPLIT_ICON 4
+
+#define TOTAL_BM ( BMOFF_TSPLIT_ICON + NUM_BM_TSPLIT_ICON )
 
 #define BOB_SPRITE_DOWN 0
 #define BOB_SPRITE_UP 1
@@ -107,7 +115,7 @@ bool load_images(bool progress, int vert_pos)
 
 	if (progress)
 	{
-		TAB(10,vert_pos);printf("Loading Images");
+		TAB(10,vert_pos);printf("Loading %d Images", TOTAL_BM);
 		progbar = init_horiz_bar(10,8*(vert_pos+2),300,24,0,prog_max,1,3);
 		
 		update_bar(progbar, 0);
@@ -243,6 +251,20 @@ bool load_images(bool progress, int vert_pos)
 	if ( ret < 0 ) return false;
 	if (progress) update_bar(progbar, cnt++);
 
+	for (int fn=1; fn<=NUM_BM_TSPLIT; fn++)
+	{
+		sprintf(fname, FN_TSPLIT, fn);
+		int ret = load_bitmap_file(fname, 16, 16, BMOFF_TSPLIT + fn-1 );
+		if ( ret < 0 ) return false;
+		if (progress) update_bar(progbar, cnt++);
+	}
+	for (int fn=1; fn<=NUM_BM_TSPLIT_ICON; fn++)
+	{
+		sprintf(fname, FN_TSPLIT_ICON, fn);
+		int ret = load_bitmap_file(fname, 16, 16, BMOFF_TSPLIT_ICON + fn-1 );
+		if ( ret < 0 ) return false;
+		if (progress) update_bar(progbar, cnt++);
+	}
 
 #if 0
 	printf("TILES start %d count %d\n",BMOFF_TERR16,NUM_BM_TERR16);

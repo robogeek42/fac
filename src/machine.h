@@ -79,7 +79,7 @@ ProcessType furnaceProcessTypes[NUM_FURNACE_PROCESSES] = {
 	{ {IT_COPPER_ORE,	0,	0}, IT_COPPER_PLATE,{1,0,0},1,1, false},
 };
 
-#define NUM_ASM_PROCESSES 12
+#define NUM_ASM_PROCESSES 13
 #define NUM_MANUAL_ASM_PROCESSES 9
 ProcessType assemblerProcessTypes[NUM_ASM_PROCESSES] = {
 	{ {IT_STONE,			IT_WOOD,		0			}, IT_PROD_FURNACE,		{2, 1, 0}, 1, 2, true },
@@ -94,12 +94,37 @@ ProcessType assemblerProcessTypes[NUM_ASM_PROCESSES] = {
 	{ {IT_STONE_BRICK,		0,				0			}, IT_PAVING,			{4, 0, 0}, 1, 1, false },
 	{ {IT_GEARWHEEL,		IT_MINI_BELT,	IT_CIRCUIT	}, IT_PROD_INSERTER,	{2, 1, 1}, 1, 3, false },
 	{ {IT_PROD_ASSEMBLER,	IT_WIRE,		IT_CIRCUIT	}, IT_COMPUTER,			{1, 2, 2}, 1, 3, false },
+	{ {IT_MINI_BELT,		IT_IRON_PLATE,	IT_CIRCUIT	}, IT_TSPLITTER,		{1, 2, 1}, 1, 3, false },
 };
 
 #define NUM_GENERATOR_PROCESSES 2
 ProcessType generatorProcessTypes[NUM_GENERATOR_PROCESSES] = {
 	{ {IT_WOOD, 0, 0}, 0,	{1,0,0},30,1, false},
 	{ {IT_COAL, 0, 0}, 0,	{1,0,0},120,1, false},
+};
+
+
+// splitter switch states
+typedef struct {
+	uint8_t id;
+	uint8_t in;		// input direction
+	uint8_t out[2]; // state 0/1 output direction
+} TSplitSwitchStates;
+
+#define TSPLIT_0_1 0
+#define TSPLIT_0_3 1
+#define TSPLIT_1_2 2
+#define TSPLIT_1_0 3
+#define TSPLIT_2_1 4
+#define TSPLIT_2_3 5
+#define TSPLIT_3_2 6
+#define TSPLIT_3_0 7
+
+TSplitSwitchStates tsplit_states[8] = {
+	{ 0, 0, {1, 3} },
+	{ 1, 1, {2, 0} },
+	{ 2, 2, {1, 3} },
+	{ 3, 3, {2, 0} }
 };
 
 #endif
@@ -210,7 +235,7 @@ ProcessType* getProcessType(Machine *mach)
 	return pt;
 }
 
-Machine* addMachine( ThingNodePtr *machinelist, uint8_t machine_type, int tx, int ty, uint8_t direction, int speed, int ptype, uint8_t energyCost )
+Machine* addMachine( ThingNodePtr *machinelist, uint8_t machine_type, uint16_t tx, uint16_t ty, uint8_t direction, int speed, int ptype, uint8_t energyCost )
 {
 	Machine *mach = (Machine*) malloc(sizeof(Machine));
 	if ( !mach )
@@ -234,6 +259,7 @@ Machine* addMachine( ThingNodePtr *machinelist, uint8_t machine_type, int tx, in
 	}
 	// set-up the machine 
 	mach->machine_type = machine_type; 
+	mach->dir = direction;
 	mach->tx = tx; 
 	mach->ty = ty;
 	mach->end_tx = end_tx; 
@@ -244,7 +270,6 @@ Machine* addMachine( ThingNodePtr *machinelist, uint8_t machine_type, int tx, in
 	mach->countIn[2] = 0;
 	mach->countOut = 0;
 	mach->processTime = speed;
-	mach->dir = direction;
 	mach->ticksTillProduce = 0;
 	mach->energyCost = energyCost;
 	mach->itemlist = NULL;

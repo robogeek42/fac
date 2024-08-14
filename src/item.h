@@ -108,6 +108,7 @@ enum ItemTypesEnum {
 	IT_INSERTER,
 	IT_BOX,
 	IT_GENERATOR,
+	IT_TSPLITTER,
 
 	IT_TYPES_FEATURES,
 	IT_FEAT_STONE = IT_TYPES_FEATURES,
@@ -130,6 +131,7 @@ enum ItemTypesEnum {
 	IT_PROD_INSERTER,
 	IT_PROD_BOX,
 	IT_PROD_GENERATOR,
+	IT_PROD_TSPLITTER,
 
 	NUM_ITEMTYPES
 };
@@ -155,6 +157,7 @@ static ItemType itemtypes[] = {
     {IT_INSERTER,		"Inserter", 	true, false, false, false, BMOFF_MACH16+3, BM_SIZE16, 0 },
     {IT_BOX,			"Box",		 	true, false, false, false, BMOFF_MACH16+4, BM_SIZE16, 0 },
     {IT_GENERATOR,		"Generator", 	true, false, false, false, BMOFF_MACH16+5, BM_SIZE16, 0 },
+    {IT_TSPLITTER,		"T-Splitter", 	true, false, false, false, BMOFF_TSPLIT_ICON, BM_SIZE16, 0 },
 // Overlays
 	{IT_FEAT_STONE,		"Stone",		false, false, true, false, BMOFF_FEAT16+0, BM_SIZE16, 0 },
 	{IT_FEAT_IRON,		"Iron Ore", 	false, false, true, false, BMOFF_FEAT16+1, BM_SIZE16, 0 },
@@ -174,6 +177,7 @@ static ItemType itemtypes[] = {
     {IT_PROD_INSERTER,	"Inserter",		false, false, false, true, BMOFF_MACH_MINI+3, BM_SIZE8, 0 },
     {IT_PROD_BOX,		"Box",			false, false, false, true, BMOFF_MACH_MINI+4, BM_SIZE8, 0 },
     {IT_PROD_GENERATOR,	"Generator",	false, false, false, true, BMOFF_MACH_MINI+5, BM_SIZE8, 0 },
+    {IT_PROD_TSPLITTER,	"T-Splitter",	false, false, false, true, BMOFF_MACH_MINI+6, BM_SIZE8, 0 },
 	
 };
 
