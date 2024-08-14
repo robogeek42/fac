@@ -94,7 +94,7 @@ ProcessType assemblerProcessTypes[NUM_ASM_PROCESSES] = {
 	{ {IT_STONE_BRICK,		0,				0			}, IT_PAVING,			{4, 0, 0}, 1, 1, false },
 	{ {IT_GEARWHEEL,		IT_MINI_BELT,	IT_CIRCUIT	}, IT_PROD_INSERTER,	{2, 1, 1}, 1, 3, false },
 	{ {IT_PROD_ASSEMBLER,	IT_WIRE,		IT_CIRCUIT	}, IT_COMPUTER,			{1, 2, 2}, 1, 3, false },
-	{ {IT_MINI_BELT,		IT_IRON_PLATE,	IT_CIRCUIT	}, IT_TSPLITTER,		{1, 2, 1}, 1, 3, false },
+	{ {IT_MINI_BELT,		IT_IRON_PLATE,	IT_CIRCUIT	}, IT_PROD_TSPLITTER,	{1, 2, 1}, 1, 3, false },
 };
 
 #define NUM_GENERATOR_PROCESSES 2
