@@ -106,25 +106,15 @@ ProcessType generatorProcessTypes[NUM_GENERATOR_PROCESSES] = {
 
 // splitter switch states
 typedef struct {
-	uint8_t id;
 	uint8_t in;		// input direction
 	uint8_t out[2]; // state 0/1 output direction
 } TSplitSwitchStates;
 
-#define TSPLIT_0_1 0
-#define TSPLIT_0_3 1
-#define TSPLIT_1_2 2
-#define TSPLIT_1_0 3
-#define TSPLIT_2_1 4
-#define TSPLIT_2_3 5
-#define TSPLIT_3_2 6
-#define TSPLIT_3_0 7
-
 TSplitSwitchStates tsplit_states[8] = {
-	{ 0, 0, {1, 3} },
-	{ 1, 1, {2, 0} },
-	{ 2, 2, {1, 3} },
-	{ 3, 3, {2, 0} }
+	{ 2, {1, 3} },
+	{ 3, {2, 0} },
+	{ 0, {1, 3} },
+	{ 1, {2, 0} }
 };
 
 #endif
