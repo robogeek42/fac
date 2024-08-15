@@ -4368,7 +4368,9 @@ void help_machines()
 		"Produce using Recipes",
 		"Grab and move items",
 		"Items go to Inventory",
-   		"Power machines" };
+   		"Power machines",
+		"Split to 2 outputs"
+	};
 	int line = 4; int column = 3;
 	help_clear(32);
 	COL(128);
