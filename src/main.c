@@ -1967,36 +1967,39 @@ void do_place()
 	int machine_itemtype = -1;
 	if (mh && mh->machine_type > 0)
 	{
+		// there is a machine where we are dropping
 		machine_itemtype = mh->machine_type;
 	}
 
+	int beltID = layer_belts[ tileoffset ];
+
+	// dropping a belt
    	if ( isBelt(item_selected) ) {
 		if ( place_belt_selected<0 ) return;
 
-		int beltID = layer_belts[ tileoffset ];
 		int ret = inventory_remove_item( inventory, IT_BELT, 1 );
 		if ( ret >= 0 )
 		{
-			MachineHeader *mh = (MachineHeader*) objectmap[tileoffset];
-			if (mh && mh->machine_type > 0)
+			// dropping a belt into a machine - use the mini-belt
+			if ( machine_itemtype == IT_ASSEMBLER )
 			{
-				int machine_itemtype = mh->machine_type;
-				if ( machine_itemtype == IT_ASSEMBLER )
-				{
-					drop_item(IT_MINI_BELT);
-				}
+				drop_item(IT_MINI_BELT);
 			} else {
+				// same for dropping onto a belt
 				if (beltID>=0)
 				{
 					drop_item(IT_MINI_BELT);
 				} else {
+					// otherwise, just place the actual belt
 					layer_belts[tileoffset] = place_belt_selected;
 				}
 			}
 		}
 	}
+	// dropping a resource or a product
 	if ( isResource(item_selected) || isProduct(item_selected) ) {
 		bool placed=false;
+		// paving - these are placed as terrain
 		if ( item_selected == IT_PAVING )
 		{
 			// no features or machine or anything here?
@@ -2011,6 +2014,7 @@ void do_place()
 				}
 			}
 		} 
+		// all others are just dtopped
 		if (!placed)
 		{
 			int ret = inventory_remove_item( inventory, item_selected, 1 );
@@ -2020,9 +2024,10 @@ void do_place()
 			}
 		}
 	}
+	// dropping a machine
 	if ( isMachine(item_selected) ) {
-		int beltID = layer_belts[ tileoffset ];
 		int mach_mini_it = convertMachineToProduction(item_selected);
+		int mach_maxi_it = convertProductionToMachine(item_selected);
 		if ( beltID >= 0 )
 		{
 			if (inventory_remove_item( inventory, item_selected, 1 ))
@@ -2032,14 +2037,17 @@ void do_place()
 				numItems++;
 			}
 		} else
+		// dropping a machine into an assembler?
 		if (machine_itemtype == IT_ASSEMBLER) 
 		{
 			if (inventory_remove_item( inventory, item_selected, 1 ))
 			{
-				insertItemIntoMachine( item_selected, cursor_tx, cursor_ty, machine_itemtype );
+				insertItemIntoMachine( machine_itemtype, cursor_tx, cursor_ty, mach_maxi_it );
 				numItems++;
 			}
 		} else
+		// drop the machine. In most cases this means creating the machine.
+		// - make sure there isn't anything already there
 		if ( objectmap[tileoffset]==NULL )
 		{
 			// miners can only be placed where there is an overlay resource
@@ -2993,7 +3001,7 @@ void show_info()
 					x = leftx;
 					if ( pt->in[it] > 0 )
 					{
-						int itemBMID = itemtypes[ pt->in[it] ].bmID;
+						int itemBMID = itemtypes[ convertMachineToProduction(pt->in[it]) ].bmID;
 						vdp_adv_select_bitmap( itemBMID );
 						vdp_draw_bitmap( x, infoy+4 + 8*it );
 					} else {
@@ -3820,10 +3828,6 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 
 		if ( ptype >= 0 )
 		{
-			if (isMachine(item)) 
-			{
-				item = item - IT_TYPES_MACHINE + IT_TYPES_MINI_MACHINES;
-			}
 			if (item == IT_BELT)
 			{
 				item = IT_MINI_BELT;
@@ -3892,7 +3896,8 @@ void check_items_on_machines()
 			if ( machine_itemtype == IT_FURNACE || machine_itemtype == IT_BOX ||  machine_itemtype == IT_ASSEMBLER || machine_itemtype == IT_GENERATOR )
 			{
 				int item = currPtr->item;
-				insertItemIntoMachine( machine_itemtype, tx, ty, item );
+				int maxi_item = convertProductionToMachine(item);
+				insertItemIntoMachine( machine_itemtype, tx, ty, maxi_item );
 				ItemNodePtr popped = popItem( &itemlist, currPtr );
 				numItems--;
 				free(popped);
@@ -3905,8 +3910,8 @@ void check_items_on_machines()
 #define RECIPE_EXT_BORDER 5
 #define RECIPE_INT_BORDER 2
 #define RECIPE_NUM_IN_VIEW 6
-#define RECIPE_BOX_WIDTH 120
-#define RECIPE_SELECT_HEIGHT 24
+#define RECIPE_BOX_WIDTH 128
+#define RECIPE_SELECT_HEIGHT 22
 #define RECIPE_TITLE_HEIGHT 10
 int show_recipe_dialog(int machine_type, bool bManual)
 {
@@ -4000,34 +4005,66 @@ int show_recipe_dialog(int machine_type, bool bManual)
 				vdp_gcol(0, 11);
 				int xx = offx + RECIPE_EXT_BORDER + 2;
 				int yy = box_offsetsY[j-from_process] + 2;
-
+				int overflowx = 0; int overflowy = 0;
+				// recipe number
 				draw_number_lj( j, xx, yy+2 );
 				xx+=8;
+				// inputs
 				for (int i=0; i < processType[j].innum; i++ )
 				{
-					int itemBMID = itemtypes[ processType[j].in[i] ].bmID;
-					for (int k=0; k<processType[j].incnt[i]; k++)
+					int itemBMID = itemtypes[ convertMachineToProduction(processType[j].in[i]) ].bmID;
+					if ( xx > offx + 88 ) {
+						overflowx = xx; overflowy = yy;
+						xx = offx + RECIPE_EXT_BORDER + 10;
+						yy += 8;
+					}
+					// either show icons
+					if ( processType[j].incnt[i] < 4 )
 					{
+						for (int k=0; k<processType[j].incnt[i]; k++)
+						{
+							vdp_adv_select_bitmap( itemBMID );
+							vdp_draw_bitmap( xx, yy );
+							xx += 10;
+						}
+					} else {
+						// or the icon and a count
 						vdp_adv_select_bitmap( itemBMID );
 						vdp_draw_bitmap( xx, yy );
-						xx += 10;
+						xx += 8;
+						vdp_move_to( xx, yy ); printf("x%d",processType[j].incnt[i]);
+						xx +=18; if ( processType[j].incnt[i] >=10 ) xx += 10;
 					}
+					// plus sign between inputs
 					if ( i <  processType[j].innum -1 )
 					{
 						vdp_move_to( xx, yy ); printf("+");
 						xx += 10;
 					}
 				}
-				vdp_move_to( xx, yy ); printf("%c",CHAR_RIGHTARROW);
-				xx += 10;
+				if (overflowx==0) 
+				{
+					// arrow
+					vdp_move_to( xx, yy ); printf("%c",CHAR_RIGHTARROW);
+					xx += 10;
+				} else {
+					xx = overflowx;
+					yy = overflowy;
+					vdp_move_to( xx, yy+4 ); printf("%c",CHAR_RIGHTARROW);
+					xx += 10;
+				}
+
+				// outputs
 				int out_itemtype = convertProductionToMachine(processType[j].out);
 				int itemBMID = itemtypes[ out_itemtype ].bmID;
 
+				// generators show energy produced
 				if ( machine_type == IT_GENERATOR )
 				{
 					vdp_move_to( xx, yy ); printf("%dE",processType[j].outcnt);
 					xx += 10;
 				} else {
+					// otherwise show output bitmaps
 					for (int k=0; k<processType[j].outcnt; k++)
 					{
 						vdp_adv_select_bitmap( itemBMID );
@@ -4369,7 +4406,8 @@ void help_machines()
 		"Grab and move items",
 		"Items go to Inventory",
    		"Power machines",
-		"Split to 2 outputs"
+		"Split to 2 outputs",
+		"Enter to escape"
 	};
 	int line = 4; int column = 3;
 	help_clear(32);
@@ -4386,6 +4424,10 @@ void help_machines()
 	COL(4);
 	for (int it=IT_TYPES_MACHINE; it<IT_TYPES_FEATURES; it++)
 	{
+		if (it == IT_ESCPOD) {
+			COL(11); TAB(column,line++); printf("Rockets");
+		}
+			
 		help_item(column,line,it,0, text[it-IT_TYPES_MACHINE], 4); 
 		line+=2;
 	}

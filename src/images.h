@@ -27,7 +27,7 @@
 
 #define FN_MACH16 "img/tm16/tm%02d.rgb2"
 #define BMOFF_MACH16 ( BMOFF_ITEM8 + NUM_BM_ITEM8 )
-#define NUM_BM_MACH16 6
+#define NUM_BM_MACH16 8
 
 #define FN_NUMS "img/nums4x5/num%01d.rgb2"
 #define BMOFF_NUMS ( BMOFF_MACH16 + NUM_BM_MACH16 )
@@ -63,7 +63,7 @@
 
 #define FN_MACH_MINI "img/tm8/mini%02d.rgb2"
 #define BMOFF_MACH_MINI ( BMOFF_ZAP + NUM_BM_ZAP)
-#define NUM_BM_MACH_MINI 7
+#define NUM_BM_MACH_MINI 8
 
 #define FN_BELT_MINI "img/bmini.rgb2"
 #define BMOFF_BELT_MINI ( BMOFF_MACH_MINI + NUM_BM_MACH_MINI )
