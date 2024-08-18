@@ -46,8 +46,8 @@ int gTileSize = 16;
 int gScreenWidthTiles = 20;
 int gScreenHeightTiles = 15;
 
-int gMapTW = 14;
-int gMapTH = 14;
+int gMapViewTW = 14;
+int gMapViewTH = 14;
 int gViewOffX = 12;
 int gViewOffY = 8;
 
@@ -221,10 +221,10 @@ void game_loop()
 		if ( vdp_check_key_press( KEY_UP ) ) {cursor_dir |= BITS_UP; scroll_tiles=1; }
 		if ( vdp_check_key_press( KEY_DOWN ) ) {cursor_dir |= BITS_DOWN; scroll_tiles=1; }
 
-		if ( vdp_check_key_press( KEY_home ) ) {cursor_dir |= BITS_LEFT; scroll_tiles=gMapTW; }
-		if ( vdp_check_key_press( KEY_end ) ) {cursor_dir |= BITS_RIGHT; scroll_tiles=gMapTW; }
-		if ( vdp_check_key_press( KEY_pageup ) ) {cursor_dir |= BITS_UP; scroll_tiles=gMapTH; }
-		if ( vdp_check_key_press( KEY_pagedown ) ) {cursor_dir |= BITS_DOWN; scroll_tiles=gMapTH; }
+		if ( vdp_check_key_press( KEY_home ) ) {cursor_dir |= BITS_LEFT; scroll_tiles=gMapViewTW; }
+		if ( vdp_check_key_press( KEY_end ) ) {cursor_dir |= BITS_RIGHT; scroll_tiles=gMapViewTW; }
+		if ( vdp_check_key_press( KEY_pageup ) ) {cursor_dir |= BITS_UP; scroll_tiles=gMapViewTH; }
+		if ( vdp_check_key_press( KEY_pagedown ) ) {cursor_dir |= BITS_DOWN; scroll_tiles=gMapViewTH; }
 
 		// move the cursor
 		if (cursor_dir>0 && ( key_wait_ticks < clock() ) ) {
@@ -240,13 +240,13 @@ void game_loop()
 			{
 				if ( cursor_tx < fac.mapWidth - 1 ) { cursor_tx += MIN( scroll_tiles, fac.mapWidth-cursor_tx); } 
 				if ( cursor_tx > fac.mapWidth - 1 ) cursor_tx = fac.mapWidth -1;
-				if ( cursor_tx >= scr_tx + gMapTW ) { dir=SCROLL_RIGHT; }
+				if ( cursor_tx >= scr_tx + gMapViewTW ) { dir=SCROLL_RIGHT; }
 			}
 			if ( cursor_dir & BITS_DOWN )
 			{
 				if ( cursor_ty < fac.mapHeight - 1 ) { cursor_ty += MIN( scroll_tiles, fac.mapHeight-cursor_ty); }
 				if ( cursor_ty > fac.mapHeight - 1 ) cursor_ty = fac.mapHeight -1;
-				if ( cursor_ty >= scr_ty + gMapTH ) { dir=SCROLL_DOWN; }
+				if ( cursor_ty >= scr_ty + gMapViewTH ) { dir=SCROLL_DOWN; }
 			}
 			if ( cursor_dir & BITS_LEFT )
 			{
@@ -377,7 +377,7 @@ void game_loop()
 			delete_tile(false);
 		}
 
-		if ( vdp_check_key_press( KEY_t ) && key_wait_ticks < clock() ) // select tileset
+		if ( ( vdp_check_key_press( KEY_t )|| vdp_check_key_press( KEY_tab ) ) && key_wait_ticks < clock() ) // select tileset
 		{
 			key_wait_ticks = clock() + key_wait;
 			ts++; ts %= NUM_TILESETS;
@@ -455,10 +455,10 @@ void scroll_screen(int dir, int tiles)
 			}
 			break;
 		case SCROLL_RIGHT:
-			if ((scr_tx + gMapTW + tiles ) < fac.mapWidth) {
+			if ((scr_tx + gMapViewTW + tiles ) < fac.mapWidth) {
 				scr_tx += tiles;
 			} else {
-				scr_tx = fac.mapWidth - gMapTW;
+				scr_tx = fac.mapWidth - gMapViewTW;
 			}
 			break;
 		case SCROLL_UP:
@@ -469,10 +469,10 @@ void scroll_screen(int dir, int tiles)
 			}
 			break;
 		case SCROLL_DOWN:
-			if ((scr_ty + gMapTH + tiles ) < fac.mapHeight) {
+			if ((scr_ty + gMapViewTH + tiles ) < fac.mapHeight) {
 				scr_ty += tiles;
 			} else {
-				scr_ty = fac.mapHeight - gMapTH;
+				scr_ty = fac.mapHeight - gMapViewTH;
 			}
 			break;
 		default:
@@ -699,34 +699,34 @@ void draw_screen()
 {
 	if (fac.mapWidth<0) return;
 
-	for (int i=0; i < gMapTH; i++) 
+	for (int i=0; i < gMapViewTH; i++) 
 	{
-		draw_horizontal(scr_tx, scr_ty+i, gMapTW);
+		draw_horizontal(scr_tx, scr_ty+i, gMapViewTW);
 	}
 
 	if (bGridLines)
 	{
 		vdp_gcol(0,8);
-		for (int x=0; x<(gMapTW)*gTileSize; x+=gTileSize)
+		for (int x=0; x<(gMapViewTW)*gTileSize; x+=gTileSize)
 		{
 			vdp_move_to(x+gViewOffX,0+gViewOffY);
-			vdp_line_to(x+gViewOffX,gMapTH*gTileSize-1+gViewOffY);
+			vdp_line_to(x+gViewOffX,gMapViewTH*gTileSize-1+gViewOffY);
 		}	
-		for (int y=0; y<(gMapTH)*gTileSize; y+=gTileSize)
+		for (int y=0; y<(gMapViewTH)*gTileSize; y+=gTileSize)
 		{
 			vdp_move_to(0+gViewOffX,y+gViewOffY);
-			vdp_line_to(gMapTW*gTileSize-1+gViewOffX,y+gViewOffY);
+			vdp_line_to(gMapViewTW*gTileSize-1+gViewOffX,y+gViewOffY);
 		}	
 	}
 	if (bTileNumbers)
 	{
-		draw_filled_box(0,0,gViewOffX+gMapTW*gTileSize,gViewOffY,0,0);
-		for (int tx=0; tx < gMapTW; tx++)
+		draw_filled_box(0,0,gViewOffX+gMapViewTW*gTileSize,gViewOffY,0,0);
+		for (int tx=0; tx < gMapViewTW; tx++)
 		{
 			draw_number_lj( tx+scr_tx, (tx*gTileSize)+gViewOffX+4, gViewOffY-6); 
 		}
-		draw_filled_box(0,0,gViewOffX, gViewOffY+gMapTH*gTileSize,0,0);
-		for (int ty=0; ty < gMapTH; ty++)
+		draw_filled_box(0,0,gViewOffX, gViewOffY+gMapViewTH*gTileSize,0,0);
+		for (int ty=0; ty < gMapViewTH; ty++)
 		{
 			draw_number( ty+scr_ty, gViewOffX, (ty*gTileSize)+gViewOffY+6); 
 		}
@@ -756,15 +756,15 @@ void draw_block()
 	if (bGridLines)
 	{
 		vdp_gcol(0,8);
-		for (int x=0; x<(gMapTW)*gTileSize; x+=gTileSize)
+		for (int x=0; x<(gMapViewTW)*gTileSize; x+=gTileSize)
 		{
 			vdp_move_to(x+gViewOffX,0+gViewOffY);
-			vdp_line_to(x+gViewOffX,gMapTH*gTileSize-1+gViewOffY);
+			vdp_line_to(x+gViewOffX,gMapViewTH*gTileSize-1+gViewOffY);
 		}	
-		for (int y=0; y<(gMapTH)*gTileSize; y+=gTileSize)
+		for (int y=0; y<(gMapViewTH)*gTileSize; y+=gTileSize)
 		{
 			vdp_move_to(0+gViewOffX,y+gViewOffY);
-			vdp_line_to(gMapTW*gTileSize-1+gViewOffX,y+gViewOffY);
+			vdp_line_to(gMapViewTW*gTileSize-1+gViewOffX,y+gViewOffY);
 		}	
 	}
 	if (bBlockSelect)
@@ -841,7 +841,7 @@ void draw_number_lj(int n, int px, int py)
 void draw_tile_menu()
 {
 	int ytop = 0;
-	int xleft = gMapTW*gTileSize+gViewOffX;
+	int xleft = gMapViewTW*gTileSize+gViewOffX;
 	int x = xleft;
 	int y = ytop;
 
@@ -887,6 +887,13 @@ void draw_tile_menu()
 		vdp_adv_select_bitmap( tileset[ts].set[i] );
 		vdp_draw_bitmap(xleft+i*(gTileSize+1)+12, ytop);
 	}
+
+	vdp_write_at_graphics_cursor();
+	vdp_gcol(0,15);
+	vdp_move_to(xleft+8, gScreenHeight - 16);
+	printf("%dx%d", fac.mapWidth, fac.mapHeight);
+	vdp_write_at_text_cursor();
+
 }
 
 void delete_tile(bool bOverlayOnly)
@@ -1132,7 +1139,7 @@ void draw_mini_map()
 			vdp_filled_rect( tx * gMinimapScale + offx + gMinimapScale-1, ty * gMinimapScale + offy + gMinimapScale-1 );
 		}
 	}
-	draw_box(scr_tx * gMinimapScale + offx, scr_ty * gMinimapScale + offy, gMapTW * gMinimapScale, gMapTH * gMinimapScale, 8 );
+	draw_box(scr_tx * gMinimapScale + offx, scr_ty * gMinimapScale + offy, gMapViewTW * gMinimapScale, gMapViewTH * gMinimapScale, 8 );
 	
 	while( vdp_check_key_press( KEY_h ) )
 	{
@@ -1208,15 +1215,18 @@ printf("c");
 
 void new_mode()
 {
-
-	vdp_cls();
-	TAB(2,2);printf("0 Mode 8 320x240 64 cols ");
-	TAB(2,3);printf("1 Mode 0 640x480 16 cols (False Cols)");
-	TAB(2,4);printf("2 Mode 3 640x240 64 cols ");
-	int choice = input_int_noclear(2,6,"Enter choice 0-3");
+	int choice = 0;
+	while (choice < 1 || choice > 3)
+	{
+		vdp_cls();
+		TAB(2,2);printf("1 Mode 8 320x240 64 cols ");
+		TAB(2,3);printf("2 Mode 0 640x480 16 cols (False Cols)");
+		TAB(2,4);printf("3 Mode 3 640x240 64 cols ");
+		choice = input_int_noclear(2,6,"Enter choice 1-3");
+	}
 	switch (choice)
 	{
-		case 0:
+		case 1:
 		default:
 			gMode = 8; 
 			gScreenWidth = 320;
@@ -1224,30 +1234,30 @@ void new_mode()
 			gTileSize = 16;
 			gScreenWidthTiles = 20;
 			gScreenHeightTiles = 15;
-			gMapTW = 14;
-			gMapTH = 14;
+			gMapViewTW = 14;
+			gMapViewTH = 14;
 			gMinimapScale= 2;
 			break;
-		case 1:
+		case 2:
 			gMode = 0; 
 			gScreenWidth = 640;
 			gScreenHeight = 480;
 			gTileSize = 16;
 			gScreenWidthTiles = 40;
 			gScreenHeightTiles = 30;
-			gMapTW = 34;
-			gMapTH = 29;
+			gMapViewTW = 34;
+			gMapViewTH = 29;
 			gMinimapScale= 4;
 			break;
-		case 2:
+		case 3:
 			gMode = 3; 
 			gScreenWidth = 640;
 			gScreenHeight = 240;
 			gTileSize = 16;
 			gScreenWidthTiles = 40;
 			gScreenHeightTiles = 15;
-			gMapTW = 34;
-			gMapTH = 14;
+			gMapViewTW = 34;
+			gMapViewTH = 14;
 			gMinimapScale= 2;
 			break;
 	}
