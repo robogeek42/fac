@@ -59,9 +59,9 @@ int inventory_find_item(INV_ITEM *inv, uint8_t item)
 // return -1 if inventory is full
 int inventory_add_item(INV_ITEM *inv, uint8_t item, int count)
 {
-	int index = inventory_find_item(inv, item);
-	if ( count <= 0) return index;
+	if ( count <= 0) return 0;
 
+	int index = inventory_find_item(inv, item);
 	// could not find item type in inventory
 	if (index < 0)
 	{

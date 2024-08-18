@@ -28,6 +28,7 @@ extern uint8_t key_pressed_code;
 int target_item_type = -1;
 int target_items = 0;
 int target_item_count = 0;
+char selected_map[40] = "maps/m5res";
 //------------------------------------------------------------
 
 #include "item.h"
@@ -307,6 +308,8 @@ int convertProductionToMachine( int it );
 int convertMachineToProduction( int it );
 int load_sound_sample(char *fname, int sample_id);
 bool load_sound_samples(int vert_pos);
+void walking_sound_enable( bool enable );
+void select_game();
 
 #define _MESSAGE_IMPLEMENTATION
 #include "message.h"
@@ -450,8 +453,10 @@ int main(int argc, char *argv[])
 		goto my_exit2;
 	}
 
+	select_game();
+
 	clear_map();
-	load_game_map("maps/m4");
+	load_game_map(selected_map);
 
 	/* start bob and screen centred in map */
 	fac.bobx = (mapinfo.width * gTileSize / 2) & 0xFFFFF0;
@@ -477,12 +482,13 @@ int main(int argc, char *argv[])
 	// Add some default items 
 	inventory_init(inventory);
 	// for test add some items
-	inventory_add_item(inventory, IT_BELT, 100); // belt
+	inventory_add_item(inventory, IT_BELT, 16); // belt
 	inventory_add_item(inventory, IT_GENERATOR, 1);
 	if (bIsTest)
 	{
-		inventory_add_item(inventory, IT_STONE, 20);
-		inventory_add_item(inventory, IT_WOOD, 20);
+		inventory_add_item(inventory, IT_BELT, 84);
+		inventory_add_item(inventory, IT_STONE, 80);
+		inventory_add_item(inventory, IT_WOOD, 80);
 		inventory_add_item(inventory, IT_COAL, 100);
 		inventory_add_item(inventory, IT_IRON_PLATE, 20);
 		inventory_add_item(inventory, IT_COPPER_PLATE, 20);
@@ -582,8 +588,7 @@ void game_loop()
 		     !vdp_check_key_press( KEY_s ) && 
 		     !vdp_check_key_press( KEY_d ) )
 		{
-			vdp_audio_set_volume( SOUND_CHAN_STEPS, 0);
-			bPlayingWalkSound = false;
+			walking_sound_enable( false );
 		}
 
 		// cursor movement
@@ -670,6 +675,7 @@ void game_loop()
 
 		if (  vdp_check_key_press( KEY_enter ) && cursor_in_range()  ) // ENTER - start placement state
 		{
+			walking_sound_enable( false );
 			do_place();
 			while ( vdp_check_key_press(KEY_enter) );
 		}
@@ -691,6 +697,7 @@ void game_loop()
 		}
 
 		if ( vdp_check_key_press( KEY_x ) || vdp_check_key_press( KEY_escape ) ) { // x - exit
+			walking_sound_enable( false );
 			vdp_activate_sprites(0);
 			draw_filled_box( 70, 84, 180, 30, 11, 0 );
 			COL(128+0);COL(15);TAB(10,12);printf("EXIT: Are you sure?");
@@ -705,12 +712,14 @@ void game_loop()
 
 		if ( vdp_check_key_press( KEY_e ) ) // Bring up inventory
 		{
+			walking_sound_enable( false );
 			show_inventory(12,12);
 			while ( vdp_check_key_press(KEY_e) );
 		}
 	
 		if ( vdp_check_key_press( KEY_i ) ) // i for item info
 		{
+			walking_sound_enable( false );
 			show_info();
 			while ( vdp_check_key_press(KEY_i) );
 		}
@@ -778,6 +787,7 @@ void game_loop()
 
 		if ( vdp_check_key_press( KEY_g ) ) // g - generate
 		{
+			walking_sound_enable( false );
 			int recipe = show_recipe_dialog(IT_ASSEMBLER, true);
 			if ( recipe >= 0 )
 			{
@@ -845,12 +855,14 @@ void game_loop()
 
 		if ( vdp_check_key_press( KEY_f ) ) // file dialog
 		{
+			walking_sound_enable( false );
 			show_filedialog();
 			key_wait_ticks = clock() + key_wait;
 		}
 
 		if ( vdp_check_key_press( KEY_h ) ) // help dialog
 		{
+			walking_sound_enable( false );
 			while ( vdp_check_key_press( KEY_h ) );
 			show_help();
 		}
@@ -864,6 +876,7 @@ void game_loop()
 
 		if ( vdp_check_key_press( KEY_c ) ) // recentre cursor on Bob
 		{
+			stop_place(); 
 			while ( vdp_check_key_press( KEY_c ) );
 			reset_cursor();
 		}
@@ -1550,9 +1563,7 @@ bool move_bob(int dir, int speed)
 
 	if (moved) {
 		if ( bSoundEnabled && !bPlayingWalkSound ) {
-			bPlayingWalkSound = true;
-			vdp_audio_sample_seek( SOUND_CHAN_STEPS, 0 );
-			vdp_audio_set_volume( SOUND_CHAN_STEPS, sound_volume );
+			walking_sound_enable( true );
 		}
 	}
 
@@ -1990,8 +2001,12 @@ void do_place()
 				{
 					drop_item(IT_MINI_BELT);
 				} else {
-					// otherwise, just place the actual belt
-					layer_belts[tileoffset] = place_belt_selected;
+					// don't place on water
+					if ( (tilemap[tileoffset] & 0x0F) != 0 )
+					{
+						// otherwise, just place the actual belt
+						layer_belts[tileoffset] = place_belt_selected;
+					}
 				}
 			}
 		}
@@ -2030,7 +2045,7 @@ void do_place()
 		int mach_maxi_it = convertProductionToMachine(item_selected);
 		if ( beltID >= 0 )
 		{
-			if (inventory_remove_item( inventory, item_selected, 1 ))
+			if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
 			{
 				// place the 8x8 resource item in the centre of the square
 				insertAtFrontItemList(&itemlist, mach_mini_it, cursor_tx*gTileSize + 4, cursor_ty*gTileSize + 4);
@@ -2040,7 +2055,7 @@ void do_place()
 		// dropping a machine into an assembler?
 		if (machine_itemtype == IT_ASSEMBLER) 
 		{
-			if (inventory_remove_item( inventory, item_selected, 1 ))
+			if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
 			{
 				insertItemIntoMachine( machine_itemtype, cursor_tx, cursor_ty, mach_maxi_it );
 				numItems++;
@@ -2056,7 +2071,7 @@ void do_place()
 				uint8_t overlay = getOverlayAtCursor();
 				if ( overlay > 0 )
 				{
-					if (inventory_remove_item( inventory, item_selected, 1 ))
+					if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
 					{
 						int feat_type = item_feature_map[overlay-1].feature_type;
 						uint8_t raw_item = process_map[feat_type - IT_FEAT_STONE].raw_type;
@@ -2068,7 +2083,7 @@ void do_place()
 			if ( item_selected == IT_FURNACE )
 			{
 				int recipe = show_recipe_dialog(IT_FURNACE, false);
-				if (inventory_remove_item( inventory, item_selected, 1 ))
+				if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
 				{
 					Machine *mach = addFurnace( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
 					objectmap[tileoffset] = mach;
@@ -2077,7 +2092,7 @@ void do_place()
 			if ( item_selected == IT_ASSEMBLER )
 			{
 				int recipe = show_recipe_dialog(IT_ASSEMBLER, false);
-				if (inventory_remove_item( inventory, item_selected, 1 ))
+				if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
 				{
 					Machine *mach = addAssembler( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
 					objectmap[tileoffset] = mach;
@@ -2086,7 +2101,7 @@ void do_place()
 			if ( item_selected == IT_INSERTER )
 			{
 				int filter_item = show_item_dialog();
-				if ( inventory_remove_item( inventory, item_selected, 1 ) ) // take from inventory
+				if ( inventory_remove_item( inventory, item_selected, 1 ) >= 0 ) // take from inventory
 				{
 					Inserter *insp = addInserter(&inserterlist, cursor_tx, cursor_ty, place_belt_index, filter_item);
 					objectmap[tileoffset] = insp;
@@ -2095,7 +2110,7 @@ void do_place()
 			if ( item_selected == IT_GENERATOR )
 			{
 				int recipe = show_recipe_dialog(IT_GENERATOR, false);
-				if (inventory_remove_item( inventory, item_selected, 1 ))
+				if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
 				{
 					Machine *mach = addGenerator( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
 					objectmap[tileoffset] = mach;
@@ -2107,12 +2122,12 @@ void do_place()
 				// reuse some of the Machine fields for splitter purposes
 				// ptype - splitter state. Use to lookup TSplitSwitchStates.out[] direction
 				// processTime - (3-bytes int) store ItemNodePtr if an object is moving though it
-				if (inventory_remove_item( inventory, item_selected, 1 ))
+				if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
 				{
 					objectmap[tileoffset] = addMachine( &machinelist, item_selected, cursor_tx, cursor_ty, place_belt_index, 0, 0, 0);
 				}
 			} else
-			if ( inventory_remove_item( inventory, item_selected, 1 ) )
+			if ( inventory_remove_item( inventory, item_selected, 1 ) >= 0 )
 			{
 				// generic machine ... e.g. Box
 				objectmap[tileoffset] = addMachine( &machinelist, item_selected, cursor_tx, cursor_ty, 0, 100, 0, 0);
@@ -4767,4 +4782,21 @@ bool load_sound_samples(int vert_pos)
 	delete_bar(&progbar);
 
 	return true;
+}
+
+void walking_sound_enable( bool enable )
+{
+	if ( enable )
+	{
+		bPlayingWalkSound = true;
+		vdp_audio_sample_seek( SOUND_CHAN_STEPS, 0 );
+		vdp_audio_set_volume( SOUND_CHAN_STEPS, sound_volume );
+	} else {
+		bPlayingWalkSound = false;
+		vdp_audio_set_volume( SOUND_CHAN_STEPS, 0 );
+	}
+}
+
+void select_game()
+{
 }

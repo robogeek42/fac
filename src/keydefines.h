@@ -113,7 +113,7 @@
 #define KEY_backspace 0x84
 #define KEY_home 0x85
 #define KEY_end 0x87
-#define KEY_tab 0x8F
+#define KEY_tab 0x8E
 #define KEY_enter 0x8F
 #define KEY_pageup 0x92
 #define KEY_pagedown 0x94
