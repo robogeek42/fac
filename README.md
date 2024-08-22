@@ -43,4 +43,3 @@ If you are too far away to do an action the yellow cursor turns grey.
 - more sounds. Machines?
 - Music??
 - Enemies .... 
-- Floating HUD ? Could impelement with a big Sprite?
