@@ -525,10 +525,17 @@ void game_loop()
 		// scroll the screen AND/OR move Bob
 		if ( dir>=0 && ( move_wait_ticks < clock() ) ) {
 			move_wait_ticks = clock()+1;
-			int move_amount = 1;
-			if (frame_time_in_ticks>=4) move_amount=2;
-			if (frame_time_in_ticks>=8) move_amount=4;
-			if (frame_time_in_ticks>=16) move_amount=8;
+
+			int run_mult = 1;
+			int tileoffset = getTileX(fac.bobx+7) + getTileY(fac.boby+7)*mapinfo.width;
+			if ( (tilemap[tileoffset] & 0x0F) == 13)
+			{
+				run_mult = 2;
+			}
+			int move_amount = run_mult;
+			if (frame_time_in_ticks>=4) move_amount=2*run_mult;
+			if (frame_time_in_ticks>=8) move_amount=4*run_mult;
+			if (frame_time_in_ticks>=16) move_amount=8*run_mult;
 			
 			// screen can scroll, move Bob AND screen
 			if ( can_scroll_screen(dir, move_amount) )
