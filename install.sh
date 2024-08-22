@@ -22,8 +22,10 @@ if [ ! -d $FACDIR/maps ]
 then
 	mkdir -p $FACDIR/maps
 fi
-cp maps/splash* $FACDIR/maps
-cp maps/m4* $FACDIR/maps
+cp maps/splash2* $FACDIR/maps
+cp maps/splash_save.data $FACDIR/maps
+cp maps/m4mod* $FACDIR/maps
+cp maps/m5res* $FACDIR/maps
 
 echo "create saves dir"
 if [ ! -d $FACDIR/saves ]
