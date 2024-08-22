@@ -24,11 +24,23 @@ extern uint8_t key_pressed_code;
 #define DIR_DOWN 2
 #define DIR_LEFT 3
 
+#define DIR_OPP(D) ((D+2)%4)
+
 //------------------------------------------------------------
 int target_item_type = -1;
-int target_items = 0;
 int target_item_count = 0;
-char selected_map[40] = "maps/m5res";
+int target_item_current = 0;
+bool bWinMessageDisplayed = false;
+
+#define MAX_MAPNAME_SIZE 40
+typedef struct {
+	char name[MAX_MAPNAME_SIZE];
+	int target_item_type;
+	int target_item_count;
+	char desc[60];
+} Maps;
+int selected_map = 0;
+
 //------------------------------------------------------------
 
 #include "item.h"
@@ -48,6 +60,36 @@ char selected_map[40] = "maps/m5res";
 #include "hud.h"
 
 #include "message.h"
+
+//#define SPLASH_EDIT
+#ifdef SPLASH_EDIT
+#define NUM_AVAILABLE_MAPS 3
+#else
+#define NUM_AVAILABLE_MAPS 2
+#endif
+Maps available_maps[NUM_AVAILABLE_MAPS] = {
+	{
+		"maps/m5res",
+		IT_COMPUTER,
+		10,
+		"Small."
+	},
+	{
+		"maps/m4mod",
+		IT_ESCPOD,
+		1,
+		"Large."
+	},
+#ifdef SPLASH_EDIT
+	{
+		"maps/splash2",
+		IT_COMPUTER,
+		1,
+		"Splash"
+	},
+#endif
+};
+
 
 int gMode = 8; 
 int gScreenWidth = 320;
@@ -77,7 +119,7 @@ int numItems;
 bool debug = false;
 
 char sigref[4] = "FAC";
-#define SAVE_VERSION 1
+#define SAVE_VERSION 2
 
 #define MACH_NEED_ENERGY
 #define CURSOR_RANGE
@@ -93,6 +135,8 @@ typedef struct {
 	int bobx;
 	int boby;		// Position of character in world coords (pixel)
 	int energy;
+	char mapname[MAX_MAPNAME_SIZE];
+	int resourceMultiplier;
 } FacState;
 
 FacState fac;
@@ -178,8 +222,6 @@ int machine_anim_speed = 30;
 clock_t machine_update_ticks;
 int machine_update_rate = 15;
 
-int resourceMultiplier = 32;
-
 //------------------------------------------------------------
 // Configuration vars
 int belt_speed = 7;
@@ -220,101 +262,25 @@ bool bShowHud = true;
 int hud_posx = 4;
 int hud_posy = 4;
 
-//------------------------------------------------------------
-//Function defs
-void wait();
-void change_mode(int mode);
-
-void game_loop();
-
-void load_custom_chars();
-int getWorldCoordX(int sx) { return (fac.xpos + sx); }
-int getWorldCoordY(int sy) { return (fac.ypos + sy); }
-int getTileX(int sx) { return (sx/gTileSize); }
-int getTileY(int sy) { return (sy/gTileSize); }
-int getTilePosInScreenX(int tx) { return ((tx * gTileSize) - fac.xpos); }
-int getTilePosInScreenY(int ty) { return ((ty * gTileSize) - fac.ypos); }
-
-bool cursor_in_range();
-void draw_tile(int tx, int ty, int tposx, int tposy);
-void draw_machines(int tx, int ty, int tposx, int tposy, bool bDrawExtensionTile);
-void draw_screen();
-void scroll_screen(int dir, int step);
-bool can_scroll_screen(int dir, int step);
-void draw_horizontal(int tx, int ty, int len);
-void draw_vertical(int tx, int ty, int len);
-
-bool check_dir_exists(char *path);
-int load_map(char *mapname);
-int load_map_info( char *filename);
-void load_resource_data();
-void clear_map();
-
-int readTileInfoFile(char *path, TileInfoFile *tif, int items);
-
-void draw_bob(int bx, int by, int px, int py);
-bool move_bob(int dir, int speed);
-
-void start_place();
-void stop_place();
-void draw_cursor(bool draw);
-void draw_place_belt();
-
-void do_place();
-void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty);
-
-void draw_layer(bool draw_items);
-void draw_horizontal_layer(int tx, int ty, int len, bool bdraw_belts, bool bdraw_machines, bool bdraw_items);
-
-void drop_item(int item);
-
-void move_items(bool bDraw);
-void inserters_pull_from_box();
-void move_items_on_inserters(bool bDraw);
-void move_items_on_machines(bool bDraw);
-void draw_items();
-void draw_items_at_tile(int tx, int ty);
-
-void show_inventory(int X, int Y);
-void draw_digit(int i, int px, int py);
-void draw_number(int n, int px, int py);
-void draw_number_lj(int n, int px, int py);
-void show_info();
-void do_mining();
-bool check_can_mine();
-void removeAtCursor();
-void pickupItemsAtTile(int tx, int ty);
-bool save_game( char *filepath );
-bool load_game( char *filepath, bool bQuiet );
-void show_filedialog();
-bool isValid( int machine_byte );
-int getMachineBMID(int tx, int ty);
-int getMachineBMIDmh(MachineHeader *mh);
-int getMachineItemType(uint8_t machine_byte);
-int getOverlayAtOffset( int tileoffset );
-int getOverlayAtCursor();
-void insertItemIntoMachine(int machine_type, int tx, int ty, int item );
-void check_items_on_machines();
-int getResourceCount(int tx, int ty);
-ItemNodePtr getResource(int tx, int ty);
-bool reduceResourceCount(int tx, int ty);
-int show_recipe_dialog(int machine_type, bool bManual);
-int show_item_dialog();
-void show_help();
-bool load_splash_screen_maps();
-bool splash_loop();
-bool load_game_map( char * game_map_name );
-int convertProductionToMachine( int it );
-int convertMachineToProduction( int it );
-int load_sound_sample(char *fname, int sample_id);
-bool load_sound_samples(int vert_pos);
-void walking_sound_enable( bool enable );
-void select_game();
-
-#define _MESSAGE_IMPLEMENTATION
-#include "message.h"
-
 static volatile SYSVAR *sys_vars = NULL;
+
+//------------------------------------------------------------
+// Inline function defs
+//------------------------------------------------------------
+inline int getWorldCoordX(int sx) { return (fac.xpos + sx); }
+inline int getWorldCoordY(int sy) { return (fac.ypos + sy); }
+inline int getTileX(int sx) { return (sx/gTileSize); }
+inline int getTileY(int sy) { return (sy/gTileSize); }
+inline int getTilePosInScreenX(int tx) { return ((tx * gTileSize) - fac.xpos); }
+inline int getTilePosInScreenY(int ty) { return ((ty * gTileSize) - fac.ypos); }
+
+// machine byte is
+// bit     7    6 5  4 3 2 1 0
+//     valid outdir         ID   
+inline bool isValid( int byte ) { return ( byte & 0x80 ) == 0; }
+inline int getMachineItemType(uint8_t machine_byte) { return (machine_byte & 0x7) + IT_TYPES_MACHINE; }
+inline int getOverlayAtOffset( int tileoffset ) { return (tilemap[tileoffset] & 0xF0) >> 4; }
+inline int getOverlayAtCursor() { return (tilemap[cursor_ty*mapinfo.width +  cursor_tx] & 0xF0) >> 4; }
 
 void wait()
 {
@@ -329,6 +295,95 @@ void change_mode(int mode)
 	while ( !(sys_vars->vdp_pflags & vdp_pflag_mode) );
 }
 
+//------------------------------------------------------------
+// file handling functions 
+
+#include "file_handling.h"
+
+//------------------------------------------------------------
+// Function defs
+//------------------------------------------------------------
+void load_custom_chars();
+
+void game_loop();
+
+void do_new_game();
+
+int getMachineBMID(int tx, int ty);
+int getMachineBMIDmh(MachineHeader *mh);
+int getOverlayAtCursor();
+int convertProductionToMachine( int it );
+int convertMachineToProduction( int it );
+
+void draw_tile(int tx, int ty, int tposx, int tposy);
+void draw_machines(int tx, int ty, int tposx, int tposy, bool bDrawExtensionTile);
+void draw_horizontal(int tx, int ty, int len);
+void draw_vertical(int tx, int ty, int len);
+void draw_screen();
+void scroll_screen(int dir, int step);
+bool can_scroll_screen(int dir, int step);
+
+void draw_bob(int bx, int by, int px, int py);
+bool check_tile(int px, int py);
+bool move_bob(int dir, int speed);
+
+void reset_cursor();
+bool cursor_in_range();
+void start_place();
+void stop_place();
+void draw_cursor(bool draw);
+void draw_place_belt();
+void draw_place_resource();
+void draw_place_machine();
+void do_place();
+
+bool itemIsOnScreen(ItemNodePtr itemptr);
+bool itemIsInHorizontal(ItemNodePtr itemptr, int tx, int ty, int len);
+bool itemIsInRows(ItemNodePtr itemptr, int from_row, int to_row);
+void draw_layer(bool draw_items);
+void draw_horizontal_layer(int tx, int ty, int len, bool bdraw_belts, bool bdraw_machines, bool bdraw_items);
+void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty);
+void drop_item(int item);
+bool move_item_on_belt(ItemNodePtr currPtr, int in, int out, bool *predraw);
+void move_items(bool bDraw);
+void inserters_pull_from_box();
+void move_items_on_inserters(bool bDraw);
+void move_items_on_machines(bool bDraw);
+void draw_items();
+void draw_items_at_tile(int tx, int ty);
+
+void draw_digit(int i, int px, int py);
+void draw_number(int n, int px, int py);
+void draw_number_lj(int n, int px, int py);
+
+void show_info();
+bool check_can_mine();
+int getResourceCount(int tx, int ty);
+ItemNodePtr getResource(int tx, int ty);
+bool reduceResourceCount(int tx, int ty);
+void do_mining();
+void removeAtCursor();
+void pickupItemsAtTile(int tx, int ty);
+void insertItemIntoMachine(int machine_type, int tx, int ty, int item );
+void check_items_on_machines();
+
+void show_inventory(int X, int Y);
+void show_filedialog();;
+int show_recipe_dialog(int machine_type, bool bManual);
+int show_item_dialog();
+void select_game();
+
+void show_help(bool bShowWin);
+
+bool splash_loop();
+
+bool load_sound_samples(int vert_pos);
+void walking_sound_enable( bool enable );
+
+
+#define _MESSAGE_IMPLEMENTATION
+#include "message.h"
+
 // redefine "~" character as arrow
 #define CHAR_RIGHTARROW 0x7E
 void load_custom_chars()
@@ -337,45 +392,9 @@ void load_custom_chars()
 	vdp_redefine_character( CHAR_RIGHTARROW, 0x00, 0x04, 0x02, 0xFF, 0x02, 0x04, 0x00, 0x00); // right arrow
 }
 
-bool alloc_map()
-{
-	tilemap = (uint8_t *) malloc(sizeof(uint8_t) * mapinfo.width * mapinfo.height);
-	if (tilemap == NULL)
-	{
-		printf("Out of memory\n");
-		return false;
-	}
-
-	layer_belts = (int8_t *) malloc(sizeof(int8_t) * mapinfo.width * mapinfo.height);
-	if (layer_belts == NULL)
-	{
-		printf("Out of memory\n");
-		return false;
-	}
-	memset(layer_belts, (int8_t)-1, mapinfo.width * mapinfo.height);
-
-	objectmap = (void**) malloc(sizeof(void*) * mapinfo.width * mapinfo.height);
-	if (objectmap == NULL)
-	{
-		printf("Out of memory\n");
-		return false;
-	}
-	memset(objectmap, 0, 3*mapinfo.width * mapinfo.height);
-
-	return true;
-}
-
-void reset_cursor()
-{
-	cursor_tx = getTileX(fac.bobx+gTileSize/2);
-	cursor_ty = getTileY(fac.boby+gTileSize/2);
-	cursorx = getTilePosInScreenX(cursor_tx);
-	cursory = getTilePosInScreenY(cursor_ty);
-	old_cursorx=cursorx;
-	old_cursory=cursory;
-	oldcursor_tx = cursor_tx;
-	oldcursor_ty = cursor_ty;
-}
+//------------------------------------------------------------
+// MAIN
+//------------------------------------------------------------
 int main(int argc, char *argv[])
 {
 	vdp_vdu_init();
@@ -393,6 +412,7 @@ int main(int argc, char *argv[])
 		}
 	}
 	fac.version = SAVE_VERSION;
+	fac.resourceMultiplier = 16; // default
 
 	load_custom_chars();
 
@@ -402,7 +422,7 @@ int main(int argc, char *argv[])
 		goto my_exit2;
 	}
 
-	if ( !load_splash_screen_maps() )
+	if ( !load_game_map("maps/splash2") )
 	{
 		goto my_exit2;
 	}
@@ -440,70 +460,19 @@ int main(int argc, char *argv[])
 
 	vdp_activate_sprites(0);
 	
-	// simple mission
-	target_item_type = IT_COMPUTER;
-	target_items = 20;
-	target_item_count = 0;
-
 	load_game("maps/splash_save.data", true);
-	COL(15);COL(128+4);
-	TAB(4,22);printf("Press H for Help, Enter to start");
+
+	// default map/target after the splash screen
+	selected_map = 0;
+	target_item_type = available_maps[ selected_map ].target_item_type;
+	target_item_count = available_maps[ selected_map ].target_item_count;
+
 	if (!splash_loop())
 	{
 		goto my_exit2;
 	}
 
-	select_game();
-
-	clear_map();
-	load_game_map(selected_map);
-
-	/* start bob and screen centred in map */
-	fac.bobx = (mapinfo.width * gTileSize / 2) & 0xFFFFF0;
-	fac.boby = (mapinfo.height * gTileSize / 2) & 0xFFFFF0;
-	fac.xpos = fac.bobx - gScreenWidth/2;
-	fac.ypos = fac.boby - gScreenHeight/2;
-
-	reset_cursor();
-
-	if (bShowHud) hud_update_count(fac.energy);
-
-	// Turn on sprites and move bob to the centre
-	vdp_activate_sprites( NUM_SPRITES );
-	vdp_select_sprite( CURSOR_SPRITE );
-	vdp_show_sprite();
-	select_bob_sprite( bob_facing );
-	vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
-
-	if (bShowHud) show_hud(hud_posx, hud_posy);
-
-	vdp_refresh_sprites();
-
-	// Add some default items 
-	inventory_init(inventory);
-	// for test add some items
-	inventory_add_item(inventory, IT_BELT, 16); // belt
-	inventory_add_item(inventory, IT_GENERATOR, 1);
-	if (bIsTest)
-	{
-		inventory_add_item(inventory, IT_BELT, 84);
-		inventory_add_item(inventory, IT_STONE, 80);
-		inventory_add_item(inventory, IT_WOOD, 80);
-		inventory_add_item(inventory, IT_COAL, 100);
-		inventory_add_item(inventory, IT_IRON_PLATE, 20);
-		inventory_add_item(inventory, IT_COPPER_PLATE, 20);
-		inventory_add_item(inventory, IT_ASSEMBLER, 10);
-		inventory_add_item(inventory, IT_GEARWHEEL, 20);
-		inventory_add_item(inventory, IT_CIRCUIT, 20);
-		inventory_add_item(inventory, IT_WIRE, 20);
-		inventory_add_item(inventory, IT_STONE_BRICK, 20);
-		inventory_add_item(inventory, IT_MINER, 10);
-		inventory_add_item(inventory, IT_INSERTER, 10);
-		inventory_add_item(inventory, IT_BOX, 10);
-		inventory_add_item(inventory, IT_TSPLITTER, 10);
-		fac.energy = 1000;
-		if (bShowHud) hud_update_count(fac.energy);
-	}
+	do_new_game();
 
 	game_loop();
 
@@ -514,6 +483,10 @@ my_exit2:
 	vdp_cursor_enable( true );
 	return 0;
 }
+
+//------------------------------------------------------------
+// CENTRAL GAME LOOP
+//------------------------------------------------------------
 
 void game_loop()
 {
@@ -864,7 +837,7 @@ void game_loop()
 		{
 			walking_sound_enable( false );
 			while ( vdp_check_key_press( KEY_h ) );
-			show_help();
+			show_help(true);
 		}
 
 		if ( vdp_check_key_press( KEY_l ) ) // refresh screen
@@ -930,6 +903,30 @@ void game_loop()
 			}
 		}
 
+		if ( vdp_check_key_press( KEY_n ) ) // new game
+		{
+			while ( vdp_check_key_press( KEY_n ) );
+			// are you sure
+			walking_sound_enable( false );
+			vdp_activate_sprites(0);
+			draw_filled_box( 70, 84, 200, 30, 11, 17 );
+			COL(128+17);COL(15);TAB(10,12);printf("NEW GAME: Are you sure?");
+			char k=getchar(); 
+			if (k=='y' || k=='Y') {
+				// select game map dialog
+				select_game();
+				// change to new map
+				do_new_game();
+			}
+			COL(128);COL(15);
+			// refresh screen
+			draw_screen();
+			vdp_activate_sprites( NUM_SPRITES );
+			vdp_select_sprite( CURSOR_SPRITE );
+			vdp_show_sprite();
+			vdp_refresh_sprites();
+		}
+
 
 		if ( machine_update_ticks < clock() )
 		{
@@ -987,12 +984,12 @@ void game_loop()
 				tlistp = tlistp->next;
 			}
 
-			if ( target_item_count == target_items )
+			if ( !bWinMessageDisplayed && target_item_count == target_item_current )
 			{
 				vdp_activate_sprites(0);
-				draw_filled_box( 70, 84, 180, 30, 11, 25 );
-				COL(128+25);COL(9);TAB(10,12);printf("  !!! You Win !!! ");
-				target_item_count=0;
+				draw_filled_box( 70, 84, 180, 30, 11, 1 );
+				COL(128+1);COL(15);TAB(10,12);printf("  !!! You Win !!! ");
+				bWinMessageDisplayed = true;
 				delay(500);
 				wait_for_any_key();
 				draw_screen();
@@ -1025,41 +1022,75 @@ void game_loop()
 
 }
 
-bool cursor_in_range()
+
+//------------------------------------------------------------
+// new game
+//------------------------------------------------------------
+void do_new_game()
 {
-#ifndef CURSOR_RANGE
-	return true;
-#else
-	int bob_tx = getTileX(fac.bobx+gTileSize/2);
-	int bob_ty = getTileY(fac.boby+gTileSize/2)+1;
-	if ( cursor_tx >= ( bob_tx - cursor_range ) && cursor_tx <= ( bob_tx + cursor_range ) && 
-	     cursor_ty >= ( bob_ty -1 - cursor_range ) && cursor_ty <= ( bob_ty -1 + cursor_range ) )
+	clear_map_and_lists();
+	load_game_map( available_maps[selected_map].name );
+
+	/* start bob and screen centred in map */
+	fac.bobx = (mapinfo.width * gTileSize / 2) & 0xFFFFF0;
+	fac.boby = (mapinfo.height * gTileSize / 2) & 0xFFFFF0;
+	fac.xpos = fac.bobx - gScreenWidth/2;
+	fac.ypos = fac.boby - gScreenHeight/2;
+
+	reset_cursor();
+
+	if (bShowHud) hud_update_count(fac.energy);
+
+	// Turn on sprites and move bob to the centre
+	vdp_activate_sprites( NUM_SPRITES );
+	vdp_select_sprite( CURSOR_SPRITE );
+	vdp_show_sprite();
+	select_bob_sprite( bob_facing );
+	vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
+
+	if (bShowHud) show_hud(hud_posx, hud_posy);
+
+	vdp_refresh_sprites();
+	
+	// Add some default items 
+	inventory_init(inventory);
+	// for test add some items
+	inventory_add_item(inventory, IT_BELT, 16); // belt
+	inventory_add_item(inventory, IT_GENERATOR, 1);
+	if (bIsTest)
 	{
-		return true;
+		inventory_add_item(inventory, IT_BELT, 100);
+		inventory_add_item(inventory, IT_STONE, 80);
+		inventory_add_item(inventory, IT_WOOD, 80);
+		inventory_add_item(inventory, IT_COAL, 100);
+		inventory_add_item(inventory, IT_FURNACE, 40);
+		inventory_add_item(inventory, IT_IRON_PLATE, 60);
+		inventory_add_item(inventory, IT_COPPER_PLATE, 60);
+		inventory_add_item(inventory, IT_ASSEMBLER, 50);
+		inventory_add_item(inventory, IT_GEARWHEEL, 60);
+		inventory_add_item(inventory, IT_CIRCUIT, 60);
+		inventory_add_item(inventory, IT_WIRE, 60);
+		inventory_add_item(inventory, IT_STONE_BRICK, 40);
+		inventory_add_item(inventory, IT_MINER, 40);
+		inventory_add_item(inventory, IT_INSERTER, 40);
+		inventory_add_item(inventory, IT_BOX, 40);
+		inventory_add_item(inventory, IT_TSPLITTER, 40);
+		fac.energy = 1000;
+		if (bShowHud) hud_update_count(fac.energy);
 	}
-	return false;
-#endif
-}
-inline bool isValid( int byte )
-{
-	return ( byte & 0x80 ) == 0;
+
 }
 
-inline int getMachineItemType(uint8_t machine_byte)
-{
-	// machine byte is
-	// bit     7    6 5  4 3 2 1 0
-	//     valid outdir         ID   
-
-	return (machine_byte & 0x7) + IT_TYPES_MACHINE;
-}
-
+//------------------------------------------------------------
+// Bitmap lookup  Functions
+//------------------------------------------------------------
 int getMachineBMID(int tx, int ty)
 {
 	int tileoffset = ty*mapinfo.width + tx;
 	MachineHeader *mh = (MachineHeader*) objectmap[tileoffset];
 	return getMachineBMIDmh(mh);
 }
+
 int getMachineBMIDmh(MachineHeader *mh)
 {
 	int machine_itemtype = mh->machine_type;
@@ -1111,14 +1142,27 @@ int getMachineBMIDmh(MachineHeader *mh)
 	}
 }
 
-int getOverlayAtOffset( int tileoffset )
+int convertProductionToMachine( int it )
 {
-	return (tilemap[tileoffset] & 0xF0) >> 4;
+	if (it >= IT_TYPES_MINI_MACHINES && it < NUM_ITEMTYPES)
+		it = it - IT_TYPES_MINI_MACHINES + IT_TYPES_MACHINE;
+	if (it == IT_MINI_BELT)
+		it = IT_BELT;
+	return it;
 }
-int getOverlayAtCursor()
+int convertMachineToProduction( int it )
 {
-	return (tilemap[cursor_ty*mapinfo.width +  cursor_tx] & 0xF0) >> 4;
+	if (it >= IT_TYPES_MACHINE && it < IT_TYPES_FEATURES)
+		it = it - IT_TYPES_MACHINE + IT_TYPES_MINI_MACHINES;
+	if (it == IT_BELT)
+		it = IT_MINI_BELT;
+	return it;
 }
+
+
+//------------------------------------------------------------
+// Draw tile, horizontals and screen
+//------------------------------------------------------------
 
 // draws terrain and features at a tile
 // (tx,ty) tile in map 
@@ -1391,95 +1435,10 @@ bool can_scroll_screen(int dir, int step)
 	}
 	return false;
 }
-uint8_t oval1_block6x6[6*6] = {
-	0,0,3,3,0,0,
-	0,1,2,1,2,0,
-	3,2,1,1,2,0,
-	3,1,2,1,1,3,
-	0,3,1,3,2,0,
-	0,0,2,0,0,0};
 
-uint8_t oval2_block6x6[6*6] = {
-	0,3,2,1,0,0,
-	0,1,0,2,3,0,
-	3,2,1,1,0,0,
-	0,1,0,1,2,3,
-	0,3,2,1,3,0,
-	0,0,2,3,0,0};
-
-uint8_t rnd1_block5x5[5*5] = {
-	0,3,0,2,3,
-	0,0,2,1,0,
-	3,0,0,0,0,
-	0,1,2,3,0,
-	0,2,0,2,0,
-};
-uint8_t rnd2_block5x5[5*5] = {
-	0,0,0,1,0,
-	0,3,1,2,0,
-	2,1,0,0,1,
-	0,0,2,0,0,
-	3,2,0,0,3,
-};
-
-uint8_t rnd1_block4x4[4*4] = {
-	0,3,2,0,
-	3,2,1,0,
-	0,1,0,2,
-	3,2,0,0,
-};
-
-
-bool check_dir_exists(char *path)
-{
-    FRESULT        fr = FR_OK;
-    DIR            dir;
-    fr = ffs_dopen(&dir, path);
-	if ( fr == FR_OK )
-	{
-		return true;
-	}
-	return false;
-}
-int load_map_info( char *filename)
-{
-	uint8_t ret = mos_load( filename, (uint24_t) &mapinfo,  2 );
-	if ( ret != 0 )
-	{
-		printf("Failed to load %s\n",filename);
-	}
-	return ret;
-}
-
-void load_resource_data()
-{
-	for (int y=0; y<mapinfo.height; y++)
-	{
-		for (int x=0; x<mapinfo.width; x++)
-		{
-			int offset = x + mapinfo.width*y;
-			int overlay = getOverlayAtOffset( offset );
-			if (overlay>0)
-			{
-				int val = resourceMultiplier * 3;
-				if (overlay > 5) val -= resourceMultiplier;
-				if (overlay > 10) val -= resourceMultiplier;
-				insertAtFrontItemList( &resourcelist, val, x, y);
-			}
-		}
-	}
-}
-int load_map(char *mapname)
-{
-	uint8_t ret = mos_load( mapname, (uint24_t) tilemap,  mapinfo.width * mapinfo.height );
-	if ( ret != 0 )
-	{
-		return ret;
-	}
-	
-	load_resource_data();
-	return ret;
-}
+//------------------------------------------------------------
+// Character movement handling
+//------------------------------------------------------------
 
 void draw_bob(int bx, int by, int px, int py)
 {
@@ -1576,6 +1535,39 @@ bool move_bob(int dir, int speed)
 	return moved;
 }
 
+
+//------------------------------------------------------------
+// Cursor movement and place selection
+//------------------------------------------------------------
+
+void reset_cursor()
+{
+	cursor_tx = getTileX(fac.bobx+gTileSize/2);
+	cursor_ty = getTileY(fac.boby+gTileSize/2);
+	cursorx = getTilePosInScreenX(cursor_tx);
+	cursory = getTilePosInScreenY(cursor_ty);
+	old_cursorx=cursorx;
+	old_cursory=cursory;
+	oldcursor_tx = cursor_tx;
+	oldcursor_ty = cursor_ty;
+}
+
+bool cursor_in_range()
+{
+#ifndef CURSOR_RANGE
+	return true;
+#else
+	int bob_tx = getTileX(fac.bobx+gTileSize/2);
+	int bob_ty = getTileY(fac.boby+gTileSize/2)+1;
+	if ( cursor_tx >= ( bob_tx - cursor_range ) && cursor_tx <= ( bob_tx + cursor_range ) && 
+	     cursor_ty >= ( bob_ty -1 - cursor_range ) && cursor_ty <= ( bob_ty -1 + cursor_range ) )
+	{
+		return true;
+	}
+	return false;
+#endif
+}
+
 void start_place()
 {
 	bPlace=true;
@@ -1587,8 +1579,6 @@ void stop_place()
 	draw_cursor(false);
 	bPlace=false;
 }
-
-#define DIR_OPP(D) ((D+2)%4)
 
 // Function draws the appropriate belt pice that fits in the place
 // where the cursor is
@@ -1752,6 +1742,180 @@ void draw_cursor(bool draw)
 	oldcursor_tx = cursor_tx;
 	oldcursor_ty = cursor_ty;
 }
+
+// drop what is in the placement cursor. 
+void do_place()
+{
+	if ( !bPlace ) return;
+	int tileoffset = mapinfo.width * cursor_ty + cursor_tx;
+
+	MachineHeader *mh = (MachineHeader*) objectmap[tileoffset];
+	int machine_itemtype = -1;
+	if (mh && mh->machine_type > 0)
+	{
+		// there is a machine where we are dropping
+		machine_itemtype = mh->machine_type;
+	}
+
+	int beltID = layer_belts[ tileoffset ];
+
+	// dropping a belt
+   	if ( isBelt(item_selected) ) {
+		if ( place_belt_selected<0 ) return;
+
+		int ret = inventory_remove_item( inventory, IT_BELT, 1 );
+		if ( ret >= 0 )
+		{
+			// dropping a belt into a machine - use the mini-belt
+			if ( machine_itemtype == IT_ASSEMBLER )
+			{
+				drop_item(IT_MINI_BELT);
+			} else {
+				// same for dropping onto a belt
+				if (beltID>=0)
+				{
+					drop_item(IT_MINI_BELT);
+				} else {
+					// don't place on water
+					if ( (tilemap[tileoffset] & 0x0F) != 0 )
+					{
+						// otherwise, just place the actual belt
+						layer_belts[tileoffset] = place_belt_selected;
+					}
+				}
+			}
+		}
+	}
+	// dropping a resource or a product
+	if ( isResource(item_selected) || isProduct(item_selected) ) {
+		bool placed=false;
+		// paving - these are placed as terrain
+		if ( item_selected == IT_PAVING )
+		{
+			// no features or machine or anything here?
+			uint8_t overlay = (tilemap[tileoffset] & 0xF0) >> 4;
+			if ( objectmap[ tileoffset ] == NULL && overlay == 0 && layer_belts[tileoffset] < 0 )
+			{
+				int ret = inventory_remove_item( inventory, item_selected, 1 );
+				if (ret >= 0)
+				{
+					tilemap[ tileoffset ] = 13; // paving terrain
+					placed=true;
+				}
+			}
+		} 
+		// all others are just dtopped
+		if (!placed)
+		{
+			int ret = inventory_remove_item( inventory, item_selected, 1 );
+			if ( ret >= 0 )
+			{
+				drop_item(item_selected);
+			}
+		}
+	}
+	// dropping a machine
+	if ( isMachine(item_selected) ) {
+		int mach_mini_it = convertMachineToProduction(item_selected);
+		int mach_maxi_it = convertProductionToMachine(item_selected);
+		if ( beltID >= 0 )
+		{
+			if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
+			{
+				// place the 8x8 resource item in the centre of the square
+				insertAtFrontItemList(&itemlist, mach_mini_it, cursor_tx*gTileSize + 4, cursor_ty*gTileSize + 4);
+				numItems++;
+			}
+		} else
+		// dropping a machine into an assembler?
+		if (machine_itemtype == IT_ASSEMBLER) 
+		{
+			if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
+			{
+				insertItemIntoMachine( machine_itemtype, cursor_tx, cursor_ty, mach_maxi_it );
+				numItems++;
+			}
+		} else
+		// drop the machine. In most cases this means creating the machine.
+		// - make sure there isn't anything already there
+		if ( objectmap[tileoffset]==NULL )
+		{
+			// miners can only be placed where there is an overlay resource
+			if ( item_selected == IT_MINER )
+			{
+				uint8_t overlay = getOverlayAtCursor();
+				if ( overlay > 0 )
+				{
+					if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
+					{
+						int feat_type = item_feature_map[overlay-1].feature_type;
+						uint8_t raw_item = process_map[feat_type - IT_FEAT_STONE].raw_type;
+						Machine *mach = addMiner( &machinelist, cursor_tx, cursor_ty, raw_item, place_belt_index );
+						objectmap[tileoffset] = mach;
+					}
+				}
+			} else 
+			if ( item_selected == IT_FURNACE )
+			{
+				int recipe = show_recipe_dialog(IT_FURNACE, false);
+				if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
+				{
+					Machine *mach = addFurnace( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
+					objectmap[tileoffset] = mach;
+				}
+			} else 
+			if ( item_selected == IT_ASSEMBLER )
+			{
+				int recipe = show_recipe_dialog(IT_ASSEMBLER, false);
+				if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
+				{
+					Machine *mach = addAssembler( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
+					objectmap[tileoffset] = mach;
+				}
+			} else 
+			if ( item_selected == IT_INSERTER )
+			{
+				int filter_item = show_item_dialog();
+				if ( inventory_remove_item( inventory, item_selected, 1 ) >= 0 ) // take from inventory
+				{
+					Inserter *insp = addInserter(&inserterlist, cursor_tx, cursor_ty, place_belt_index, filter_item);
+					objectmap[tileoffset] = insp;
+				}
+			} else 
+			if ( item_selected == IT_GENERATOR )
+			{
+				int recipe = show_recipe_dialog(IT_GENERATOR, false);
+				if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
+				{
+					Machine *mach = addGenerator( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
+					objectmap[tileoffset] = mach;
+				}
+			} else 
+			if ( item_selected == IT_TSPLITTER )
+			{
+				// not making a splitter a separate object type as yet 
+				// reuse some of the Machine fields for splitter purposes
+				// ptype - splitter state. Use to lookup TSplitSwitchStates.out[] direction
+				// processTime - (3-bytes int) store ItemNodePtr if an object is moving though it
+				if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
+				{
+					objectmap[tileoffset] = addMachine( &machinelist, item_selected, cursor_tx, cursor_ty, place_belt_index, 0, 0, 0);
+				}
+			} else
+			if ( inventory_remove_item( inventory, item_selected, 1 ) >= 0 )
+			{
+				// generic machine ... e.g. Box
+				objectmap[tileoffset] = addMachine( &machinelist, item_selected, cursor_tx, cursor_ty, 0, 100, 0, 0);
+			}
+		}
+	}
+
+	stop_place();
+}
+
+//------------------------------------------------------------
+// Item (small object) movement on belts, etc
+//------------------------------------------------------------
 
 bool itemIsOnScreen(ItemNodePtr itemptr)
 {
@@ -1969,175 +2133,6 @@ void get_belt_neighbours(BELT_PLACE *bn, int tx, int ty)
 
 }
 
-void do_place()
-{
-	if ( !bPlace ) return;
-	int tileoffset = mapinfo.width * cursor_ty + cursor_tx;
-
-	MachineHeader *mh = (MachineHeader*) objectmap[tileoffset];
-	int machine_itemtype = -1;
-	if (mh && mh->machine_type > 0)
-	{
-		// there is a machine where we are dropping
-		machine_itemtype = mh->machine_type;
-	}
-
-	int beltID = layer_belts[ tileoffset ];
-
-	// dropping a belt
-   	if ( isBelt(item_selected) ) {
-		if ( place_belt_selected<0 ) return;
-
-		int ret = inventory_remove_item( inventory, IT_BELT, 1 );
-		if ( ret >= 0 )
-		{
-			// dropping a belt into a machine - use the mini-belt
-			if ( machine_itemtype == IT_ASSEMBLER )
-			{
-				drop_item(IT_MINI_BELT);
-			} else {
-				// same for dropping onto a belt
-				if (beltID>=0)
-				{
-					drop_item(IT_MINI_BELT);
-				} else {
-					// don't place on water
-					if ( (tilemap[tileoffset] & 0x0F) != 0 )
-					{
-						// otherwise, just place the actual belt
-						layer_belts[tileoffset] = place_belt_selected;
-					}
-				}
-			}
-		}
-	}
-	// dropping a resource or a product
-	if ( isResource(item_selected) || isProduct(item_selected) ) {
-		bool placed=false;
-		// paving - these are placed as terrain
-		if ( item_selected == IT_PAVING )
-		{
-			// no features or machine or anything here?
-			uint8_t overlay = (tilemap[tileoffset] & 0xF0) >> 4;
-			if ( objectmap[ tileoffset ] == NULL && overlay == 0 && layer_belts[tileoffset] < 0 )
-			{
-				int ret = inventory_remove_item( inventory, item_selected, 1 );
-				if (ret >= 0)
-				{
-					tilemap[ tileoffset ] = 13; // paving terrain
-					placed=true;
-				}
-			}
-		} 
-		// all others are just dtopped
-		if (!placed)
-		{
-			int ret = inventory_remove_item( inventory, item_selected, 1 );
-			if ( ret >= 0 )
-			{
-				drop_item(item_selected);
-			}
-		}
-	}
-	// dropping a machine
-	if ( isMachine(item_selected) ) {
-		int mach_mini_it = convertMachineToProduction(item_selected);
-		int mach_maxi_it = convertProductionToMachine(item_selected);
-		if ( beltID >= 0 )
-		{
-			if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
-			{
-				// place the 8x8 resource item in the centre of the square
-				insertAtFrontItemList(&itemlist, mach_mini_it, cursor_tx*gTileSize + 4, cursor_ty*gTileSize + 4);
-				numItems++;
-			}
-		} else
-		// dropping a machine into an assembler?
-		if (machine_itemtype == IT_ASSEMBLER) 
-		{
-			if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
-			{
-				insertItemIntoMachine( machine_itemtype, cursor_tx, cursor_ty, mach_maxi_it );
-				numItems++;
-			}
-		} else
-		// drop the machine. In most cases this means creating the machine.
-		// - make sure there isn't anything already there
-		if ( objectmap[tileoffset]==NULL )
-		{
-			// miners can only be placed where there is an overlay resource
-			if ( item_selected == IT_MINER )
-			{
-				uint8_t overlay = getOverlayAtCursor();
-				if ( overlay > 0 )
-				{
-					if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
-					{
-						int feat_type = item_feature_map[overlay-1].feature_type;
-						uint8_t raw_item = process_map[feat_type - IT_FEAT_STONE].raw_type;
-						Machine *mach = addMiner( &machinelist, cursor_tx, cursor_ty, raw_item, place_belt_index );
-						objectmap[tileoffset] = mach;
-					}
-				}
-			} else 
-			if ( item_selected == IT_FURNACE )
-			{
-				int recipe = show_recipe_dialog(IT_FURNACE, false);
-				if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
-				{
-					Machine *mach = addFurnace( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
-					objectmap[tileoffset] = mach;
-				}
-			} else 
-			if ( item_selected == IT_ASSEMBLER )
-			{
-				int recipe = show_recipe_dialog(IT_ASSEMBLER, false);
-				if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
-				{
-					Machine *mach = addAssembler( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
-					objectmap[tileoffset] = mach;
-				}
-			} else 
-			if ( item_selected == IT_INSERTER )
-			{
-				int filter_item = show_item_dialog();
-				if ( inventory_remove_item( inventory, item_selected, 1 ) >= 0 ) // take from inventory
-				{
-					Inserter *insp = addInserter(&inserterlist, cursor_tx, cursor_ty, place_belt_index, filter_item);
-					objectmap[tileoffset] = insp;
-				}
-			} else 
-			if ( item_selected == IT_GENERATOR )
-			{
-				int recipe = show_recipe_dialog(IT_GENERATOR, false);
-				if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
-				{
-					Machine *mach = addGenerator( &machinelist, cursor_tx, cursor_ty, place_belt_index, recipe );
-					objectmap[tileoffset] = mach;
-				}
-			} else 
-			if ( item_selected == IT_TSPLITTER )
-			{
-				// not making a splitter a separate object type as yet 
-				// reuse some of the Machine fields for splitter purposes
-				// ptype - splitter state. Use to lookup TSplitSwitchStates.out[] direction
-				// processTime - (3-bytes int) store ItemNodePtr if an object is moving though it
-				if (inventory_remove_item( inventory, item_selected, 1 ) >= 0)
-				{
-					objectmap[tileoffset] = addMachine( &machinelist, item_selected, cursor_tx, cursor_ty, place_belt_index, 0, 0, 0);
-				}
-			} else
-			if ( inventory_remove_item( inventory, item_selected, 1 ) >= 0 )
-			{
-				// generic machine ... e.g. Box
-				objectmap[tileoffset] = addMachine( &machinelist, item_selected, cursor_tx, cursor_ty, 0, 100, 0, 0);
-			}
-		}
-	}
-
-	stop_place();
-}
-
 void drop_item(int item)
 {
 	int tileoffset = cursor_tx + cursor_ty*mapinfo.width;
@@ -2264,7 +2259,7 @@ bool move_item_on_belt(ItemNodePtr currPtr, int in, int out, bool *predraw)
 	return moved;
 }
 
-/// @brief Move items along a belt or into an inserter or machine
+// Move items along a belt or into an inserter or machine
 void move_items(bool bDraw)
 {
 	// function timer
@@ -2732,153 +2727,9 @@ void draw_items_at_tile(int tx, int ty)
 	}
 }
 
-#define INV_EXT_BORDER 3
-#define INV_INT_BORDER 4
-// Show inventory and run it's own mini game-loop
-void show_inventory(int X, int Y)
-{
-	int offx = X;
-	int offy = Y;
-	int inv_offsetsX[MAX_INVENTORY_ITEMS] = {0};
-	int inv_offsetsY[MAX_INVENTORY_ITEMS] = {0};
-	int cursor_border_on = 15;
-	int cursor_border_off = 0;
-	// yellow border of UI with dark-grey fill
-	int boxw = INV_EXT_BORDER*2 + (gTileSize + INV_INT_BORDER*2) * inv_items_wide;
-	int boxh = INV_EXT_BORDER*2 + (gTileSize + INV_INT_BORDER*2) * inv_items_high;
-
-	vdp_select_sprite( CURSOR_SPRITE );
-	vdp_hide_sprite();
-	vdp_refresh_sprites();
-
-	draw_filled_box( offx, offy, boxw, boxh, 11, 16 );
-
-	for (int j=0; j<inv_items_high; j++)
-	{
-		for (int i=0; i<inv_items_wide; i++)
-		{
-			inv_offsetsX[i+j*inv_items_wide] = offx + INV_EXT_BORDER + i*(gTileSize+INV_INT_BORDER*2);
-			inv_offsetsY[i+j*inv_items_wide] = offy + INV_EXT_BORDER + j*(gTileSize+INV_INT_BORDER*2);
-
-			// grey border of cells
-			draw_filled_box(
-					inv_offsetsX[i+j*inv_items_wide],
-					inv_offsetsY[i+j*inv_items_wide],
-					gTileSize+INV_INT_BORDER*2, gTileSize+INV_INT_BORDER*2, cursor_border_off, 8);
-		}
-	}
-
-	// draw inventory items
-	for (int ii=0; ii<MAX_INVENTORY_ITEMS; ii++)
-	{
-		// zero count shouldn't show anything
-		if ( inventory[ii].count <= 0 )
-		{
-			inventory[ii].item = INVENTORY_EMPTY_SLOT;
-			inventory[ii].count = 0;
-		}
-
-		// if anything is in this slot, draw it
-		if ( inventory[ii].item >= 0 && inventory[ii].item != INVENTORY_EMPTY_SLOT )
-		{
-			int item = inventory[ii].item;
-			ItemType *type = &itemtypes[item];
-
-			vdp_adv_select_bitmap(type->bmID);
-
-			vdp_draw_bitmap(
-					inv_offsetsX[ii]+INV_INT_BORDER + 4*type->size,
-					inv_offsetsY[ii]+INV_INT_BORDER + 4*type->size -2);
-
-			draw_number(inventory[ii].count, 
-					inv_offsetsX[ii]+INV_INT_BORDER*2+gTileSize-1,
-					inv_offsetsY[ii]+INV_INT_BORDER*2+10);
-		}
-	}
-
-	draw_box( 
-			inv_offsetsX[inv_selected], 
-			inv_offsetsY[inv_selected], 
-			gTileSize + 2*INV_INT_BORDER, 
-			gTileSize + 2*INV_INT_BORDER,
-			cursor_border_on);
-
-	// game loop for interacting with inventory
-	clock_t key_wait_ticks = clock() + 20;
-	bool finish = false;
-	bool bDoPlaceAfterInventory = false;
-	do {
-
-		if ( key_wait_ticks < clock() && 
-				(vdp_check_key_press( KEY_e ) ||
-				 vdp_check_key_press( KEY_x ) ||
-				 vdp_check_key_press( KEY_enter ) ) )
-		{
-			key_wait_ticks = clock()+10;
-			if ( vdp_check_key_press( KEY_enter ) ) bDoPlaceAfterInventory=true;
-			finish=true;
-			item_selected = inventory[inv_selected].item;
-			// delay otherwise x will cause exit from program
-			while (key_wait_ticks > clock()) vdp_update_key_state();
-		}
-		// cursor movement
-		bool update_selected = false;
-		int new_selected = inv_selected;
-
-		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_RIGHT ) ) { 
-			key_wait_ticks = clock()+20;
-			if ( inv_selected < MAX_INVENTORY_ITEMS ) {
-				new_selected++; 
-				update_selected = true;
-			}
-		}
-		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_LEFT ) ) {
-	  		key_wait_ticks = clock()+20;
-			if ( inv_selected > 0 ) {
-				new_selected--; 
-				update_selected = true;
-			}
-		}
-		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_DOWN ) ) {
-	   		key_wait_ticks = clock()+20;
-			if ( inv_selected < MAX_INVENTORY_ITEMS - inv_items_wide ) {
-				new_selected += inv_items_wide;
-				update_selected = true;
-			}
-		}
-		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_UP ) ) { 
-			key_wait_ticks = clock()+20;
-			if ( inv_selected >= inv_items_wide ) {
-				new_selected -= inv_items_wide;
-				update_selected = true;
-			}
-		}
-		if ( update_selected )
-		{
-			draw_box( 
-					inv_offsetsX[inv_selected], 
-					inv_offsetsY[inv_selected], 
-					gTileSize + 2*INV_INT_BORDER, 
-					gTileSize + 2*INV_INT_BORDER,
-					cursor_border_off);
-			inv_selected = new_selected;
-			draw_box( 
-					inv_offsetsX[inv_selected], 
-					inv_offsetsY[inv_selected], 
-					gTileSize + 2*INV_INT_BORDER, 
-					gTileSize + 2*INV_INT_BORDER,
-					cursor_border_on);
-		}
-		vdp_update_key_state();
-	} while (finish==false);
-
-	draw_screen();
-
-	vdp_select_sprite( CURSOR_SPRITE );
-	vdp_show_sprite();
-	vdp_refresh_sprites();
-	if ( bDoPlaceAfterInventory ) start_place();
-}
+//------------------------------------------------------------
+// Small number/digit drawing utilities (move out of here?)
+//------------------------------------------------------------
 
 void draw_digit(int i, int px, int py)
 {
@@ -2920,6 +2771,7 @@ void draw_number_lj(int n, int px, int py)
 
 	draw_number(n, px+diglen*4, py);
 }
+
 
 void show_info()
 {
@@ -3167,7 +3019,7 @@ bool reduceResourceCount(int tx, int ty)
 			draw_tile(tx, ty, px, py);
 			draw_machines(tx, ty, px, py, false);
 			deleteItem(&resourcelist, rp);
-		} else if ( (rp->item % resourceMultiplier) == 0 )
+		} else if ( (rp->item % fac.resourceMultiplier) == 0 )
 		{
 			// size is reduced - change icon in tilemap
 			overlay += 5;
@@ -3350,460 +3202,6 @@ void pickupItemsAtTile(int tx, int ty)
 	}
 }
 
-bool save_game( char *filepath )
-{
-	bool ret = true;
-	FILE *fp;
-	int objs_written = 0;
-	char *msg;
-
-	COL(15);
-
-	// Open the file for writing
-	if ( !(fp = fopen( filepath, "wb" ) ) ) {
-		printf( "Error opening file \"%s\"a\n.", filepath );
-		return false;
-	}
-
-	// 0. write file signature to 1st 3 bytes "FAC"	
-	printf("Save: signature\n");
-	for (int i=0;i<3;i++)
-	{
-		fputc( sigref[i], fp );
-	}
-
-	// 1. write the fac state
-	printf("Save: fac state\n");
-	objs_written = fwrite( (const void*) &fac, sizeof(FacState), 1, fp);
-	if (objs_written!=1) {
-		msg = "Fail: fac state\n"; goto save_game_errexit;
-	}
-
-	// 2. write the tile map and layers
-	printf("Save: tilemap\n");
-	objs_written = fwrite( (const void*) tilemap, sizeof(uint8_t) * mapinfo.width * mapinfo.height, 1, fp);
-	if (objs_written!=1) {
-		msg = "Fail: tilemap\n"; goto save_game_errexit;
-	}
-	printf("Save: layer_belts\n");
-	objs_written = fwrite( (const void*) layer_belts, sizeof(uint8_t) * mapinfo.width * mapinfo.height, 1, fp);
-	if (objs_written!=1) {
-		msg = "Fail: layer_belts\n"; goto save_game_errexit;
-	}
-
-	// 3. save the item list
-
-	// get and write number of items
-	ItemNodePtr currPtr = itemlist;
-	int cnt=0;
-	while (currPtr != NULL) {
-		currPtr = currPtr->next;
-		cnt++;
-	}
-	printf("Save: num item count %d\n",cnt);
-	objs_written = fwrite( (const void*) &cnt, sizeof(int), 1, fp);
-	if (objs_written!=1) {
-		msg = "Fail: item count\n"; goto save_game_errexit;
-	}
-
-	// back to begining
-	currPtr = itemlist;
-	ItemNodePtr nextPtr = NULL;
-
-	// must write data and no ll pointers
-	printf("Save: items\n");
-	while (currPtr != NULL) {
-		nextPtr = currPtr->next;
-
-		objs_written = fwrite( (const void*) currPtr, sizeof(ItemNodeSave), 1, fp);
-		if (objs_written!=1) {
-			msg = "Fail: item\n"; goto save_game_errexit;
-		}
-		currPtr = nextPtr;
-	}
-
-	// 4. write the inventory
-	printf("Save: inventory\n");
-	objs_written = fwrite( (const void*) inventory, sizeof(INV_ITEM), MAX_INVENTORY_ITEMS, fp);
-	if (objs_written!=MAX_INVENTORY_ITEMS) {
-		msg = "Fail: inventory\n"; goto save_game_errexit;
-	}
-
-	// 5. write machine data
-	printf("Save: machines\n");
-	int num_machine_objects = countMachine(&machinelist);
-	printf("%d objects\n",num_machine_objects);
-	objs_written = fwrite( (const void*) &num_machine_objects, sizeof(int), 1, fp);
-	if (objs_written!=1) {
-		msg = "Fail: machine count\n"; goto save_game_errexit;
-	}
-
-	ThingNodePtr thptr = machinelist;
-	while (thptr != NULL )
-	{
-		// save the machine without the items
-		Machine *mach = (Machine*)thptr->thing;
-
-		objs_written = fwrite( (const void*) mach, sizeof(MachineSave), 1, fp);
-		if (objs_written!=1) {
-			msg = "Fail: machines\n"; goto save_game_errexit;
-		}
-
-		thptr = thptr->next;
-	}
-
-	// 6. write the resource data
-	currPtr = resourcelist;
-	cnt=0;
-	while (currPtr != NULL) {
-		currPtr = currPtr->next;
-		cnt++;
-	}
-	printf("Save: num resources count %d\n",cnt);
-	objs_written = fwrite( (const void*) &cnt, sizeof(int), 1, fp);
-	if (objs_written!=1) {
-		msg = "Fail: resource count\n"; goto save_game_errexit;
-	}
-
-	// back to begining
-	currPtr = resourcelist;
-	nextPtr = NULL;
-
-	// must write data and no ll pointers
-	printf("Save: resources\n");
-	while (currPtr != NULL) {
-		nextPtr = currPtr->next;
-
-		objs_written = fwrite( (const void*) currPtr, sizeof(ItemNodeSave), 1, fp);
-		if (objs_written!=1) {
-			msg = "Fail: item\n"; goto save_game_errexit;
-		}
-		currPtr = nextPtr;
-	}
-
-	// 7. write the Inserter objects
-	printf("Save: inserters ");
-	int num_inserter_objects = countInserters(&inserterlist);
-	printf("%d objects\n",num_inserter_objects);
-	objs_written = fwrite( (const void*) &num_inserter_objects, sizeof(int), 1, fp);
-	if (objs_written!=1) {
-		msg = "Fail: inserter count\n"; goto save_game_errexit;
-	}
-
-	thptr = inserterlist;
-	Inserter *insp = NULL;
-	while (thptr != NULL )
-	{
-		// save the inserter without the items
-		insp = (Inserter*)thptr->thing;
-
-		objs_written = fwrite( (const void*) insp, sizeof(InserterSave), 1, fp);
-		if (objs_written!=1) {
-			msg = "Fail: inserter\n"; goto save_game_errexit;
-		}
-
-		thptr = thptr->next;
-	}
-
-	printf("done.\n");
-	fclose(fp);
-	return ret;
-
-save_game_errexit:
-	COL(9);printf("%s",msg);
-	fclose(fp);
-	COL(15);
-	return false;
-
-}
-bool load_game( char *filepath, bool bQuiet )
-{
-	// 0. write file signature to 1st 3 bytes "FAC"	
-	// 1. write the fac state
-	// 2. write the tile map and layers
-	// 3. save the item list
-	// 4. write the inventory
-	// 5. write machine data
-	// 6. write the resource data
-	bool ret = true;
-	FILE *fp;
-	int objs_read = 0;
-	char *msg;
-
-	COL(15);
-
-	// open file for reading
-	if ( !(fp = fopen( filepath, "rb" ) ) ) {
-		printf("Error opening file \"%s\".\n", filepath );
-		return false;
-	}
-
-	char sig[4];
-
-	// 0. read file signature to 1st 3 bytes "FAC"	
-	if (!bQuiet) printf("Load: signature\n");
-	fgets( sig, 4, fp );
-
-	for (int i=0; i<3; i++)
-	{
-		if ( sig[i] != sigref[i] )
-		{
-			printf("Error reading signature. i=%d\n", i );
-			fclose(fp);
-			return false;
-		}
-	}
-
-	// 1. read the fac state
-	if (!bQuiet) printf("Load: fac state\n");
-	objs_read = fread( &fac, sizeof(FacState), 1, fp );
-	if ( objs_read != 1 || fac.version != SAVE_VERSION )
-	{
-		printf("Fail L %d!=1 v%d\n", objs_read, fac.version );
-		fclose(fp);
-		return NULL;
-	}
-
-	// 2. read the tile map and layers
-	
-	// clear and read tilemap and layers
-	free(tilemap);
-	free(layer_belts);
-	free(objectmap);
-	if ( ! alloc_map() ) return false;
-
-	// read the tilemap
-	if (!bQuiet) printf("Load: tilemap\n");
-	objs_read = fread( tilemap, sizeof(uint8_t) * mapinfo.width * mapinfo.height, 1, fp );
-	if ( objs_read != 1 ) {
-		msg = "Fail read tilemap\n"; goto load_game_errexit;
-	}
-	// read the layer_belts
-	if (!bQuiet) printf("Load: layer_belts\n");
-	objs_read = fread( layer_belts, sizeof(uint8_t) * mapinfo.width * mapinfo.height, 1, fp );
-	if ( objs_read != 1 ) {
-		msg = "Fail read layer_belts\n"; goto load_game_errexit;
-	}
-	// objectmap is a list of pointers so will be filled in when we read the machines/inserters
-
-	// 3. read the item list
-	
-	// clear out item list
-	ItemNodePtr currPtr = itemlist;
-	ItemNodePtr nextPtr = NULL;
-	while ( currPtr != NULL )
-	{
-		nextPtr = currPtr->next;
-		ItemNodePtr pitem = popFrontItem(&itemlist);
-		free(pitem);
-		currPtr = nextPtr;
-	}
-	itemlist = NULL;
-
-	// read number of items in list
-	int num_items = 0;
-
-	if (!bQuiet) printf("Load: items ");
-	objs_read = fread( &num_items, sizeof(int), 1, fp );
-	if ( objs_read != 1 ) {
-		msg = "Fail read num items\n"; goto load_game_errexit;
-	}
-	printf("%d\n",num_items);
-
-	// add items in one by one
-	while (num_items > 0 && !feof( fp ) )
-	{
-		ItemNodeSave newitem;
-
-		objs_read = fread( &newitem, sizeof(ItemNodeSave), 1, fp );
-		if ( objs_read != 1 ) {
-			msg = "Fail read item\n"; goto load_game_errexit;
-		}
-		insertAtBackItemList( &itemlist, newitem.item, newitem.x, newitem.y );
-		num_items--;
-	}
-
-	// 4. write the inventory
-	if (!bQuiet) printf("Load: inventory\n");
-	for ( int i=0;i<MAX_INVENTORY_ITEMS; i++)
-	{
-		objs_read = fread( &inventory[i], sizeof(INV_ITEM), 1, fp );
-		if ( objs_read != 1 ) {
-			msg = "Fail read inv item\n"; goto load_game_errexit;
-		}
-	}
-
-	// 5. read machine data
-	if (!bQuiet) printf("Load: Machines. clear ... ");
-	clearMachines(&machinelist);
-
-	int num_machs = 0;
-
-	if (!bQuiet) printf("num ");
-	objs_read = fread( &num_machs, sizeof(int), 1, fp );
-	if ( objs_read != 1 ) {
-		msg = "Fail read num machines\n"; goto load_game_errexit;
-	}
-	if (!bQuiet) printf("%d ",num_machs);
-	while (num_machs > 0 && !feof( fp ) )
-	{
-		Machine* newmachp = malloc(sizeof(Machine));
-		if (newmachp == NULL)
-		{
-			msg="Alloc Error\n"; goto load_game_errexit;
-		}
-
-		objs_read = fread( newmachp, sizeof(MachineSave), 1, fp );
-		if ( objs_read != 1 ) {
-			msg = "Fail read machines\n"; goto load_game_errexit;
-		}
-		// start machines with an empty item list
-		newmachp->itemlist = NULL;
-		newmachp->ticksTillProduce = 0;
-		// make sure splitters don't have ghosts of items in them
-		if ( newmachp->machine_type == IT_TSPLITTER ) newmachp->processTime = 0;
-
-		insertAtBackThingList( &machinelist, newmachp);
-		objectmap[newmachp->tx + newmachp->ty * mapinfo.width] = newmachp;
-		num_machs--;
-	}
-	if (!bQuiet) printf("done.\n");
-
-	// 6. read the resource data
-	
-	if (!bQuiet) printf("Load: resources. Clear ... ");
-	// clear out resources list
-	currPtr = resourcelist;
-	nextPtr = NULL;
-	while ( currPtr != NULL )
-	{
-		nextPtr = currPtr->next;
-		ItemNodePtr pitem = popFrontItem(&resourcelist);
-		free(pitem); pitem=NULL;
-		currPtr = nextPtr;
-	}
-	resourcelist = NULL;
-
-	// read number of resources in list
-	num_items = 0;
-
-	if (!bQuiet) printf("num_items ");
-	objs_read = fread( &num_items, sizeof(int), 1, fp );
-	if ( objs_read != 1 ) {
-		msg = "Fail read num resources\n"; goto load_game_errexit;
-	}
-	if (!bQuiet) printf("%d ",num_items);
-
-	// add items in one by one
-	while (num_items > 0 && !feof( fp ) )
-	{
-		ItemNodeSave newitem;
-
-		objs_read = fread( &newitem, sizeof(ItemNodeSave), 1, fp );
-		if ( objs_read != 1 ) {
-			msg = "Fail read resource\n"; goto load_game_errexit;
-		}
-		insertAtBackItemList( &resourcelist, newitem.item, newitem.x, newitem.y );
-		num_items--;
-	}
-	if (!bQuiet) printf("done.\n");
-
-	// 7. read the Inserter objects
-
-	if (!bQuiet) printf("Load: Inserters. clear ... ");
-	clearInserters(&inserterlist);
-
-	int num_ins = 0;
-
-	if (!bQuiet) printf("num ");
-	objs_read = fread( &num_ins, sizeof(int), 1, fp );
-	if ( objs_read != 1 ) {
-		msg = "Fail read num inserters\n"; goto load_game_errexit;
-	}
-	if (!bQuiet) printf("%d ",num_ins);
-	while (num_ins > 0 && !feof( fp ) )
-	{
-		Inserter* newinsp = malloc(sizeof(Inserter));
-		if (newinsp == NULL)
-		{
-			msg="Alloc Error\n"; goto load_game_errexit;
-		}
-
-		objs_read = fread( newinsp, sizeof(InserterSave), 1, fp );
-		if ( objs_read != 1 ) {
-			msg = "Fail read inserter\n"; goto load_game_errexit;
-		}
-		newinsp->itemlist = NULL;
-		newinsp->itemcnt = 0;
-
-		insertAtBackThingList( &inserterlist, newinsp);
-		objectmap[newinsp->tx + newinsp->ty * mapinfo.width] = newinsp;
-		num_ins--;
-	}
-	if (!bQuiet) printf("done.\n");
-
-	if (!bQuiet) printf("\nDone.\n");
-	fclose(fp);
-	return ret;
-
-load_game_errexit:
-	COL(9);printf("%s",msg);
-	fclose(fp);
-	COL(15);
-	return false;
-}
-
-
-// Show file dialog
-void show_filedialog()
-{
-	vdp_select_sprite( CURSOR_SPRITE );
-	vdp_hide_sprite();
-	hide_bob();
-	vdp_refresh_sprites();
-
-	char filename[80];
-	bool isload = false;
-
-	change_mode(3);
-	vdp_logical_scr_dims( false );
-	vdp_cursor_enable( false );
-
-	int fd_return = file_dialog("./saves", filename, 80, &isload);
-
-	COL(11);COL(128+16);
-	vdp_cls();
-	TAB(0,0);
-	if (fd_return)
-	{
-		if ( isload )
-		{
-			printf("Loading %s ... \n",filename);
-			load_game( filename, false );
-		} else {
-			printf("Saving %s ... \n",filename);
-			save_game( filename );
-		}
-
-		printf("\nPress any key\n");
-		wait();
-	}
-
-	change_mode(gMode);
-	vdp_cursor_enable( false );
-	vdp_logical_scr_dims( false );
-
-	reset_cursor();
-	vdp_activate_sprites( NUM_SPRITES );
-	vdp_select_sprite( CURSOR_SPRITE );
-	vdp_show_sprite();
-	show_bob();
-
-	draw_screen();
-
-	vdp_refresh_sprites();
-}
-
 void insertItemIntoMachine(int machine_type, int tx, int ty, int item )
 {
 	bool bInserted = false;
@@ -3920,6 +3318,207 @@ void check_items_on_machines()
 		}
 		currPtr = nextPtr;
 	}
+}
+
+//------------------------------------------------------------
+// Dialogs
+//------------------------------------------------------------
+
+#define INV_EXT_BORDER 3
+#define INV_INT_BORDER 4
+// Show inventory and run it's own mini game-loop
+void show_inventory(int X, int Y)
+{
+	int offx = X;
+	int offy = Y;
+	int inv_offsetsX[MAX_INVENTORY_ITEMS] = {0};
+	int inv_offsetsY[MAX_INVENTORY_ITEMS] = {0};
+	int cursor_border_on = 15;
+	int cursor_border_off = 0;
+	// yellow border of UI with dark-grey fill
+	int boxw = INV_EXT_BORDER*2 + (gTileSize + INV_INT_BORDER*2) * inv_items_wide;
+	int boxh = INV_EXT_BORDER*2 + (gTileSize + INV_INT_BORDER*2) * inv_items_high;
+
+	vdp_select_sprite( CURSOR_SPRITE );
+	vdp_hide_sprite();
+	vdp_refresh_sprites();
+
+	draw_filled_box( offx, offy, boxw, boxh, 11, 16 );
+
+	for (int j=0; j<inv_items_high; j++)
+	{
+		for (int i=0; i<inv_items_wide; i++)
+		{
+			inv_offsetsX[i+j*inv_items_wide] = offx + INV_EXT_BORDER + i*(gTileSize+INV_INT_BORDER*2);
+			inv_offsetsY[i+j*inv_items_wide] = offy + INV_EXT_BORDER + j*(gTileSize+INV_INT_BORDER*2);
+
+			// grey border of cells
+			draw_filled_box(
+					inv_offsetsX[i+j*inv_items_wide],
+					inv_offsetsY[i+j*inv_items_wide],
+					gTileSize+INV_INT_BORDER*2, gTileSize+INV_INT_BORDER*2, cursor_border_off, 8);
+		}
+	}
+
+	// draw inventory items
+	for (int ii=0; ii<MAX_INVENTORY_ITEMS; ii++)
+	{
+		// zero count shouldn't show anything
+		if ( inventory[ii].count <= 0 )
+		{
+			inventory[ii].item = INVENTORY_EMPTY_SLOT;
+			inventory[ii].count = 0;
+		}
+
+		// if anything is in this slot, draw it
+		if ( inventory[ii].item >= 0 && inventory[ii].item != INVENTORY_EMPTY_SLOT )
+		{
+			int item = inventory[ii].item;
+			ItemType *type = &itemtypes[item];
+
+			vdp_adv_select_bitmap(type->bmID);
+
+			vdp_draw_bitmap(
+					inv_offsetsX[ii]+INV_INT_BORDER + 4*type->size,
+					inv_offsetsY[ii]+INV_INT_BORDER + 4*type->size -2);
+
+			draw_number(inventory[ii].count, 
+					inv_offsetsX[ii]+INV_INT_BORDER*2+gTileSize-1,
+					inv_offsetsY[ii]+INV_INT_BORDER*2+10);
+		}
+	}
+
+	draw_box( 
+			inv_offsetsX[inv_selected], 
+			inv_offsetsY[inv_selected], 
+			gTileSize + 2*INV_INT_BORDER, 
+			gTileSize + 2*INV_INT_BORDER,
+			cursor_border_on);
+
+	// game loop for interacting with inventory
+	clock_t key_wait_ticks = clock() + 20;
+	bool finish = false;
+	bool bDoPlaceAfterInventory = false;
+	do {
+
+		if ( key_wait_ticks < clock() && 
+				(vdp_check_key_press( KEY_e ) ||
+				 vdp_check_key_press( KEY_x ) ||
+				 vdp_check_key_press( KEY_enter ) ) )
+		{
+			key_wait_ticks = clock()+10;
+			if ( vdp_check_key_press( KEY_enter ) ) bDoPlaceAfterInventory=true;
+			finish=true;
+			item_selected = inventory[inv_selected].item;
+			// delay otherwise x will cause exit from program
+			while (key_wait_ticks > clock()) vdp_update_key_state();
+		}
+		// cursor movement
+		bool update_selected = false;
+		int new_selected = inv_selected;
+
+		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_RIGHT ) ) { 
+			key_wait_ticks = clock()+20;
+			if ( inv_selected < MAX_INVENTORY_ITEMS ) {
+				new_selected++; 
+				update_selected = true;
+			}
+		}
+		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_LEFT ) ) {
+	  		key_wait_ticks = clock()+20;
+			if ( inv_selected > 0 ) {
+				new_selected--; 
+				update_selected = true;
+			}
+		}
+		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_DOWN ) ) {
+	   		key_wait_ticks = clock()+20;
+			if ( inv_selected < MAX_INVENTORY_ITEMS - inv_items_wide ) {
+				new_selected += inv_items_wide;
+				update_selected = true;
+			}
+		}
+		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_UP ) ) { 
+			key_wait_ticks = clock()+20;
+			if ( inv_selected >= inv_items_wide ) {
+				new_selected -= inv_items_wide;
+				update_selected = true;
+			}
+		}
+		if ( update_selected )
+		{
+			draw_box( 
+					inv_offsetsX[inv_selected], 
+					inv_offsetsY[inv_selected], 
+					gTileSize + 2*INV_INT_BORDER, 
+					gTileSize + 2*INV_INT_BORDER,
+					cursor_border_off);
+			inv_selected = new_selected;
+			draw_box( 
+					inv_offsetsX[inv_selected], 
+					inv_offsetsY[inv_selected], 
+					gTileSize + 2*INV_INT_BORDER, 
+					gTileSize + 2*INV_INT_BORDER,
+					cursor_border_on);
+		}
+		vdp_update_key_state();
+	} while (finish==false);
+
+	draw_screen();
+
+	vdp_select_sprite( CURSOR_SPRITE );
+	vdp_show_sprite();
+	vdp_refresh_sprites();
+	if ( bDoPlaceAfterInventory ) start_place();
+}
+// Show file dialog
+void show_filedialog()
+{
+	vdp_select_sprite( CURSOR_SPRITE );
+	vdp_hide_sprite();
+	hide_bob();
+	vdp_refresh_sprites();
+
+	char filename[80];
+	bool isload = false;
+
+	change_mode(3);
+	vdp_logical_scr_dims( false );
+	vdp_cursor_enable( false );
+
+	int fd_return = file_dialog("./saves", filename, 80, &isload);
+
+	COL(11);COL(128+16);
+	vdp_cls();
+	TAB(0,0);
+	if (fd_return)
+	{
+		if ( isload )
+		{
+			printf("Loading %s ... \n",filename);
+			load_game( filename, false );
+		} else {
+			printf("Saving %s ... \n",filename);
+			save_game( filename );
+		}
+
+		printf("\nPress any key\n");
+		wait();
+	}
+
+	change_mode(gMode);
+	vdp_cursor_enable( false );
+	vdp_logical_scr_dims( false );
+
+	reset_cursor();
+	vdp_activate_sprites( NUM_SPRITES );
+	vdp_select_sprite( CURSOR_SPRITE );
+	vdp_show_sprite();
+	show_bob();
+
+	draw_screen();
+
+	vdp_refresh_sprites();
 }
 
 #define RECIPE_EXT_BORDER 5
@@ -4334,6 +3933,69 @@ int show_item_dialog()
 	return select_items[item_selected];
 }
 
+// mini dialog for selecting a game
+void select_game()
+{
+	int bgcol = 4;
+	int fgcol = 15;
+	int hlcol = 11;
+
+	draw_filled_box( 20, 40, 280, 120, fgcol, bgcol );
+
+	COL(fgcol); COL(128+bgcol);
+
+	int line = 8;
+	TAB(4,line++);printf("Select Map:");
+	line++;
+	for ( int i=0; i< NUM_AVAILABLE_MAPS; i++)
+	{
+		COL(hlcol);TAB(4,line++);printf("%d: ",i+1);COL(fgcol);printf("%s ", available_maps[i].desc);
+		COL(hlcol);printf("Target:");
+		COL(fgcol);printf("%d %s%s",
+				available_maps[i].target_item_count, 
+				itemtypes[ available_maps[i].target_item_type ].desc,
+				available_maps[i].target_item_count>1?"s":"");
+	}
+	line += 2;
+	int selected = 1;
+	bool bexit = false;
+	COL(fgcol);TAB(4,line); printf("?: ");
+	TAB(7,line); COL(hlcol);printf("%d",selected);
+	while (vdp_check_key_press(KEY_enter));
+
+	while (!bexit)
+	{
+		int x_keys[3] = { KEY_x, KEY_enter, KEY_escape };
+		for ( int k = 0; k < 3; k++ )
+		{
+			if ( vdp_check_key_press( x_keys[k] ) )
+			{
+				while (vdp_check_key_press( x_keys[k] ));
+				bexit = true;
+			}
+		}
+		for ( int i=0; i< NUM_AVAILABLE_MAPS; i++)
+		{
+			if ( vdp_check_key_press(KEY_1+i) )
+			{
+				while (vdp_check_key_press(KEY_1+i));
+				selected=1+i;
+				TAB(7, line);COL(fgcol);printf("%d",selected);
+				bexit = true;
+			}
+		}
+
+		vdp_update_key_state();
+	}
+	selected_map = selected - 1;
+	target_item_type = available_maps[ selected_map ].target_item_type;
+	target_item_count = available_maps[ selected_map ].target_item_count;
+}
+
+//------------------------------------------------------------
+// Help
+//------------------------------------------------------------
+
 void help_clear(int col)
 {
 	draw_filled_box( 10, 10, 300, 220, 11, 0 );
@@ -4341,7 +4003,6 @@ void help_clear(int col)
 	{
 		draw_filled_box( 16, 26, 288, 184, 11, col );
 	}
-	COL(11);
 }
 
 void help_feature(int x, int y, int itype, int col)
@@ -4422,7 +4083,7 @@ void help_machines()
 		"Items go to Inventory",
    		"Power machines",
 		"Split to 2 outputs",
-		"Enter to escape"
+		"Escape planet"
 	};
 	int line = 4; int column = 3;
 	help_clear(32);
@@ -4461,7 +4122,7 @@ void help_line(int line, int column, int keywidth, char *keystr, char* helpstr, 
 	printf("%s",helpstr);
 }
 
-void show_help()
+void show_help(bool bShowWin)
 {
 	vdp_activate_sprites(0);
 	help_clear(0);
@@ -4472,10 +4133,9 @@ void show_help()
 	help_line(line++, 18, 9, "Dir keys", "Move cursor", 11, 13);
 	line++;
 	help_line(line, 2, 6, "X", "Exit", 11, 13); help_line(line++, 21, 6, "F", "File dialog", 11, 13);
-
-	help_line(line, 2, 6, "L", "Refresh", 11, 13); help_line(line++, 21, 6, "C", "Recentre", 11, 13);
+	help_line(line, 2, 6, "F2", "Toggle HUD", 11, 13); help_line(line++, 21, 6, "N", "New game", 11, 13);
+	help_line(line, 2, 6, "L", "Refresh", 10, 14); help_line(line++, 21, 6, "C", "Centre curs", 10, 14);
 	help_line(line, 2, 6, "F9", "Toggle Sound", 10, 14); help_line(line++, 21, 6, "F8,F7", "Vol Up/Down", 10, 14);
-	help_line(line++, 2, 6, "F2", "Toggle HUD", 10, 14);
 	line++;
 	help_line(line++, 2, 6, "I", "Show info under cursor", 10, 14);
 	help_line(line++, 2, 6, "E", "Show Inventory and select item", 10, 14);
@@ -4494,7 +4154,15 @@ void show_help()
 	COL(6);TAB(2,line++);printf("Process using furnaces and assemble");
 	COL(6);TAB(2,line++);printf("  into items and more machines.");
 
-	COL(15);TAB(2,line++);printf("     WIN: Make %d %ss.", target_items, itemtypes[target_item_type].desc);
+	if (bShowWin)
+	{
+		COL(15);TAB(2,line++);printf("     WIN: Make %d %s%s.", 
+				target_item_count,
+				itemtypes[target_item_type].desc,
+				target_item_count > 1 ?"s":"");
+	} else { 
+		line++;
+	}
 
 	COL(3);TAB(5,27);printf("Next: any key     X: Exit help");
 
@@ -4533,104 +4201,51 @@ leave_help:
 	vdp_refresh_sprites();
 }
 
-void clear_map()
+//------------------------------------------------------------
+// Splash screen special loop
+//------------------------------------------------------------
+
+void splash_loop_info(int FG, int BG, int HL)
 {
-	// clear and read tilemap and layers
-	free(tilemap);
-	free(layer_belts);
-	free(objectmap);
+	COL(FG);COL(128+BG);
+	TAB(2,28);COL(FG);printf("Map:");COL(HL);printf("%s", available_maps[selected_map].desc);
+	TAB(30,28);COL(FG);printf("Sound:");COL(HL);printf("%s", bSoundEnabled?"On ":"Off");
 
-	// clear out item list
-	ItemNodePtr currPtr = itemlist;
-	ItemNodePtr nextPtr = NULL;
-	while ( currPtr != NULL )
-	{
-		nextPtr = currPtr->next;
-		ItemNodePtr pitem = popFrontItem(&itemlist);
-		free(pitem);
-		currPtr = nextPtr;
-	}
-	itemlist = NULL;
+	TAB(4,1);COL(FG);printf("FAC"); COL(HL);printf(" - A Factory Game for the AGON");
+	TAB(14,2);COL(FG);printf("by robogeek");
 
-	clearMachines(&machinelist);
-	clearInserters(&inserterlist);
-}
-bool load_game_map( char * game_map_name )
-{
-	char buf[20];
-	sprintf(buf,"%s.info",game_map_name);
-	if ( load_map_info(buf) != 0 )
-	{
-		printf("Failed to load map info");
-		return false;
-	}
-
-	// resource multiplier could be encoded in .info?
-	resourceMultiplier = 16;
-
-	if ( !alloc_map() ) 
-	{
-		printf("Failed to alloc map layers\n");
-		return false;
-	}
-
-	if (load_map(game_map_name) != 0)
-	{
-		printf("Failed to load map\n");
-		return false;
-	}
-
-	return true;
-}
-bool load_splash_screen_maps()
-{
-	if ( load_map_info("maps/splash.info") != 0 )
-	{
-		printf("Failed to load map info");
-		return false;
-	}
-
-	// resource multiplier could be encoded in .info?
-	resourceMultiplier = 16;
-
-	if ( !alloc_map() ) 
-	{
-		printf("Failed to alloc map layers\n");
-		return false;
-	}
-
-	if (load_map("maps/splash") != 0)
-	{
-		printf("Failed to load map\n");
-		return false;
-	}
-
-	return true;
+	TAB(2,25);COL(HL);printf("Enter");COL(FG);printf(" Start");
+	TAB(2,26);COL(HL);printf("H");COL(FG);printf(" Help");
+	TAB(23,25);COL(HL);printf("M");COL(FG);printf(" Change Map");
+	TAB(23,26);COL(HL);printf("F9");COL(FG);printf(" Sound on/off");
 }
 
-void splash_loop_info()
-{
-	COL(15);COL(128+4);
-	TAB(4,4);printf("Press ");COL(11);printf("H");COL(15);printf(" for Help, ");COL(11);printf("Enter");COL(15);printf(" to start");
-	TAB(4,25);printf("Sound:");COL(11);printf("%s", bSoundEnabled?"On ":"Off");COL(15);printf(" Toggle with ");COL(11);printf("F9");
-}
 bool splash_loop()
 {
 	int loopexit=0;
+	
+	int bgcol = 4;
+	int fgcol = 15;
+	int hlcol = 11;
+
+	COL(fgcol);COL(128+bgcol); vdp_cls();
 
 	draw_screen();
 	draw_layer(true);
-	splash_loop_info();
+	splash_loop_info(fgcol,bgcol,hlcol);
 
 	layer_wait_ticks = clock();
 	key_wait_ticks = clock();
 
 	for (int i = 0; i< 4; i++)
 	{
-		insertAtFrontItemList(&itemlist, IT_COPPER_PLATE, (4+i*4)*gTileSize + 4, (1)*gTileSize + 4);
-		insertAtFrontItemList(&itemlist, IT_IRON_PLATE, (4+i*4)*gTileSize + 4, (13)*gTileSize + 4);
-		insertAtFrontItemList(&itemlist, IT_CIRCUIT, (0)*gTileSize + 4, (2+i*3)*gTileSize + 4);
-		insertAtFrontItemList(&itemlist, IT_GEARWHEEL, (19)*gTileSize + 4, (2+i*3)*gTileSize + 4);
+		insertAtFrontItemList(&itemlist, IT_COPPER_PLATE, (3+i*4)*gTileSize + 4, (2)*gTileSize + 4);
+		insertAtFrontItemList(&itemlist, IT_IRON_PLATE, (3+i*4)*gTileSize + 4, (11)*gTileSize + 4);
+	}
+	for (int i = 0; i< 3; i++)
+	{
+		insertAtFrontItemList(&itemlist, IT_CIRCUIT, (1)*gTileSize + 4, (4+i*3)*gTileSize + 4);
+		insertAtFrontItemList(&itemlist, IT_GEARWHEEL, (18)*gTileSize + 4, (4+i*3)*gTileSize + 4);
 	}
 
 	do {
@@ -4645,11 +4260,11 @@ bool splash_loop()
 		if ( vdp_check_key_press( KEY_h ) ) // help dialog
 		{
 			while ( vdp_check_key_press( KEY_h ) );
-			show_help();
+			show_help(false);
 			vdp_activate_sprites(0);
 			draw_screen();
 			draw_layer(true);
-			splash_loop_info();
+			splash_loop_info(fgcol,bgcol,hlcol);
 		}
 		if ( vdp_check_key_press( KEY_x ) )
 		{
@@ -4667,8 +4282,16 @@ bool splash_loop()
 			if (bSoundSamplesLoaded)
 			{
 				bSoundEnabled = !bSoundEnabled;
-				splash_loop_info();
+				splash_loop_info(fgcol,bgcol,hlcol);
 			}
+		}
+		if ( vdp_check_key_press( KEY_m ) )
+		{
+			while ( vdp_check_key_press( KEY_m ) );
+			select_game();
+			draw_screen();
+			draw_layer(true);
+			splash_loop_info(fgcol,bgcol,hlcol);
 		}
 
 		vdp_update_key_state();
@@ -4679,71 +4302,9 @@ bool splash_loop()
 	return true;
 }
 
-int convertProductionToMachine( int it )
-{
-	if (it >= IT_TYPES_MINI_MACHINES && it < NUM_ITEMTYPES)
-	{
-		it = it - IT_TYPES_MINI_MACHINES + IT_TYPES_MACHINE;
-	}
-	if (it == IT_MINI_BELT)
-	{
-		it = IT_BELT;
-	}
-	return it;
-}
-int convertMachineToProduction( int it )
-{
-	if (it >= IT_TYPES_MACHINE && it < IT_TYPES_FEATURES)
-	{
-		it = it - IT_TYPES_MACHINE + IT_TYPES_MINI_MACHINES;
-	}
-	if (it == IT_BELT)
-	{
-		it = IT_MINI_BELT;
-	}
-	return it;
-}
-
-// returns length of sound sample
-int load_sound_sample(char *fname, int sample_id)
-{
-	unsigned int file_len = 0;
-	FILE *fp;
-	fp = fopen(fname, "rb");
-	if ( !fp )
-	{
-		printf("Fail to Open %s\n",fname);
-		return 0;
-	}
-	// get length of file
-	fseek(fp, 0, SEEK_END);
-	file_len = ftell(fp);
-	fseek(fp, 0, SEEK_SET);
-
-	uint8_t *data = (uint8_t*) malloc(file_len);
-	if ( !data )
-	{
-		fclose(fp);
-		printf("Mem alloc error\n");
-		return 0;
-	}
-	unsigned int bytes_read = fread( data, 1, file_len, fp );
-	if ( bytes_read != file_len )
-	{
-		fclose(fp);
-		printf("Err read %d bytes expected %d\n", bytes_read, file_len);
-		return 0;
-	}
-
-	fclose(fp);
-
-	if (file_len)
-	{
-		vdp_audio_load_sample(sample_id, file_len, data);
-	}
-
-	return file_len;
-}
+//------------------------------------------------------------
+// Sounds
+//------------------------------------------------------------
 
 bool load_sound_samples(int vert_pos)
 {
@@ -4797,6 +4358,3 @@ void walking_sound_enable( bool enable )
 	}
 }
 
-void select_game()
-{
-}

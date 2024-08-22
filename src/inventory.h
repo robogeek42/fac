@@ -93,7 +93,7 @@ int inventory_add_item(INV_ITEM *inv, uint8_t item, int count)
 	// update the global count of the target item
 	if ( item == target_item_type ) 
 	{
-		target_item_count += count;
+		target_item_current += count;
 	}
 	return index;
 }
@@ -113,7 +113,7 @@ int inventory_remove_item(INV_ITEM *inv, uint8_t item, int count)
 	// update the global count of the target item
 	if ( item == target_item_type ) 
 	{
-		target_item_count -= count;
+		target_item_current -= count;
 	}
 
 	// deleted all the items ...
