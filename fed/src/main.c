@@ -107,6 +107,45 @@ clock_t key_wait_ticks;
 int key_wait = 14;
 clock_t move_wait_ticks;
 
+uint8_t oval1_block6x6[6*6] = {
+	0,0,3,3,0,0,
+	0,1,2,1,2,0,
+	3,2,1,1,2,0,
+	3,1,2,1,1,3,
+	0,3,1,3,2,0,
+	0,0,2,0,0,0};
+
+uint8_t oval2_block6x6[6*6] = {
+	0,3,2,1,0,0,
+	0,1,0,2,3,0,
+	3,2,1,1,0,0,
+	0,1,0,1,2,3,
+	0,3,2,1,3,0,
+	0,0,2,3,0,0};
+
+uint8_t rnd1_block5x5[5*5] = {
+	0,3,0,2,3,
+	0,0,2,1,0,
+	3,0,0,0,0,
+	0,1,2,3,0,
+	0,2,0,2,0,
+};
+uint8_t rnd2_block5x5[5*5] = {
+	0,0,0,1,0,
+	0,3,1,2,0,
+	2,1,0,0,1,
+	0,0,2,0,0,
+	3,2,0,0,3,
+};
+
+uint8_t rnd3_block4x4[4*4] = {
+	0,3,2,0,
+	3,2,1,0,
+	0,1,0,2,
+	3,2,0,0,
+};
+
+
 static volatile SYSVAR *sys_vars = NULL;
 
 int getTilePosInScreenX(int tx) { return ((tx - scr_tx) * gTileSize)+gViewOffX; }
@@ -137,6 +176,7 @@ void fill_random();
 void draw_mini_map();
 void circle();
 void new_mode();
+void insert_block( uint8_t *template, int sizex, int sizey );
 
 void wait()
 {
@@ -414,7 +454,33 @@ void game_loop()
 			}
 		}
 
-		if ( vdp_check_key_press( KEY_f12 ) && key_wait_ticks < clock() ) // new map
+		if ( vdp_check_key_press( KEY_f1 ) && key_wait_ticks < clock() ) // insert special
+		{
+			key_wait_ticks = clock() + key_wait;
+			insert_block( oval1_block6x6, 6, 6 );
+		}
+		if ( vdp_check_key_press( KEY_f2 ) && key_wait_ticks < clock() ) // insert special
+		{
+			key_wait_ticks = clock() + key_wait;
+			insert_block( oval2_block6x6, 6, 6 );
+		}
+		if ( vdp_check_key_press( KEY_f3 ) && key_wait_ticks < clock() ) // insert special
+		{
+			key_wait_ticks = clock() + key_wait;
+			insert_block( rnd1_block5x5, 5, 5 );
+		}
+		if ( vdp_check_key_press( KEY_f4 ) && key_wait_ticks < clock() ) // insert special
+		{
+			key_wait_ticks = clock() + key_wait;
+			insert_block( rnd2_block5x5, 5, 5 );
+		}
+		if ( vdp_check_key_press( KEY_f5 ) && key_wait_ticks < clock() ) // insert special
+		{
+			key_wait_ticks = clock() + key_wait;
+			insert_block( rnd3_block4x4, 4, 4 );
+		}
+
+		if ( vdp_check_key_press( KEY_f12 ) && key_wait_ticks < clock() ) // change mode
 		{
 			key_wait_ticks = clock() + key_wait;
 			new_mode();
@@ -1270,4 +1336,26 @@ void new_mode()
 	vdp_logical_scr_dims( false );
 	draw_all();
 }
+
+void insert_block( uint8_t *template, int sizex, int sizey )
+{
+	for (int by=0; by<sizey; by++)
+	{
+		int offset = cursor_tx + (cursor_ty+by)*fac.mapWidth;
+		for (int bx=0; bx<sizex; bx++)
+		{
+			if (tileset[ ts ].bOverlay && template[bx + by*sizex] > 0 )
+			{
+				int bm= tileset[ts].set[ template[bx + by*sizex] - 1 ];
+				uint8_t byte = tilemap[ offset ];
+				byte &= 0x0F;
+				byte |= ( (bm - BMOFF_FEAT16+1) << 4 );
+				tilemap[ offset ] = byte;
+			}
+			offset++;
+		}
+	}
+	draw_all();
+}
+
 
