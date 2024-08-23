@@ -10,7 +10,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-bool file_dialog( char *dir, char *filenamestr, int maxstr, bool *isload );
+bool file_dialog( char *dir, char *filenamestr, int maxstr, bool *isload, bool bLoadOnly );
 
 #endif
 
@@ -124,7 +124,7 @@ void show_files(int *line, int select_offset, int fno_start )
 	printf("%s", linestr);
 }
 
-bool file_dialog( char *dir, char *filenamestr, int maxstr, bool *isload )
+bool file_dialog( char *dir, char *filenamestr, int maxstr, bool *isload, bool bLoadOnly )
 {
 	bool ret = false;
 
@@ -164,7 +164,8 @@ bool file_dialog( char *dir, char *filenamestr, int maxstr, bool *isload )
 	print_key(menux, line, "ch","D","ir");
 	print_key(menux+6, line, "","U","p");
 	print_key(menux+9,line,"","L","oad");
-	print_key(menux+14,line,"","S","ave");
+	if (!bLoadOnly)
+		print_key(menux+14,line,"","S","ave");
 	print_key(menux+19,line,"e","X","it");
 
 	vdp_move_to(0,1*8+2);vdp_line_to(scrwidth_pix,1*8+2); // line under title/menu
@@ -271,7 +272,7 @@ bool file_dialog( char *dir, char *filenamestr, int maxstr, bool *isload )
 			finish=true;
 		}
 
-		if ( key_wait_ticks < clock() && vdp_check_key_press( KEY_s ) )
+		if ( !bLoadOnly && key_wait_ticks < clock() && vdp_check_key_press( KEY_s ) )
 		{
 			char buffer[255];
 			key_wait_ticks = clock() + key_wait_time;

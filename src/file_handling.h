@@ -12,7 +12,7 @@
 //void clear_map_and_lists();
 //bool save_game( char *filepath );
 //bool load_game( char *filepath, bool bQuiet );
-//bool load_game_map( char * game_map_name );
+bool load_game_map( char * game_map_name );
 
 bool alloc_map()
 {
@@ -359,24 +359,16 @@ bool load_game( char *filepath, bool bQuiet )
 
 	// 1.5 Load the map using the mapname stored in the fac state
 	if (!bQuiet) printf("Load: map %s\n",fac.mapname);
-	char mapinfoname[MAX_MAPNAME_SIZE+6];
-	sprintf(mapinfoname, "%s.info",fac.mapname);
-	if ( load_map_info(mapinfoname) != 0 )
-	{
-		msg="Failed to load map info"; goto load_game_errexit;
-	}
-	printf("MAP: %dx%d\n",mapinfo.width, mapinfo.height);
 
-	if ( load_map(fac.mapname) != 0 )
+	// clear and read tilemap and layers
+	clear_map_and_lists();
+	if ( !load_game_map(fac.mapname) )
 	{
 		msg="Failed to load map"; goto load_game_errexit;
 	}
+	printf("MAP: %dx%d\n",mapinfo.width, mapinfo.height);
 
 	// 2. read the tile map and layers
-	
-	// clear and read tilemap and layers
-	clear_map_and_lists();
-	if ( ! alloc_map() ) return false;
 
 	// read the tilemap
 	if (!bQuiet) printf("Load: tilemap\n");

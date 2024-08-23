@@ -307,6 +307,7 @@ void load_custom_chars();
 
 void game_loop();
 
+void reshow_sprites();
 void do_new_game();
 
 int getMachineBMID(int tx, int ty);
@@ -368,10 +369,10 @@ void insertItemIntoMachine(int machine_type, int tx, int ty, int item );
 void check_items_on_machines();
 
 void show_inventory(int X, int Y);
-void show_filedialog();;
+bool show_filedialog(bool bLoadOnly);
 int show_recipe_dialog(int machine_type, bool bManual);
 int show_item_dialog();
-void select_game();
+void select_game_map();
 
 void show_help(bool bShowWin);
 
@@ -467,12 +468,10 @@ int main(int argc, char *argv[])
 	target_item_type = available_maps[ selected_map ].target_item_type;
 	target_item_count = available_maps[ selected_map ].target_item_count;
 
-	if (!splash_loop())
+	if (splash_loop())
 	{
-		goto my_exit2;
+		do_new_game();
 	}
-
-	do_new_game();
 
 	game_loop();
 
@@ -836,7 +835,7 @@ void game_loop()
 		if ( vdp_check_key_press( KEY_f ) ) // file dialog
 		{
 			walking_sound_enable( false );
-			show_filedialog();
+			show_filedialog( false ); // load or save
 			key_wait_ticks = clock() + key_wait;
 		}
 
@@ -921,7 +920,7 @@ void game_loop()
 			char k=getchar(); 
 			if (k=='y' || k=='Y') {
 				// select game map dialog
-				select_game();
+				select_game_map();
 				// change to new map
 				do_new_game();
 			}
@@ -1033,6 +1032,23 @@ void game_loop()
 //------------------------------------------------------------
 // new game
 //------------------------------------------------------------
+void reshow_sprites()
+{
+	reset_cursor();
+
+	if (bShowHud) hud_update_count(fac.energy);
+
+	// Turn on sprites and move bob sprite to his set location
+	vdp_activate_sprites( NUM_SPRITES );
+	vdp_select_sprite( CURSOR_SPRITE );
+	vdp_show_sprite();
+	select_bob_sprite( bob_facing );
+	vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
+
+	if (bShowHud) show_hud(hud_posx, hud_posy);
+
+	vdp_refresh_sprites();
+}
 void do_new_game()
 {
 	clear_map_and_lists();
@@ -1044,21 +1060,10 @@ void do_new_game()
 	fac.xpos = fac.bobx - gScreenWidth/2;
 	fac.ypos = fac.boby - gScreenHeight/2;
 
-	reset_cursor();
+	fac.energy=0;
 
-	if (bShowHud) hud_update_count(fac.energy);
+	reshow_sprites();
 
-	// Turn on sprites and move bob to the centre
-	vdp_activate_sprites( NUM_SPRITES );
-	vdp_select_sprite( CURSOR_SPRITE );
-	vdp_show_sprite();
-	select_bob_sprite( bob_facing );
-	vdp_move_sprite_to( fac.bobx - fac.xpos, fac.boby - fac.ypos );
-
-	if (bShowHud) show_hud(hud_posx, hud_posy);
-
-	vdp_refresh_sprites();
-	
 	// Add some default items 
 	inventory_init(inventory);
 	// for test add some items
@@ -3479,7 +3484,7 @@ void show_inventory(int X, int Y)
 	if ( bDoPlaceAfterInventory ) start_place();
 }
 // Show file dialog
-void show_filedialog()
+bool show_filedialog(bool bLoadOnly)
 {
 	vdp_select_sprite( CURSOR_SPRITE );
 	vdp_hide_sprite();
@@ -3493,7 +3498,7 @@ void show_filedialog()
 	vdp_logical_scr_dims( false );
 	vdp_cursor_enable( false );
 
-	int fd_return = file_dialog("./saves", filename, 80, &isload);
+	bool fd_return = file_dialog("./saves", filename, 80, &isload, bLoadOnly);
 
 	COL(11);COL(128+16);
 	vdp_cls();
@@ -3505,8 +3510,11 @@ void show_filedialog()
 			printf("Loading %s ... \n",filename);
 			load_game( filename, false );
 		} else {
-			printf("Saving %s ... \n",filename);
-			save_game( filename );
+			if ( !bLoadOnly)
+			{
+				printf("Saving %s ... \n",filename);
+				save_game( filename );
+			}
 		}
 
 		printf("\nPress any key\n");
@@ -3517,15 +3525,14 @@ void show_filedialog()
 	vdp_cursor_enable( false );
 	vdp_logical_scr_dims( false );
 
-	reset_cursor();
-	vdp_activate_sprites( NUM_SPRITES );
-	vdp_select_sprite( CURSOR_SPRITE );
-	vdp_show_sprite();
 	show_bob();
+	reshow_sprites();
 
 	draw_screen();
 
 	vdp_refresh_sprites();
+
+	return fd_return;
 }
 
 #define RECIPE_EXT_BORDER 5
@@ -3941,7 +3948,7 @@ int show_item_dialog()
 }
 
 // mini dialog for selecting a game
-void select_game()
+void select_game_map()
 {
 	int bgcol = 4;
 	int fgcol = 15;
@@ -4222,14 +4229,17 @@ void splash_loop_info(int FG, int BG, int HL)
 	TAB(14,2);COL(FG);printf("by robogeek");
 
 	TAB(2,25);COL(HL);printf("Enter");COL(FG);printf(" Start");
-	TAB(2,26);COL(HL);printf("H");COL(FG);printf(" Help");
-	TAB(23,25);COL(HL);printf("M");COL(FG);printf(" Change Map");
-	TAB(23,26);COL(HL);printf("F9");COL(FG);printf(" Sound on/off");
+	TAB(17,25);COL(HL);printf("H");COL(FG);printf(" Help");
+	TAB(27,25);COL(HL);printf("L");COL(FG);printf(" Load Game");
+
+	TAB(2,27);COL(HL);printf("M");COL(FG);printf(" Change Map");
+	TAB(24,27);COL(HL);printf("S");COL(FG);printf(" Sound on/off");
 }
 
 bool splash_loop()
 {
 	int loopexit=0;
+	bool exit_status = true; // after this, load a new game
 	
 	int bgcol = 4;
 	int fgcol = 15;
@@ -4283,9 +4293,9 @@ bool splash_loop()
 			while ( vdp_check_key_press( KEY_enter ) );
 			loopexit = true;
 		}
-		if ( vdp_check_key_press( KEY_f9 ) )
+		if ( vdp_check_key_press( KEY_s ) )
 		{
-			while ( vdp_check_key_press( KEY_f9 ) );
+			while ( vdp_check_key_press( KEY_s ) );
 			if (bSoundSamplesLoaded)
 			{
 				bSoundEnabled = !bSoundEnabled;
@@ -4295,10 +4305,22 @@ bool splash_loop()
 		if ( vdp_check_key_press( KEY_m ) )
 		{
 			while ( vdp_check_key_press( KEY_m ) );
-			select_game();
+			select_game_map();
 			draw_screen();
 			draw_layer(true);
 			splash_loop_info(fgcol,bgcol,hlcol);
+		}
+
+		if ( vdp_check_key_press( KEY_l ) )
+		{
+			while ( vdp_check_key_press( KEY_l ) );
+			// show the file dialog in load-only mode. Only exit the loop if the user chose to 
+			// load a game
+			loopexit = show_filedialog( true ); // load only
+			if (loopexit) 
+			{
+				exit_status = false; // meaning don't load a new game!
+			}
 		}
 
 		vdp_update_key_state();
@@ -4306,7 +4328,7 @@ bool splash_loop()
 		frame_time_in_ticks = clock() - ticks_start;
 	} while (loopexit==0);
 
-	return true;
+	return exit_status;
 }
 
 //------------------------------------------------------------

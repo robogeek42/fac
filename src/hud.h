@@ -184,7 +184,7 @@ void create_hud(int vert_pos)
 void hud_update_count(int count)
 {
 	char count_str[10];
-	snprintf(count_str, 7, "%d  ", count );
+	snprintf(count_str, 7, "%d     ", count );
 	int x = 16;
 	for (unsigned int i=0; i < strlen(count_str); i++)
 	{
