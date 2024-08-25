@@ -34,14 +34,13 @@ then
 fi
 
 echo "copy binary"
-cp bin/fac.bin $FACDIR/fac
+cp bin/fac.bin $FACDIR
 
 cat << EOF
 done.
 
-TO RUN FAC : 
+TO RUN FAC (on newer MOS): 
 
 cd $FACDIR 
-load fac
-run
+fac
 EOF
