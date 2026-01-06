@@ -675,7 +675,7 @@ void show_filedialog()
 	vdp_logical_scr_dims( false );
 	vdp_cursor_enable( false );
 
-	int fd_return = file_dialog("./maps", filename, 80, &isload);
+	int fd_return = file_dialog("./maps", filename, 80, &isload, false);
 
 	COL(11);COL(128+16);
 	vdp_cls();
