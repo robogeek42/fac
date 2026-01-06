@@ -55,7 +55,7 @@ bool check_dir_exists(char *path)
 }
 int load_map_info( char *filename)
 {
-	uint8_t ret = mos_load( filename, (uint24_t) &mapinfo,  2 );
+	uint8_t ret = mos_load( filename, (uint24_t) &mapinfo,  6 );
 	if ( ret != 0 )
 	{
 		printf("Failed to load %s\n",filename);
@@ -83,7 +83,7 @@ void load_resource_data()
 }
 int load_map(char *mapname)
 {
-	uint8_t ret = mos_load( mapname, (uint24_t) tilemap,  mapinfo.width * mapinfo.height );
+	uint8_t ret = mos_load( mapname, (uint24_t) tilemap,  3 * mapinfo.width * mapinfo.height );
 	if ( ret != 0 )
 	{
 		return ret;
