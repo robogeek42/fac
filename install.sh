@@ -34,7 +34,7 @@ then
 fi
 
 echo "copy binary"
-cp bin/fac.bin $FACDIR
+cp bin/fac.bin $FACDIR/fac.bin
 
 cat << EOF
 done.
