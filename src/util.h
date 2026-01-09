@@ -51,6 +51,7 @@ void wait_clock( clock_t ticks );
 double my_atof(char *str);
 
 int load_bitmap_file( const char *fname, int width, int height, int bmap_id );
+int load_concat_bitmaps( const char *fname, int numbitmaps, int width, int height, int bmap_id, int tmp_bmap_id );
 int readTileInfoFile(char *path, TileInfoFile *tif, int items);
 
 void draw_box(int x,int y, int w, int h, int col);

@@ -14,8 +14,8 @@ then
 fi
 
 echo "copy assets"
-rsync -rvu --progress img/ $FACDIR/img
-rsync -rvu --progress sounds/ $FACDIR/sounds
+rsync -rvu --progress --delete img/ $FACDIR/img
+rsync -rvu --progress --delete sounds/ $FACDIR/sounds
 
 echo "copy default maps"
 if [ ! -d $FACDIR/maps ]

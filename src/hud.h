@@ -106,12 +106,12 @@ void load_hud_images()
 	char fname[50];
 	for (int fn=0; fn<10; fn++)
 	{
-		sprintf(fname, "img/nums4x5/num%01d.rgb2",fn);
+		sprintf(fname, "img/hud/num%01d.rgb2",fn);
 		load_hud_bitmap_file(fname, 4,5, BMOFF_HUD_NUMS + fn, hud.bgcol);
 	}
-	sprintf(fname, "img/nums4x5/num_space.rgb2");
+	sprintf(fname, "img/hud/num_space.rgb2");
 	load_hud_bitmap_file(fname, 4,5, BMOFF_HUD_NUMS + 10, hud.bgcol);
-	sprintf(fname, "img/nums4x5/num_minus.rgb2");
+	sprintf(fname, "img/hud/num_minus.rgb2");
 	load_hud_bitmap_file(fname, 4,5, BMOFF_HUD_NUMS + 11, hud.bgcol);
 
 	sprintf(fname, "img/zap8x8.rgb2");

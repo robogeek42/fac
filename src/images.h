@@ -3,81 +3,68 @@
 
 #include "progbar.h"
 
-#define FN_TERR16 "img/trnew/tr%02d.rgb2"
-#define BMOFF_TERR16 0
+#define FNCC_TERR16 "img/tr_concat01-16.rgb2"
 #define NUM_BM_TERR16 16
-
-#define FN_FEAT16 "img/tf16/tf%02d.rgb2"
-#define BMOFF_FEAT16 ( BMOFF_TERR16 + NUM_BM_TERR16 )
+#define FNCC_FEAT16 "img/tf_concat01-15.rgb2"
 #define NUM_BM_FEAT16 15
-
-#define FN_BOB16  "img/facbob/fb%02d.rgb2"
-#define BMOFF_BOB16 ( BMOFF_FEAT16 + NUM_BM_FEAT16)
+#define FNCC_BOB16  "img/fb_concat01-24.rgb2"
 #define NUM_BM_BOB16 24
-
-#define FN_BELT16 "img/belt16/belt%02d.rgb2"
-#define FN_BBELT16 "img/belt16/bbelt%02d.rgb2"
-#define BMOFF_BELT16 ( BMOFF_BOB16 + NUM_BM_BOB16)
+#define FNCC_BELT16 "img/belt_concat01-16.rgb2"
 #define NUM_BM_BELT16 4*4
+#define FNCC_BBELT16 "img/bbelt_concat01-32.rgb2"
 #define NUM_BM_BBELT16 8*4
-
-#define FN_ITEM8  "img/ti8/ti%02d.rgb2"
-#define BMOFF_ITEM8 ( BMOFF_BELT16 + NUM_BM_BELT16 + NUM_BM_BBELT16)
+#define FNCC_ITEM8  "img/ti_concat01-08.rgb2"
 #define NUM_BM_ITEM8 8
-
-#define FN_MACH16 "img/tm16/tm%02d.rgb2"
-#define BMOFF_MACH16 ( BMOFF_ITEM8 + NUM_BM_ITEM8 )
+#define FNCC_MACH16 "img/tm_concat01-08.rgb2"
 #define NUM_BM_MACH16 8
-
-#define FN_NUMS "img/nums4x5/num%01d.rgb2"
-#define BMOFF_NUMS ( BMOFF_MACH16 + NUM_BM_MACH16 )
+#define FNCC_NUMS "img/nums4x5_concat0-9.rgb2"
 #define NUM_BM_NUMS 10
-
-#define FN_CURSORS "img/cursor%02d.rgb2"
-#define BMOFF_CURSORS ( BMOFF_NUMS + NUM_BM_NUMS )
+#define FNCC_CURSORS "img/cursor_concat01-04.rgb2"
 #define NUM_BM_CURSORS 4
-
-#define FN_MINERS "img/tm16/miner%s%02d.rgb2"
-#define BMOFF_MINERS ( BMOFF_CURSORS + NUM_BM_CURSORS )
+#define FNCC_MINERS "img/miners_concat01-12.rgb2"
 #define NUM_BM_MINERS 12
-
-#define FN_FURNACES "img/tm16/fur%02d.rgb2"
-#define BMOFF_FURNACES ( BMOFF_MINERS + NUM_BM_MINERS )
+#define FNCC_FURNACES "img/fur_concat01-12.rgb2"
 #define NUM_BM_FURNACES 12
-
-#define FN_ASSEMBLERS "img/tm16/asmb%02d.rgb2"
-#define BMOFF_ASSEMBLERS ( BMOFF_FURNACES + NUM_BM_FURNACES )
+#define FNCC_ASSEMBLERS "img/asmb_concat01-12.rgb2"
 #define NUM_BM_ASSEMBLERS 12
-
-#define FN_PROD8 "img/tp8/tp%02d.rgb2"
-#define BMOFF_PROD8 ( BMOFF_ASSEMBLERS + NUM_BM_ASSEMBLERS)
+#define FNCC_PROD8 "img/tp_concat01-05.rgb2"
 #define NUM_BM_PROD8 5
-
-#define FN_INSERTERS "img/ins/ins%02d.rgb2"
-#define BMOFF_INSERTERS ( BMOFF_PROD8 + NUM_BM_PROD8 )
+#define FNCC_INSERTERS "img/ins_concat01-12.rgb2"
 #define NUM_BM_INSERTERS 12
-
-#define FN_ZAP "img/zap8x8.rgb2"
-#define BMOFF_ZAP ( BMOFF_INSERTERS + NUM_BM_INSERTERS )
-#define NUM_BM_ZAP 1
-
-#define FN_MACH_MINI "img/tm8/mini%02d.rgb2"
-#define BMOFF_MACH_MINI ( BMOFF_ZAP + NUM_BM_ZAP)
+#define FNCC_MACH_MINI "img/mini_concat01-08.rgb2"
 #define NUM_BM_MACH_MINI 8
-
-#define FN_BELT_MINI "img/bmini.rgb2"
-#define BMOFF_BELT_MINI ( BMOFF_MACH_MINI + NUM_BM_MACH_MINI )
-#define NUM_BM_BELT_MINI 1
-
-#define FN_TSPLIT "img/split/split%02d.rgb2"
-#define BMOFF_TSPLIT ( BMOFF_BELT_MINI + NUM_BM_BELT_MINI )
+#define FNCC_TSPLIT "img/split_concat01-08.rgb2"
 #define NUM_BM_TSPLIT 8
-
-#define FN_TSPLIT_ICON "img/split/split_icon%02d.rgb2"
-#define BMOFF_TSPLIT_ICON ( BMOFF_TSPLIT + NUM_BM_TSPLIT )
+#define FNCC_TSPLIT_ICON "img/split_icon_concat01-04.rgb2"
 #define NUM_BM_TSPLIT_ICON 4
 
-#define TOTAL_BM ( BMOFF_TSPLIT_ICON + NUM_BM_TSPLIT_ICON )
+#define FN_BELT_MINI "img/bmini.rgb2"
+#define NUM_BM_BELT_MINI 1
+#define FN_ZAP "img/zap8x8.rgb2"
+#define NUM_BM_ZAP 1
+
+
+#define BMOFF_TERR16 0
+#define BMOFF_FEAT16 ( BMOFF_TERR16 + NUM_BM_TERR16 )
+#define BMOFF_BOB16  ( BMOFF_FEAT16 + NUM_BM_FEAT16 )
+#define BMOFF_BELT16 ( BMOFF_BOB16 + NUM_BM_BOB16)
+#define BMOFF_ITEM8 ( BMOFF_BELT16 + NUM_BM_BELT16 + NUM_BM_BBELT16)
+#define BMOFF_MACH16 ( BMOFF_ITEM8 + NUM_BM_ITEM8 )
+#define BMOFF_NUMS ( BMOFF_MACH16 + NUM_BM_MACH16 )
+#define BMOFF_CURSORS ( BMOFF_NUMS + NUM_BM_NUMS )
+#define BMOFF_MINERS ( BMOFF_CURSORS + NUM_BM_CURSORS )
+#define BMOFF_FURNACES ( BMOFF_MINERS + NUM_BM_MINERS )
+#define BMOFF_ASSEMBLERS ( BMOFF_FURNACES + NUM_BM_FURNACES )
+#define BMOFF_PROD8 ( BMOFF_ASSEMBLERS + NUM_BM_ASSEMBLERS)
+#define BMOFF_INSERTERS ( BMOFF_PROD8 + NUM_BM_PROD8 )
+#define BMOFF_MACH_MINI ( BMOFF_INSERTERS + NUM_BM_INSERTERS)
+#define BMOFF_TSPLIT ( BMOFF_MACH_MINI + NUM_BM_MACH_MINI )
+#define BMOFF_TSPLIT_ICON ( BMOFF_TSPLIT + NUM_BM_TSPLIT )
+#define BMOFF_BELT_MINI ( BMOFF_TSPLIT_ICON + NUM_BM_TSPLIT_ICON )
+#define BMOFF_ZAP ( BMOFF_BELT_MINI + NUM_BM_BELT_MINI )
+
+#define TOTAL_BM ( BMOFF_ZAP + NUM_BM_ZAP )
+
 
 #define BOB_SPRITE_DOWN 0
 #define BOB_SPRITE_UP 1
@@ -112,6 +99,7 @@ bool load_images(bool progress, int vert_pos)
 	PROGBAR *progbar;
 	int cnt=1;
 	int prog_max = TOTAL_BM;
+        int ret = 0;
 
 	if (progress)
 	{
@@ -122,167 +110,66 @@ bool load_images(bool progress, int vert_pos)
 	}
 
 	//TAB(0,0);
-	char fname[40];
-	for (int fn=1; fn<=NUM_BM_TERR16; fn++)
-	{
-		sprintf(fname, FN_TERR16, fn);
-		int ret = load_bitmap_file(fname, 16, 16, BMOFF_TERR16 + fn-1);
-		if ( ret < 0 ) return false;
-		if (progress) update_bar(progbar, cnt++);
-	}
-	for (int fn=1; fn<=NUM_BM_FEAT16; fn++)
-	{
-		sprintf(fname, FN_FEAT16, fn);
-		int ret = load_bitmap_file(fname, 16, 16, BMOFF_FEAT16 + fn-1);
-		if ( ret < 0 ) return false;
-		if (progress) update_bar(progbar, cnt++);
-	}
-	for (int fn=1; fn<=NUM_BM_BOB16; fn++)
-	{
-		sprintf(fname, FN_BOB16, fn);
-		int ret = load_bitmap_file(fname, 16, 16, BMOFF_BOB16 + fn-1);
-		if ( ret < 0 ) return false;
-		if (progress) update_bar(progbar, cnt++);
-	}
-	for (int fn=1; fn<=NUM_BM_BELT16; fn++)
-	{
-		sprintf(fname, FN_BELT16, fn);
-		int ret = load_bitmap_file(fname, 16, 16, BMOFF_BELT16 + fn-1);
-		if ( ret < 0 ) return false;
-		if (progress) update_bar(progbar, cnt++);
-	}
-	for (int fn=1; fn<=NUM_BM_BBELT16; fn++)
-	{
-		sprintf(fname, FN_BBELT16, fn);
-		int ret = load_bitmap_file(fname, 16, 16, BMOFF_BELT16 + NUM_BM_BELT16 + fn-1);
-		if ( ret < 0 ) return false;
-		if (progress) update_bar(progbar, cnt++);
-	}
-	for (int fn=1; fn<=NUM_BM_ITEM8; fn++)
-	{
-		sprintf(fname, FN_ITEM8, fn);
-		int ret = load_bitmap_file(fname, 8, 8, BMOFF_ITEM8 + fn-1);
-		if ( ret < 0 ) return false;
-		if (progress) update_bar(progbar, cnt++);
-	}
-	for (int fn=1; fn<=NUM_BM_MACH16; fn++)
-	{
-		sprintf(fname, FN_MACH16, fn);
-		int ret = load_bitmap_file(fname, 16, 16, BMOFF_MACH16 + fn-1);
-		if ( ret < 0 ) return false;
-		if (progress) update_bar(progbar, cnt++);
-	}
-	for (int fn=0; fn<=NUM_BM_NUMS-1; fn++)
-	{
-		sprintf(fname, FN_NUMS, fn);
-		int ret = load_bitmap_file(fname, 4, 5, BMOFF_NUMS + fn);
-		if ( ret < 0 ) return false;
-		if (progress) update_bar(progbar, cnt++);
-	}
-	
-	for (int fn=1; fn<=NUM_BM_CURSORS; fn++)
-	{
-		sprintf(fname, FN_CURSORS, fn);
-		int ret = load_bitmap_file(fname, 16, 16, BMOFF_CURSORS + fn-1);
-		if ( ret < 0 ) return false;
-		if (progress) update_bar(progbar, cnt++);
-	}
 
-	// 12 miners each with 3 images for animation
-	char *dir[] = {"U","R","D","L"};
-	for (int d=0;d<4;d++)
-	{
-		for (int fn=1; fn<=NUM_BM_MINERS/4; fn++)
-		{
-			sprintf(fname, FN_MINERS, dir[d], fn);
-			//printf("Load %s to BMID %d\n",fname, BMOFF_MINERS + fn-1 + d*3);
-			int ret = load_bitmap_file(fname, 16, 16, BMOFF_MINERS + fn-1 + d*3 );
-			if ( ret < 0 ) return false;
-			if (progress) update_bar(progbar, cnt++);
-		}
-	}
-	// 12 furnaces each with 3 images for animation
-	for (int fn=1; fn<=NUM_BM_FURNACES; fn++)
-	{
-		sprintf(fname, FN_FURNACES, fn);
-		int ret = load_bitmap_file(fname, 16, 16, BMOFF_FURNACES + fn-1 );
-		if ( ret < 0 ) return false;
-		if (progress) update_bar(progbar, cnt++);
-	}
-	// 12 assemblers each with 3 images for animation
-	for (int fn=1; fn<=NUM_BM_ASSEMBLERS; fn++)
-	{
-		sprintf(fname, FN_ASSEMBLERS, fn);
-		int ret = load_bitmap_file(fname, 16, 16, BMOFF_ASSEMBLERS + fn-1 );
-		if ( ret < 0 ) return false;
-		if (progress) update_bar(progbar, cnt++);
-	}
-	
-	for (int fn=1; fn<=NUM_BM_PROD8; fn++)
-	{
-		sprintf(fname, FN_PROD8, fn);
-		int ret = load_bitmap_file(fname, 8, 8, BMOFF_PROD8 + fn-1 );
-		if ( ret < 0 ) return false;
-		if (progress) update_bar(progbar, cnt++);
-	}
+        if ( load_concat_bitmaps(FNCC_TERR16, NUM_BM_TERR16, 16, 16, BMOFF_TERR16, 1000) < 0) return false;
+        if (progress) { cnt+=NUM_BM_TERR16; update_bar(progbar, cnt); };
 
-	// 12 inserters each with 3 image anim
-	for (int fn=1; fn<=NUM_BM_INSERTERS; fn++)
-	{
-		sprintf(fname, FN_INSERTERS, fn);
-		int ret = load_bitmap_file(fname, 16, 16, BMOFF_INSERTERS + fn-1 );
-		if ( ret < 0 ) return false;
-		if (progress) update_bar(progbar, cnt++);
-	}
+        if ( load_concat_bitmaps(FNCC_FEAT16, NUM_BM_FEAT16, 16, 16, BMOFF_FEAT16, 1000) < 0) return false;
+        if (progress) { cnt+=NUM_BM_FEAT16; update_bar(progbar, cnt); };
 
-	int ret = load_bitmap_file(FN_ZAP, 8, 8, BMOFF_ZAP );
-	if ( ret < 0 ) return false;
-	if (progress) update_bar(progbar, cnt++);
+        if ( load_concat_bitmaps(FNCC_BOB16, NUM_BM_BOB16, 16, 16, BMOFF_BOB16, 1000) < 0) return false;
+        if (progress) { cnt+=NUM_BM_BOB16; update_bar(progbar, cnt); };
 
-	for (int fn=1; fn<=NUM_BM_MACH_MINI; fn++)
-	{
-		sprintf(fname, FN_MACH_MINI, fn);
-		int ret = load_bitmap_file(fname, 8, 8, BMOFF_MACH_MINI + fn-1 );
-		if ( ret < 0 ) return false;
-		if (progress) update_bar(progbar, cnt++);
-	}
+        if ( load_concat_bitmaps(FNCC_BELT16, NUM_BM_BELT16, 16, 16, BMOFF_BELT16, 1000) < 0) return false;
+        if (progress) { cnt+=NUM_BM_BELT16; update_bar(progbar, cnt); };
+
+        if ( load_concat_bitmaps(FNCC_BBELT16, NUM_BM_BBELT16, 16, 16, BMOFF_BELT16 + NUM_BM_BELT16, 1000) < 0) return false;
+        if (progress) { cnt+=NUM_BM_BBELT16; update_bar(progbar, cnt); };
+
+        if ( load_concat_bitmaps(FNCC_ITEM8, NUM_BM_ITEM8, 8, 8, BMOFF_ITEM8, 1000) < 0) return false;
+        if (progress) { cnt+=NUM_BM_ITEM8; update_bar(progbar, cnt); };
+
+        if ( load_concat_bitmaps(FNCC_MACH16, NUM_BM_MACH16, 16, 16, BMOFF_MACH16, 1000) < 0) return false;
+        if (progress) { cnt+=NUM_BM_MACH16; update_bar(progbar, cnt); };
+
+        if ( load_concat_bitmaps(FNCC_NUMS, NUM_BM_NUMS, 4, 5, BMOFF_NUMS, 1000) < 0) return false;
+        if (progress) { cnt+=NUM_BM_NUMS; update_bar(progbar, cnt); };
+
+        if ( load_concat_bitmaps(FNCC_CURSORS, NUM_BM_CURSORS, 16, 16, BMOFF_CURSORS, 1000) < 0) return false;
+        if (progress) { cnt+=NUM_BM_CURSORS; update_bar(progbar, cnt); };
+
+        if ( load_concat_bitmaps(FNCC_MINERS, NUM_BM_MINERS, 16, 16, BMOFF_MINERS, 1000) < 0) return false;
+        if (progress) { cnt+=NUM_BM_MINERS; update_bar(progbar, cnt); };
+
+        if ( load_concat_bitmaps(FNCC_FURNACES, NUM_BM_FURNACES, 16, 16, BMOFF_FURNACES, 1000) < 0) return false;
+        if (progress) { cnt+=NUM_BM_FURNACES; update_bar(progbar, cnt); };
+
+        if ( load_concat_bitmaps(FNCC_ASSEMBLERS, NUM_BM_ASSEMBLERS, 16, 16, BMOFF_ASSEMBLERS, 1000) < 0) return false;
+        if (progress) { cnt+=NUM_BM_ASSEMBLERS; update_bar(progbar, cnt); };
+
+        if ( load_concat_bitmaps(FNCC_PROD8, NUM_BM_PROD8, 8, 8, BMOFF_PROD8, 1000) < 0) return false;
+        if (progress) { cnt+=NUM_BM_PROD8; update_bar(progbar, cnt); };
+
+        if ( load_concat_bitmaps(FNCC_INSERTERS, NUM_BM_INSERTERS, 16, 16, BMOFF_INSERTERS, 1000) < 0) return false;
+        if (progress) { cnt+=NUM_BM_INSERTERS; update_bar(progbar, cnt); };
+
+        if ( load_concat_bitmaps(FNCC_MACH_MINI, NUM_BM_MACH_MINI, 8, 8, BMOFF_MACH_MINI, 1000) < 0) return false;
+        if (progress) { cnt+=NUM_BM_MACH_MINI; update_bar(progbar, cnt); };
+
+        if ( load_concat_bitmaps(FNCC_TSPLIT, NUM_BM_TSPLIT, 16, 16, BMOFF_TSPLIT, 1000) < 0) return false;
+        if (progress) { cnt+=NUM_BM_TSPLIT; update_bar(progbar, cnt); };
+
+        if ( load_concat_bitmaps(FNCC_TSPLIT_ICON, NUM_BM_TSPLIT_ICON, 16, 16, BMOFF_TSPLIT_ICON, 1000) < 0) return false;
+        if (progress) { cnt+=NUM_BM_TSPLIT_ICON; update_bar(progbar, cnt); };
+
 
 	ret = load_bitmap_file(FN_BELT_MINI, 8, 8, BMOFF_BELT_MINI );
 	if ( ret < 0 ) return false;
 	if (progress) update_bar(progbar, cnt++);
 
-	for (int fn=1; fn<=NUM_BM_TSPLIT; fn++)
-	{
-		sprintf(fname, FN_TSPLIT, fn);
-		int ret = load_bitmap_file(fname, 16, 16, BMOFF_TSPLIT + fn-1 );
-		if ( ret < 0 ) return false;
-		if (progress) update_bar(progbar, cnt++);
-	}
-	for (int fn=1; fn<=NUM_BM_TSPLIT_ICON; fn++)
-	{
-		sprintf(fname, FN_TSPLIT_ICON, fn);
-		int ret = load_bitmap_file(fname, 16, 16, BMOFF_TSPLIT_ICON + fn-1 );
-		if ( ret < 0 ) return false;
-		if (progress) update_bar(progbar, cnt++);
-	}
-
-#if 0
-	printf("TILES start %d count %d\n",BMOFF_TERR16,NUM_BM_TERR16);
-	printf("FEATS start %d count %d\n",BMOFF_FEAT16,NUM_BM_FEAT16);
-	printf("BOB   start %d count %d\n",BMOFF_BOB16,NUM_BM_BOB16);
-	printf("BELTS start %d count %d + %d\n",BMOFF_BELT16,NUM_BM_BELT16,NUM_BM_BBELT16);
-	printf("ITEMS start %d count %d\n",BMOFF_ITEM8,NUM_BM_ITEM8);
-	printf("MACHS start %d count %d\n",BMOFF_MACH16,NUM_BM_MACH16);
-	printf("NUMS  start %d count %d\n",BMOFF_NUMS,NUM_BM_NUMS);
-	printf("CURS  start %d count %d\n",BMOFF_CURSORS,NUM_BM_CURSORS);
-	printf("MINER start %d count %d\n",BMOFF_MINERS,NUM_BM_MINERS);
-	printf("FURNA start %d count %d\n",BMOFF_FURNACES,NUM_BM_FURNACES);
-	printf("ASSMB start %d count %d\n",BMOFF_ASSEMBLERS,NUM_BM_ASSEMBLERS);
-	printf("PROD  start %d count %d\n",BMOFF_PROD8,NUM_BM_PROD8);
-	printf("INSER start %d count %d\n",BMOFF_INSERTERS,NUM_BM_INSERTERS);
-	printf("Total %d\n",TOTAL_BM);
-	wait_for_any_key();
-#endif
+	ret = load_bitmap_file(FN_ZAP, 8, 8, BMOFF_ZAP );
+	if ( ret < 0 ) return false;
+	if (progress) update_bar(progbar, cnt++);
 
 	delete_bar(&progbar);
 

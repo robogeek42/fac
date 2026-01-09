@@ -136,6 +136,56 @@ int load_bitmap_file( const char *fname, int width, int height, int bmap_id )
 	return bmap_id;
 }
 
+int load_concat_bitmaps( const char *fname, int numbitmaps, int width, int height, int bmap_id, int tmp_bmap_id )
+{
+	FILE *fp = NULL;
+	char *buffer;
+	int bytes_remain = numbitmaps * width * height;
+
+	if ( !(buffer = (char *)malloc( CHUNK_SIZE ) ) ) {
+		printf( "Failed to allocate %d bytes for buffer.\n",CHUNK_SIZE );
+		return -1;
+	}
+
+	fp = fopen( fname, "rb" );
+	if ( fp == NULL )  {
+		printf( "Error opening file \"%s\". Quitting.\n", fname );
+		getch();
+		return -1;
+	}
+
+	vdp_adv_clear_buffer(tmp_bmap_id);
+
+	while (bytes_remain > 0)
+	{
+		int size = (bytes_remain>CHUNK_SIZE)?CHUNK_SIZE:bytes_remain;
+
+		vdp_adv_write_block(tmp_bmap_id, size);
+
+		if ( fread( buffer, 1, size, fp ) != (size_t)size ) return -1;
+		mos_puts( buffer, size, 0 );
+		//printf(".");
+
+		bytes_remain -= size;
+	}
+
+    // at this point we have a buffer (bmap_id) with the data for all bitmaps
+    // split it 
+    vdp_adv_split_multiple_from( tmp_bmap_id, width*height, bmap_id);
+
+    // make each buffer into a bitmap
+    for (int id = bmap_id; id < bmap_id+numbitmaps; id++)
+    {
+        vdp_adv_select_bitmap(id);
+        vdp_adv_bitmap_from_buffer(width, height, 1);
+    }
+   
+	fclose( fp );
+	free( buffer );
+
+	return bmap_id;
+}
+
 int readTileInfoFile(char *path, TileInfoFile *tif, int items)
 {
 	char line[40];
