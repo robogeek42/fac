@@ -16,6 +16,7 @@ typedef struct {
 #define BMOFF_HUD 500
 #define BMOFF_HUD_IMAGES 501
 #define BMOFF_HUD_NUMS 520
+#define BMOFF_HUD_DUMMY 550
 
 #define PUTW(w) putch((w)&0xFF); putch((w)>>8);
 
@@ -100,22 +101,71 @@ int load_hud_bitmap_file( const char *fname, int width, int height, int bmap_id,
 
 	return bmap_id;
 }
+int load_hud_nums( int bmap_id, int bgcol )
+{
+	FILE *fp = NULL;
+	char *buffer;
+    int numbitmaps = 12;
+    int width=4, height=5;
+	int bytes_remain = numbitmaps * width * height;
+
+	if ( !(buffer = (char *)malloc( CHUNK_SIZE ) ) ) {
+		printf( "Failed to allocate %d bytes for buffer.\n",CHUNK_SIZE );
+		return -1;
+	}
+
+    char *fname = "img/hud/hudnums_concat0-11.rgb2";
+	fp = fopen( fname, "rb" );
+	if ( fp == NULL )  {
+		printf( "Error opening file \"%s\". Quitting.\n", fname );
+		getch();
+		return -1;
+	}
+
+	vdp_adv_clear_buffer(BMOFF_HUD_DUMMY);
+
+	while (bytes_remain > 0)
+	{
+		int size = (bytes_remain>CHUNK_SIZE)?CHUNK_SIZE:bytes_remain;
+
+		vdp_adv_write_block(bmap_id, size);
+
+		if ( fread( buffer, 1, size, fp ) != (size_t)size ) return -1;
+
+		// make transparent colour all HUD bg colour
+		for (int i=0; i<size; i++)
+		{
+			if (buffer[i]==0x33) buffer[i]=bgcol;
+		}
+
+		mos_puts( buffer, size, 0 );
+		//printf(".");
+
+		bytes_remain -= size;
+	}
+    //
+    // at this point we have a buffer with the data for all bitmaps
+    // split it 
+    vdp_adv_split_multiple_from( BMOFF_HUD_DUMMY, width*height, bmap_id);
+
+    // make each buffer into a bitmap
+    for (int id = bmap_id; id < bmap_id+numbitmaps; id++)
+    {
+        vdp_adv_select_bitmap(id);
+        vdp_adv_bitmap_from_buffer(width, height, 1);
+    }
+	
+	fclose( fp );
+	free( buffer );
+
+	return bmap_id;
+}
 
 void load_hud_images()
 {
-	char fname[50];
-	for (int fn=0; fn<10; fn++)
-	{
-		sprintf(fname, "img/hud/num%01d.rgb2",fn);
-		load_hud_bitmap_file(fname, 4,5, BMOFF_HUD_NUMS + fn, hud.bgcol);
-	}
-	sprintf(fname, "img/hud/num_space.rgb2");
-	load_hud_bitmap_file(fname, 4,5, BMOFF_HUD_NUMS + 10, hud.bgcol);
-	sprintf(fname, "img/hud/num_minus.rgb2");
-	load_hud_bitmap_file(fname, 4,5, BMOFF_HUD_NUMS + 11, hud.bgcol);
+	load_hud_nums(BMOFF_HUD_NUMS, hud.bgcol);
 
-	sprintf(fname, "img/zap8x8.rgb2");
-	load_hud_bitmap_file(fname, 8,8, BMOFF_HUD_IMAGES, hud.bgcol);
+	load_hud_bitmap_file("img/hud/zap8x8.rgb2", 8,8, BMOFF_HUD_IMAGES, hud.bgcol);
 }
 
 static VDU_ADV_CMD_B_W_W_W_W vdu_adv_copy_from_buffer = { 23, 0, 0xA0, 0xFA00, 5, 0, 0, 0, 0, 0 };
