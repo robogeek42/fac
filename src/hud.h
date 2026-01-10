@@ -128,7 +128,7 @@ int load_hud_nums( int bmap_id, int bgcol )
 	{
 		int size = (bytes_remain>CHUNK_SIZE)?CHUNK_SIZE:bytes_remain;
 
-		vdp_adv_write_block(bmap_id, size);
+		vdp_adv_write_block(BMOFF_HUD_DUMMY, size);
 
 		if ( fread( buffer, 1, size, fp ) != (size_t)size ) return -1;
 
