@@ -26,6 +26,7 @@ cp maps/splash2* $FACDIR/maps
 cp maps/splash_save.data $FACDIR/maps
 cp maps/m4mod* $FACDIR/maps
 cp maps/m5res* $FACDIR/maps
+cp maps/newmap1* $FACDIR/maps
 
 echo "create saves dir"
 if [ ! -d $FACDIR/saves ]
@@ -33,8 +34,11 @@ then
 	mkdir -p $FACDIR/saves
 fi
 
-echo "copy binary"
-cp bin/fac.bin $FACDIR/fac.bin
+echo "copy binaries"
+cp fac.bin $FACDIR/
+cp fed.bin $FACDIR/
+cp loader.bin $FACDIR/
+cp run.obey $FACDIR/
 
 cat << EOF
 done.
@@ -42,5 +46,5 @@ done.
 TO RUN FAC (on newer MOS): 
 
 cd $FACDIR 
-fac
+obey run.obey
 EOF

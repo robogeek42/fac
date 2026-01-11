@@ -2,8 +2,8 @@
 # Makefile Options
 # ----------------------------
 
-NAME = fed
-DESCRIPTION = "FAC: Map Editor"
+NAME = loader
+DESCRIPTION = "FAC: Loader"
 COMPRESSED = NO
 LDHAS_ARG_PROCESSING = 1
 
@@ -18,20 +18,12 @@ EXTRA_C_SOURCES += ../src/thinglist.c
 
 EXTRA_HEADERS = ../src/util.h
 EXTRA_HEADERS += ../src/colmap.h
-EXTRA_HEADERS += ../src/item.h
-EXTRA_HEADERS += ../src/listdir.h
 EXTRA_HEADERS += ../src/progbar.h
-EXTRA_HEADERS += ../src/thinglist.h
-EXTRA_HEADERS += ../src/file_handling.h
-EXTRA_HEADERS += ../src/filedialog.h
 EXTRA_HEADERS += ../src/globals.h
 EXTRA_HEADERS += ../src/hud.h
 EXTRA_HEADERS += ../src/images.h
-EXTRA_HEADERS += ../src/inserter.h
-EXTRA_HEADERS += ../src/inventory.h
 EXTRA_HEADERS += ../src/keydefines.h
-EXTRA_HEADERS += ../src/machine.h
-EXTRA_HEADERS += ../src/message.h
+EXTRA_HEADERS += ../src/file_handling.h
 
 # Heap size to 352k allowing a 96k program
 INIT_LOC = 040000
@@ -44,3 +36,4 @@ include $(shell cedev-config --makefile)
 
 install: bin/$(NAME).bin
 	cp bin/$(NAME).bin ../$(NAME).bin
+

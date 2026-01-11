@@ -1,0 +1,7 @@
+try rm lfac
+try rm lfed
+loader
+ifthere lfac then fac
+ifthere lfed then fed
+try rm lfac
+try rm lfed

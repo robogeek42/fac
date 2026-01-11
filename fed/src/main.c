@@ -23,6 +23,8 @@
 #define _FILEDIALOG_IMPLEMENTATION
 #include "filedialog.h"
 
+#define PRELOAD 1
+
 #define DIR_UP 0
 #define DIR_RIGHT 1
 #define DIR_DOWN 2
@@ -209,12 +211,15 @@ int main(/*int argc, char *argv[]*/)
 	scr_ty = 0;
 
 	load_map( "./maps/newmap1", 45, 45 );
-	if ( ! load_images(true) )
+
+#if PRELOAD == 0 
+	if ( ! load_images(true, 2) )
 	{
 		printf("Failed to load images\n");
 		goto my_exit2;
 	}
-	create_sprites();
+#endif
+	create_sprites(16);
 	total_bms = NUM_BM_TERR16 + NUM_BM_FEAT16;
 
 	cursor_tx = 0;
