@@ -185,19 +185,23 @@ int load_sound_sample(char *fname, int sample_id)
 
 int choose()
 {
-	int choice = 0;
+	int choice = -1;
     int ret = 0;
-	while (choice < 1 || choice > 3)
+	while (choice < 0 || choice > 3)
 	{
-		TAB(2,4);printf("1 Reload graphics");
-		TAB(2,5);printf("2 Start FAC game");
-		TAB(2,6);printf("3 Run Editor");
-		choice = input_int_noclear(2,8,"Enter choice 1-3");
+        TAB(2,4);printf("0 Exit");
+		TAB(2,5);printf("1 Reload graphics");
+		TAB(2,6);printf("2 Start FAC game");
+		TAB(2,7);printf("3 Run Editor");
+		choice = input_int_noclear(2,9,"Enter choice 0-3");
 	}
 	switch (choice)
 	{
-		case 1:
+		case 0:
 		default:
+            printf("Bye!\n");
+			break;
+		case 1:
             vdp_cls();
             ret = reload_graphics();
             if (ret < 0) return ret;

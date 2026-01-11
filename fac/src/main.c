@@ -378,7 +378,7 @@ void select_game_map();
 
 void show_help(bool bShowWin);
 
-bool splash_loop();
+int splash_loop();
 
 bool load_sound_samples(int vert_pos);
 void walking_sound_enable( bool enable );
@@ -475,10 +475,16 @@ int main(int argc, char *argv[])
 	target_item_type = available_maps[ selected_map ].target_item_type;
 	target_item_count = available_maps[ selected_map ].target_item_count;
 
-	if (splash_loop())
+	int splash_ret = splash_loop();
+    if (splash_ret == 0)
 	{
 		do_new_game();
 	}
+    if (splash_ret < 0)
+    {
+        vdp_cls();
+        goto my_exit2;
+    }
 
 	game_loop();
 
@@ -4243,10 +4249,10 @@ void splash_loop_info(int FG, int BG, int HL)
 	TAB(24,27);COL(HL);printf("S");COL(FG);printf(" Sound on/off");
 }
 
-bool splash_loop()
+int splash_loop()
 {
 	int loopexit=0;
-	bool exit_status = true; // after this, load a new game
+	int exit_status = 0; // after this, load a new game
 	
 	int bgcol = 4;
 	int fgcol = 15;
@@ -4283,7 +4289,7 @@ bool splash_loop()
 		}
 		if ( vdp_check_key_press( KEY_h ) ) // help dialog
 		{
-			while ( vdp_check_key_press( KEY_h ) );
+			while ( vdp_check_key_press( KEY_h ) ) {};
 			show_help(false);
 			vdp_activate_sprites(0);
 			draw_screen();
@@ -4292,17 +4298,18 @@ bool splash_loop()
 		}
 		if ( vdp_check_key_press( KEY_x ) )
 		{
-			while ( vdp_check_key_press( KEY_x ) );
-			return false;
+			while ( vdp_check_key_press( KEY_x ) ) {};
+            exit_status = -1;
+			loopexit = true;
 		}
 		if ( vdp_check_key_press( KEY_enter ) )
 		{
-			while ( vdp_check_key_press( KEY_enter ) );
+			while ( vdp_check_key_press( KEY_enter ) ) {};
 			loopexit = true;
 		}
 		if ( vdp_check_key_press( KEY_s ) )
 		{
-			while ( vdp_check_key_press( KEY_s ) );
+			while ( vdp_check_key_press( KEY_s ) ) {};
 			if (bSoundSamplesLoaded)
 			{
 				bSoundEnabled = !bSoundEnabled;
@@ -4311,7 +4318,7 @@ bool splash_loop()
 		}
 		if ( vdp_check_key_press( KEY_m ) )
 		{
-			while ( vdp_check_key_press( KEY_m ) );
+			while ( vdp_check_key_press( KEY_m ) ) {};
 			select_game_map();
 			draw_screen();
 			draw_layer(true);
@@ -4320,13 +4327,13 @@ bool splash_loop()
 
 		if ( vdp_check_key_press( KEY_l ) )
 		{
-			while ( vdp_check_key_press( KEY_l ) );
+			while ( vdp_check_key_press( KEY_l ) ) {};
 			// show the file dialog in load-only mode. Only exit the loop if the user chose to 
 			// load a game
 			loopexit = show_filedialog( true ); // load only
 			if (loopexit) 
 			{
-				exit_status = false; // meaning don't load a new game!
+				exit_status = 1; // meaning don't load a new game!
 			}
 		}
 
