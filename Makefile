@@ -42,8 +42,9 @@ install:
 	./install.sh ../sdcard_sync/fac
 
 clean:
+	rm -rf obj bin
 	rm -rf */bin
 	rm -rf */obj
-	rm $(BINARIES)
+	rm -f $(BINARIES)
 
 .PHONY: clean $(BINARIES)
