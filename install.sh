@@ -49,5 +49,8 @@ fac
 or, for the editor, run
 fed
 
+preload will load the images
+facnl will not load images
 
+obey go.obey will run an interactive preload
 EOF
