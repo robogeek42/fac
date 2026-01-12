@@ -2,12 +2,12 @@
 # Makefile Options
 # ----------------------------
 
-NAME = fed
-DESCRIPTION = "FAC: Map Editor"
+NAME = facnl
+DESCRIPTION = "Factory game - assumes preload"
 COMPRESSED = NO
 LDHAS_ARG_PROCESSING = 1
 
-CFLAGS = -Wall -Wextra -Oz -I../src
+CFLAGS = -Wall -Wextra -Oz -I../src -DPRELOAD
 
 EXTRA_C_SOURCES  = ../src/util.c
 EXTRA_C_SOURCES += ../src/colmap.c
@@ -44,3 +44,4 @@ include $(shell cedev-config --makefile)
 
 install: bin/$(NAME).bin
 	cp bin/$(NAME).bin ../$(NAME).bin
+

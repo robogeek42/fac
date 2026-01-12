@@ -17,8 +17,6 @@
 #include <stdbool.h>
 #include "util.h"
 
-#define PRELOAD 1
-
 extern uint8_t key_pressed_code;
 
 #define DIR_UP 0
@@ -438,7 +436,7 @@ int main(int argc, char *argv[])
 	vdp_cursor_enable( false );
 	vdp_logical_scr_dims( false );
 
-#if PRELOAD == 1
+#ifdef PRELOAD
 	bSoundSamplesLoaded = true;
     bSoundEnabled = true;
 #else

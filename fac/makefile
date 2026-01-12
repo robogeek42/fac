@@ -9,6 +9,7 @@ LDHAS_ARG_PROCESSING = 1
 
 CFLAGS = -Wall -Wextra -Oz -I../src
 CXXFLAGS = -Wall -Wextra -Oz -I../src
+
 EXTRA_C_SOURCES  = ../src/util.c
 EXTRA_C_SOURCES += ../src/colmap.c
 EXTRA_C_SOURCES += ../src/item.c

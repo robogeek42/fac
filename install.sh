@@ -35,10 +35,8 @@ then
 fi
 
 echo "copy binaries"
-cp fac.bin $FACDIR/
-cp fed.bin $FACDIR/
-cp loader.bin $FACDIR/
-cp run.obey $FACDIR/
+cp fac.bin facnl.bin fed.bin fednl.bin loader.bin preload.bin $FACDIR/
+cp go.obey $FACDIR/
 
 cat << EOF
 done.
@@ -46,5 +44,10 @@ done.
 TO RUN FAC (on newer MOS): 
 
 cd $FACDIR 
-obey run.obey
+fac
+
+or, for the editor, run
+fed
+
+
 EOF

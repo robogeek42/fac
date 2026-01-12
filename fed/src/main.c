@@ -23,8 +23,6 @@
 #define _FILEDIALOG_IMPLEMENTATION
 #include "filedialog.h"
 
-#define PRELOAD 1
-
 #define DIR_UP 0
 #define DIR_RIGHT 1
 #define DIR_DOWN 2
@@ -212,7 +210,7 @@ int main(/*int argc, char *argv[]*/)
 
 	load_map( "./maps/newmap1", 45, 45 );
 
-#if PRELOAD == 0 
+#ifndef PRELOAD
 	if ( ! load_images(true, 2) )
 	{
 		printf("Failed to load images\n");
